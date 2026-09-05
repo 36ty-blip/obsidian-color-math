@@ -1,0 +1,3034 @@
+"use strict";
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// src/main.ts
+var main_exports = {};
+__export(main_exports, {
+  default: () => ColorMathPlugin
+});
+module.exports = __toCommonJS(main_exports);
+var import_obsidian = require("obsidian");
+
+// src/config.ts
+var DEFAULT_COLORS = {
+  main: "#7aa2f7",
+  orange: "#e0af68",
+  dot: "white",
+  derivative: "#bb9af7",
+  chain: "#9ece6a",
+  upper: "#bb9af7",
+  relation: "white",
+  arrow: "#f7768e",
+  set: "#bb9af7",
+  spacing: "white"
+};
+var COLORS = { ...DEFAULT_COLORS };
+function setPalette(palette) {
+  Object.assign(COLORS, palette);
+}
+var BIG_OPERATORS = /* @__PURE__ */ new Set([
+  "\\sum",
+  "\\prod",
+  "\\coprod",
+  "\\bigcup",
+  "\\bigcap",
+  "\\bigsqcup",
+  "\\bigvee",
+  "\\bigwedge",
+  "\\bigoplus",
+  "\\bigotimes"
+]);
+var INTEGRALS = /* @__PURE__ */ new Set([
+  "\\int",
+  "\\iint",
+  "\\iiint",
+  "\\oint"
+]);
+var LIMIT_OPERATORS = /* @__PURE__ */ new Set([
+  "\\lim",
+  "\\sup",
+  "\\inf",
+  "\\max",
+  "\\min"
+]);
+var RELATIONS = /* @__PURE__ */ new Set([
+  "\\neq",
+  "\\leq",
+  "\\geq",
+  "\\approx",
+  "\\sim",
+  "\\equiv",
+  "\\propto",
+  "=",
+  "<",
+  ">"
+]);
+var ARROWS = /* @__PURE__ */ new Set([
+  "\\longrightarrow",
+  "\\longleftarrow",
+  "\\leftrightarrow",
+  "\\rightarrow",
+  "\\leftarrow",
+  "\\Rightarrow",
+  "\\Leftarrow",
+  "\\Leftrightarrow",
+  "\\mapsto",
+  "\\to"
+]);
+var SET_SYMBOLS = /* @__PURE__ */ new Set([
+  "\\notin",
+  "\\subseteq",
+  "\\supseteq",
+  "\\subset",
+  "\\supset",
+  "\\setminus",
+  "\\emptyset",
+  "\\in",
+  "\\cup",
+  "\\cap"
+]);
+var SPACING_COMMANDS = /* @__PURE__ */ new Set([
+  "\\,",
+  "\\:",
+  "\\;",
+  "\\quad",
+  "\\qquad"
+]);
+var MULTIPLICATION_SYMBOLS = /* @__PURE__ */ new Set([
+  "\\cdot",
+  "\\times",
+  "\xB7",
+  "*"
+]);
+var COLOR_COMMANDS = /* @__PURE__ */ new Set([
+  ...BIG_OPERATORS,
+  ...INTEGRALS,
+  ...LIMIT_OPERATORS,
+  ...RELATIONS,
+  ...ARROWS,
+  ...SET_SYMBOLS,
+  ...SPACING_COMMANDS,
+  ...MULTIPLICATION_SYMBOLS
+]);
+var SORTED_COLOR_COMMANDS = Array.from(COLOR_COMMANDS).sort(
+  (a, b) => b.length - a.length
+);
+
+// src/parsers/markdown_scanner.ts
+var FENCED_CODE = "fenced_code";
+var CODE_SPAN = "code_span";
+var MATH_BLOCK = "math_block";
+function lineRanges(text) {
+  const ranges = [];
+  let start = 0;
+  while (start < text.length) {
+    let contentEnd = start;
+    while (contentEnd < text.length && text[contentEnd] !== "\r" && text[contentEnd] !== "\n") {
+      contentEnd++;
+    }
+    let lineEnd = contentEnd;
+    if (lineEnd < text.length) {
+      if (text[lineEnd] === "\r" && lineEnd + 1 < text.length && text[lineEnd + 1] === "\n") {
+        lineEnd += 2;
+      } else {
+        lineEnd += 1;
+      }
+    }
+    ranges.push([start, contentEnd, lineEnd]);
+    start = lineEnd;
+  }
+  return ranges;
+}
+function openingFence(line) {
+  let index = 0;
+  while (index < line.length && index < 3 && line[index] === " ") {
+    index++;
+  }
+  if (index >= line.length || line[index] !== "`" && line[index] !== "~") {
+    return null;
+  }
+  const marker = line[index];
+  let markerEnd = index;
+  while (markerEnd < line.length && line[markerEnd] === marker) {
+    markerEnd++;
+  }
+  const length = markerEnd - index;
+  if (length < 3) {
+    return null;
+  }
+  const info = line.slice(markerEnd);
+  if (marker === "`" && info.includes("`")) {
+    return null;
+  }
+  return [marker, length];
+}
+function isClosingFence(line, marker, minimum) {
+  let index = 0;
+  while (index < line.length && index < 3 && line[index] === " ") {
+    index++;
+  }
+  let markerEnd = index;
+  while (markerEnd < line.length && line[markerEnd] === marker) {
+    markerEnd++;
+  }
+  return markerEnd - index >= minimum && line.slice(markerEnd).split("").every((ch) => ch === " " || ch === "	");
+}
+function stripBlockquotes(line) {
+  let depth = 0;
+  let index = 0;
+  while (true) {
+    let marker = index;
+    let spaces = 0;
+    while (marker < line.length && spaces < 3 && line[marker] === " ") {
+      marker++;
+      spaces++;
+    }
+    if (marker >= line.length || line[marker] !== ">") {
+      return [depth, index];
+    }
+    index = marker + 1;
+    if (index < line.length && (line[index] === " " || line[index] === "	")) {
+      index++;
+    }
+    depth++;
+  }
+}
+function stripRequiredBlockquotes(line, depth) {
+  let index = 0;
+  for (let i = 0; i < depth; i++) {
+    let marker = index;
+    let spaces = 0;
+    while (marker < line.length && spaces < 3 && line[marker] === " ") {
+      marker++;
+      spaces++;
+    }
+    if (marker >= line.length || line[marker] !== ">") {
+      return null;
+    }
+    index = marker + 1;
+    if (index < line.length && (line[index] === " " || line[index] === "	")) {
+      index++;
+    }
+  }
+  return index;
+}
+function readListMarker(line, start) {
+  if (start >= line.length) {
+    return null;
+  }
+  let markerEnd = start;
+  if ("-+*".includes(line[start])) {
+    markerEnd++;
+  } else if (/\d/.test(line[start])) {
+    while (markerEnd < line.length && /\d/.test(line[markerEnd])) {
+      markerEnd++;
+    }
+    if (markerEnd - start > 9 || markerEnd >= line.length) {
+      return null;
+    }
+    if (line[markerEnd] !== "." && line[markerEnd] !== ")") {
+      return null;
+    }
+    markerEnd++;
+  } else {
+    return null;
+  }
+  if (markerEnd === line.length) {
+    return markerEnd + 1;
+  }
+  if (line[markerEnd] !== " ") {
+    return null;
+  }
+  let whitespaceEnd = markerEnd;
+  while (whitespaceEnd < line.length && line[whitespaceEnd] === " ") {
+    whitespaceEnd++;
+  }
+  const padding = whitespaceEnd - markerEnd;
+  return markerEnd + (padding <= 4 ? padding : 1);
+}
+function listParentCount(stack, markerIndent) {
+  for (let level = stack.length - 1; level >= 0; level--) {
+    const item = stack[level];
+    if (markerIndent === item.markerIndent) {
+      return level;
+    }
+    if (item.contentIndent <= markerIndent && markerIndent <= item.contentIndent + 3) {
+      return level + 1;
+    }
+  }
+  return markerIndent <= 3 ? 0 : null;
+}
+function listContentStart(line, stack) {
+  let cursor = 0;
+  let parsedMarker = false;
+  while (cursor < line.length) {
+    let marker = cursor;
+    while (marker < line.length && line[marker] === " ") {
+      marker++;
+    }
+    const contentIndent = readListMarker(line, marker);
+    if (contentIndent === null) {
+      break;
+    }
+    const parentCount = listParentCount(stack, marker);
+    if (parentCount === null) {
+      break;
+    }
+    stack.splice(parentCount);
+    stack.push({ markerIndent: marker, contentIndent });
+    cursor = Math.min(contentIndent, line.length);
+    parsedMarker = true;
+  }
+  if (parsedMarker) {
+    return stack[stack.length - 1].contentIndent;
+  }
+  if (line.replace(/[ \t]/g, "").length === 0) {
+    return stack.length > 0 ? stack[stack.length - 1].contentIndent : 0;
+  }
+  let indentation = 0;
+  while (indentation < line.length && line[indentation] === " ") {
+    indentation++;
+  }
+  for (let level = stack.length - 1; level >= 0; level--) {
+    if (indentation >= stack[level].contentIndent) {
+      stack.splice(level + 1);
+      return stack[stack.length - 1].contentIndent;
+    }
+  }
+  stack.length = 0;
+  return 0;
+}
+function openingContainer(line, listStacks) {
+  const [quoteDepth, quoteEnd] = stripBlockquotes(line);
+  for (const depth of Array.from(listStacks.keys())) {
+    if (depth > quoteDepth) {
+      listStacks.delete(depth);
+    }
+  }
+  if (!listStacks.has(quoteDepth)) {
+    listStacks.set(quoteDepth, []);
+  }
+  const listStack = listStacks.get(quoteDepth);
+  const listIndent = listContentStart(line.slice(quoteEnd), listStack);
+  return [
+    { quoteDepth, listIndent },
+    Math.min(quoteEnd + listIndent, line.length)
+  ];
+}
+function continuationStart(line, container) {
+  const quoteEnd = stripRequiredBlockquotes(line, container.quoteDepth);
+  if (quoteEnd === null) {
+    return null;
+  }
+  const remainder = line.slice(quoteEnd);
+  if (remainder.replace(/[ \t]/g, "").length === 0) {
+    return line.length;
+  }
+  if (container.listIndent > 0 && !remainder.startsWith(" ".repeat(container.listIndent))) {
+    return null;
+  }
+  return quoteEnd + container.listIndent;
+}
+function findFencedCode(text) {
+  const lines = lineRanges(text);
+  const spans = [];
+  const listStacks = /* @__PURE__ */ new Map();
+  let lineIndex = 0;
+  while (lineIndex < lines.length) {
+    const [start, contentEnd, lineEnd] = lines[lineIndex];
+    const line = text.slice(start, contentEnd);
+    const [container, containerEnd] = openingContainer(line, listStacks);
+    const opening = openingFence(line.slice(containerEnd));
+    if (opening === null) {
+      lineIndex++;
+      continue;
+    }
+    const [marker, minimum] = opening;
+    let closingIndex = lineIndex + 1;
+    let closed = false;
+    while (closingIndex < lines.length) {
+      const [closeStart, closeContentEnd, closeLineEnd] = lines[closingIndex];
+      const closeLine = text.slice(closeStart, closeContentEnd);
+      const closeContainerEnd = continuationStart(closeLine, container);
+      if (closeContainerEnd === null) {
+        spans.push({
+          kind: FENCED_CODE,
+          start,
+          contentStart: lineEnd,
+          contentEnd: closeStart,
+          end: closeStart
+        });
+        lineIndex = closingIndex;
+        closed = true;
+        break;
+      }
+      if (isClosingFence(closeLine.slice(closeContainerEnd), marker, minimum)) {
+        spans.push({
+          kind: FENCED_CODE,
+          start,
+          contentStart: lineEnd,
+          contentEnd: closeStart,
+          end: closeLineEnd
+        });
+        lineIndex = closingIndex + 1;
+        closed = true;
+        break;
+      }
+      closingIndex++;
+    }
+    if (!closed) {
+      spans.push({
+        kind: FENCED_CODE,
+        start,
+        contentStart: lineEnd,
+        contentEnd: text.length,
+        end: text.length
+      });
+      lineIndex = lines.length;
+    }
+  }
+  return spans;
+}
+function visibleRanges(length, excluded) {
+  const ranges = [];
+  let index = 0;
+  for (const span of excluded) {
+    if (index < span.start) {
+      ranges.push([index, span.start]);
+    }
+    index = Math.max(index, span.end);
+  }
+  if (index < length) {
+    ranges.push([index, length]);
+  }
+  return ranges;
+}
+function isEscaped(text, index, lowerBound) {
+  let backslashes = 0;
+  index -= 1;
+  while (index >= lowerBound && text[index] === "\\") {
+    backslashes++;
+    index--;
+  }
+  return backslashes % 2 === 1;
+}
+function delimiterRuns(text, start, end, delimiter) {
+  const runs = [];
+  let index = start;
+  while (index < end) {
+    const runStart = text.indexOf(delimiter, index);
+    if (runStart < 0 || runStart >= end) {
+      break;
+    }
+    let runEnd = runStart + 1;
+    while (runEnd < end && text[runEnd] === delimiter) {
+      runEnd++;
+    }
+    if (!isEscaped(text, runStart, start)) {
+      runs.push([runStart, runEnd]);
+    }
+    index = runEnd;
+  }
+  return runs;
+}
+function pairRuns(runs, kind, exactLength) {
+  let filteredRuns = runs;
+  if (exactLength !== void 0) {
+    filteredRuns = runs.filter((run) => run[1] - run[0] === exactLength);
+  }
+  const nextSame = new Array(filteredRuns.length).fill(null);
+  const nearest = /* @__PURE__ */ new Map();
+  for (let index2 = filteredRuns.length - 1; index2 >= 0; index2--) {
+    const len = filteredRuns[index2][1] - filteredRuns[index2][0];
+    nextSame[index2] = nearest.get(len) ?? null;
+    nearest.set(len, index2);
+  }
+  const spans = [];
+  let index = 0;
+  while (index < filteredRuns.length) {
+    const closingIndex = nextSame[index];
+    if (closingIndex === null) {
+      index++;
+      continue;
+    }
+    const opening = filteredRuns[index];
+    const closing = filteredRuns[closingIndex];
+    spans.push({
+      kind,
+      start: opening[0],
+      contentStart: opening[1],
+      contentEnd: closing[0],
+      end: closing[1]
+    });
+    index = closingIndex + 1;
+  }
+  return spans;
+}
+function findCodeSpans(text, fenced) {
+  const spans = [];
+  for (const [start, end] of visibleRanges(text.length, fenced)) {
+    spans.push(...pairRuns(delimiterRuns(text, start, end, "`"), CODE_SPAN));
+  }
+  return spans;
+}
+function findMathBlocks(text, protectedSpans) {
+  const spans = [];
+  for (const [start, end] of visibleRanges(text.length, protectedSpans)) {
+    spans.push(
+      ...pairRuns(delimiterRuns(text, start, end, "$"), MATH_BLOCK, 2)
+    );
+  }
+  return spans;
+}
+function scanMarkdown(text) {
+  const fenced = findFencedCode(text);
+  const codeSpans = findCodeSpans(text, fenced);
+  const protectedSpans = [...fenced, ...codeSpans].sort((a, b) => a.start - b.start);
+  return {
+    protected: protectedSpans,
+    mathBlocks: findMathBlocks(text, protectedSpans)
+  };
+}
+
+// src/parsers/latex_spans.ts
+var STYLE_MACROS = /* @__PURE__ */ new Set([
+  "mathbf",
+  "mathcal",
+  "mathbb",
+  "mathrm",
+  "mathit",
+  "mathsf",
+  "mathtt",
+  "boldsymbol",
+  "operatorname",
+  "text",
+  "textbf",
+  "textit",
+  "textrm",
+  "texttt"
+]);
+var FUNCTION_MACROS = /* @__PURE__ */ new Set([
+  "Tr",
+  "arccos",
+  "arcsin",
+  "arctan",
+  "cos",
+  "cosh",
+  "det",
+  "exp",
+  "ln",
+  "log",
+  "max",
+  "min",
+  "sec",
+  "sin",
+  "sinh",
+  "sqrt",
+  "sup",
+  "tan",
+  "tanh",
+  "tr",
+  "trace",
+  "operatorname"
+]);
+var OPERATOR_COMMANDS = /* @__PURE__ */ new Set([
+  "bigcap",
+  "bigcup",
+  "bigoplus",
+  "bigotimes",
+  "bigsqcup",
+  "bigvee",
+  "bigwedge",
+  "cdot",
+  "coprod",
+  "int",
+  "iint",
+  "iiint",
+  "inf",
+  "lim",
+  "max",
+  "min",
+  "oint",
+  "otimes",
+  "prod",
+  "sum",
+  "sup",
+  "times"
+]);
+var NON_OPERAND_COMMANDS = /* @__PURE__ */ new Set([
+  "!",
+  ",",
+  ":",
+  ";",
+  "\\",
+  "approx",
+  "atop",
+  "choose",
+  "cap",
+  "displaystyle",
+  "displaylimits",
+  "emptyset",
+  "end",
+  "equiv",
+  "Leftarrow",
+  "Leftrightarrow",
+  "Rightarrow",
+  "geq",
+  "in",
+  "leq",
+  "leftarrow",
+  "leftrightarrow",
+  "limits",
+  "longleftarrow",
+  "longrightarrow",
+  "mapsto",
+  "middle",
+  "mp",
+  "neq",
+  "nolimits",
+  "notin",
+  "over",
+  "pm",
+  "propto",
+  "quad",
+  "qquad",
+  "right",
+  "rVert",
+  "scriptstyle",
+  "scriptscriptstyle",
+  "sim",
+  "setminus",
+  "subset",
+  "subseteq",
+  "supset",
+  "supseteq",
+  "to",
+  "textstyle",
+  "cup",
+  "rightarrow"
+]);
+var UNARY_MACROS = /* @__PURE__ */ new Set([
+  "acute",
+  "bar",
+  "breve",
+  "check",
+  "ddot",
+  "dot",
+  "grave",
+  "hat",
+  "mathring",
+  "overline",
+  "tilde",
+  "underline",
+  "vec",
+  "widehat",
+  "widetilde"
+]);
+var SYMBOL_MACROS = /* @__PURE__ */ new Set([
+  "Delta",
+  "Gamma",
+  "Im",
+  "Lambda",
+  "Omega",
+  "Phi",
+  "Pi",
+  "Psi",
+  "Re",
+  "Sigma",
+  "Theta",
+  "Upsilon",
+  "Xi",
+  "aleph",
+  "alpha",
+  "beta",
+  "bot",
+  "chi",
+  "delta",
+  "ell",
+  "epsilon",
+  "eta",
+  "gamma",
+  "hbar",
+  "imath",
+  "infty",
+  "iota",
+  "jmath",
+  "kappa",
+  "lambda",
+  "mu",
+  "nabla",
+  "nu",
+  "omega",
+  "partial",
+  "perp",
+  "phi",
+  "pi",
+  "psi",
+  "rho",
+  "sigma",
+  "tau",
+  "theta",
+  "top",
+  "upsilon",
+  "varepsilon",
+  "varphi",
+  "varpi",
+  "varrho",
+  "varsigma",
+  "vartheta",
+  "xi",
+  "zeta"
+]);
+var DELIMITER_SIZE_COMMANDS = /* @__PURE__ */ new Set([
+  "Big",
+  "Bigg",
+  "Biggl",
+  "Biggm",
+  "Biggr",
+  "Bigl",
+  "Bigm",
+  "Bigr",
+  "big",
+  "bigg",
+  "biggl",
+  "biggm",
+  "biggr",
+  "bigl",
+  "bigm",
+  "bigr"
+]);
+var OPAQUE_MACROS = /* @__PURE__ */ new Set([
+  "color",
+  "colorbox",
+  "fcolorbox",
+  "text",
+  "textbf",
+  "textcolor",
+  "textit",
+  "textrm",
+  "texttt",
+  "verb"
+]);
+var MATRIX_ENVIRONMENTS = /* @__PURE__ */ new Set([
+  "Bmatrix",
+  "Vmatrix",
+  "array",
+  "bmatrix",
+  "matrix",
+  "pmatrix",
+  "smallmatrix",
+  "vmatrix"
+]);
+var NEGATABLE_RELATIONS = /* @__PURE__ */ new Set([
+  "approx",
+  "equiv",
+  "geq",
+  "in",
+  "leq",
+  "sim",
+  "subset",
+  "subseteq",
+  "supset",
+  "supseteq"
+]);
+function operandText(source, span) {
+  return source.slice(span.start, span.end);
+}
+function skipWhitespace(source, index, end) {
+  while (index < end && /\s/.test(source[index])) {
+    index++;
+  }
+  return index;
+}
+function skipComment(source, start, end) {
+  let index = start + 1;
+  while (index < end && source[index] !== "\r" && source[index] !== "\n") {
+    index++;
+  }
+  if (index < end && source[index] === "\r" && index + 1 < end && source[index + 1] === "\n") {
+    return index + 2;
+  }
+  return Math.min(index + 1, end);
+}
+function skipIgnorable(source, index, end) {
+  while (true) {
+    index = skipWhitespace(source, index, end);
+    if (index >= end || source[index] !== "%") {
+      return index;
+    }
+    index = skipComment(source, index, end);
+  }
+}
+function readCommand(source, start, end) {
+  if (start >= end || source[start] !== "\\")
+    return null;
+  const match = source.slice(start, end).match(/^(\\[A-Za-z]+|\\.)/);
+  if (!match)
+    return null;
+  return [match[0].slice(1), start + match[0].length];
+}
+function readGroupEnd(source, start, end, opening) {
+  if (start >= end)
+    return null;
+  opening = opening === void 0 ? source[start] : opening;
+  const closingMap = { "{": "}", "(": ")", "[": "]" };
+  const closing = closingMap[opening];
+  if (!closing || source[start] !== opening)
+    return null;
+  let depth = 1;
+  let index = start + 1;
+  while (index < end) {
+    if (source[index] === "%") {
+      index = skipComment(source, index, end);
+      continue;
+    }
+    if (source[index] === "\\") {
+      const command = readCommand(source, index, end);
+      if (command !== null && command[0] === "verb") {
+        const verbEnd = readVerbEndHelper(source, command[1], end);
+        if (verbEnd >= end)
+          return null;
+        index = verbEnd;
+        continue;
+      }
+      if (command !== null && command[0] === "left") {
+        const nested = readLeftRightEnd(source, index, end);
+        if (nested !== null) {
+          index = nested;
+          continue;
+        }
+      }
+      index = command !== null ? command[1] : index + 1;
+      continue;
+    }
+    if (source[index] === opening) {
+      depth++;
+    } else if (source[index] === closing) {
+      depth--;
+      if (depth === 0) {
+        return index + 1;
+      }
+    }
+    index++;
+  }
+  return null;
+}
+function readDelimiterEnd(source, start, end) {
+  start = skipIgnorable(source, start, end);
+  if (start >= end)
+    return null;
+  if (source[start] === "\\") {
+    const command = readCommand(source, start, end);
+    return command !== null ? command[1] : null;
+  }
+  return start + 1;
+}
+function leftDelimiter(source, start, end) {
+  const command = readCommand(source, start, end);
+  if (command === null || command[0] !== "left")
+    return null;
+  const delimiterStart = skipIgnorable(source, command[1], end);
+  if (delimiterStart >= end)
+    return null;
+  if (source[delimiterStart] !== "\\") {
+    return source[delimiterStart];
+  }
+  const delimiter = readCommand(source, delimiterStart, end);
+  return delimiter !== null ? delimiter[0] : null;
+}
+function readLeftRightEnd(source, start, end) {
+  const command = readCommand(source, start, end);
+  if (command === null || command[0] !== "left")
+    return null;
+  let index = readDelimiterEnd(source, command[1], end);
+  if (index === null)
+    return null;
+  let depth = 1;
+  while (index < end) {
+    if (source[index] === "%") {
+      index = skipComment(source, index, end);
+      continue;
+    }
+    if (source[index] === "{") {
+      const groupEnd = readGroupEnd(source, index, end);
+      if (groupEnd !== null) {
+        index = groupEnd;
+        continue;
+      }
+    }
+    if (source[index] !== "\\") {
+      index++;
+      continue;
+    }
+    const nested = readCommand(source, index, end);
+    if (nested === null) {
+      index++;
+      continue;
+    }
+    const [name, commandEnd] = nested;
+    if (name === "verb") {
+      const verbEnd = readVerbEndHelper(source, commandEnd, end);
+      if (verbEnd >= end)
+        return null;
+      index = verbEnd;
+      continue;
+    }
+    if (name === "left") {
+      const delimiterEnd = readDelimiterEnd(source, commandEnd, end);
+      if (delimiterEnd !== null) {
+        depth++;
+        index = delimiterEnd;
+        continue;
+      }
+    } else if (name === "right") {
+      const delimiterEnd = readDelimiterEnd(source, commandEnd, end);
+      if (delimiterEnd !== null) {
+        depth--;
+        if (depth === 0) {
+          return delimiterEnd;
+        }
+        index = delimiterEnd;
+        continue;
+      }
+    }
+    index = commandEnd;
+  }
+  return null;
+}
+function readEnvironmentMarker(source, start, end) {
+  const command = readCommand(source, start, end);
+  if (command === null || command[0] !== "begin" && command[0] !== "end") {
+    return null;
+  }
+  const [marker, index] = command;
+  const groupStart = skipIgnorable(source, index, end);
+  const groupEnd = readGroupEnd(source, groupStart, end);
+  if (groupEnd === null)
+    return null;
+  const name = source.slice(groupStart + 1, groupEnd - 1).trim();
+  if (!name)
+    return null;
+  return [marker, name, groupEnd];
+}
+function readEnvironmentEnd(source, start, end) {
+  const opening = readEnvironmentMarker(source, start, end);
+  if (opening === null || opening[0] !== "begin")
+    return null;
+  const stack = [opening[1]];
+  let index = opening[2];
+  while (index < end) {
+    if (source[index] === "%") {
+      index = skipComment(source, index, end);
+      continue;
+    }
+    if (source[index] === "{") {
+      const groupEnd = readGroupEnd(source, index, end);
+      if (groupEnd !== null) {
+        index = groupEnd;
+        continue;
+      }
+    }
+    if (source[index] !== "\\") {
+      index++;
+      continue;
+    }
+    const marker = readEnvironmentMarker(source, index, end);
+    if (marker === null) {
+      const command = readCommand(source, index, end);
+      if (command !== null && command[0] === "verb") {
+        const verbEnd = readVerbEndHelper(source, command[1], end);
+        if (verbEnd >= end)
+          return null;
+        index = verbEnd;
+        continue;
+      }
+      index = command !== null ? command[1] : index + 1;
+      continue;
+    }
+    const [markerKind, name, markerEnd] = marker;
+    if (markerKind === "begin") {
+      stack.push(name);
+    } else if (name !== stack[stack.length - 1]) {
+      return null;
+    } else {
+      stack.pop();
+      if (stack.length === 0) {
+        return [opening[1], markerEnd];
+      }
+    }
+    index = markerEnd;
+  }
+  return null;
+}
+function readArgumentEnd(source, start, end) {
+  start = skipIgnorable(source, start, end);
+  if (start >= end)
+    return null;
+  if (source[start] === "{" || source[start] === "(" || source[start] === "[") {
+    return readGroupEnd(source, start, end);
+  }
+  if (source[start] === "\\") {
+    const operand = readOperand(source, start, end);
+    return operand !== null && operand.kind !== "opaque" ? operand.end : null;
+  }
+  return start + 1;
+}
+function consumeScripts(source, start, end) {
+  let current = start;
+  while (true) {
+    const marker = skipIgnorable(source, current, end);
+    if (marker >= end || source[marker] !== "_" && source[marker] !== "^") {
+      return current;
+    }
+    const argumentEnd = readArgumentEnd(source, marker + 1, end);
+    if (argumentEnd === null) {
+      return current;
+    }
+    current = argumentEnd;
+  }
+}
+function consumePostfix(source, start, end) {
+  let current = start;
+  while (true) {
+    const previous = current;
+    current = consumeScripts(source, current, end);
+    const primeStart = skipIgnorable(source, current, end);
+    if (primeStart < end && (source[primeStart] === "'" || source[primeStart] === "\u2019")) {
+      current = primeStart;
+    }
+    while (current < end && (source[current] === "'" || source[current] === "\u2019")) {
+      current++;
+    }
+    if (current === previous) {
+      return current;
+    }
+  }
+}
+function consumeOperatorScripts(source, start, end) {
+  const modifierStart = skipIgnorable(source, start, end);
+  const modifier = readCommand(source, modifierStart, end);
+  if (modifier !== null && (modifier[0] === "displaylimits" || modifier[0] === "limits" || modifier[0] === "nolimits")) {
+    start = modifier[1];
+  }
+  return consumeScripts(source, start, end);
+}
+function readNormEnd(source, start, end) {
+  const opening = readCommand(source, start, end);
+  if (opening === null)
+    return null;
+  const closingNameMap = { "|": "|", Vert: "Vert", lVert: "rVert" };
+  const closingName = closingNameMap[opening[0]];
+  if (!closingName)
+    return null;
+  let index = opening[1];
+  let braceDepth = 0;
+  while (index < end) {
+    if (source[index] === "%") {
+      index = skipComment(source, index, end);
+      continue;
+    }
+    if (source[index] === "{") {
+      braceDepth++;
+    } else if (source[index] === "}" && braceDepth > 0) {
+      braceDepth--;
+    } else if (source[index] === "\\") {
+      const command = readCommand(source, index, end);
+      if (command !== null) {
+        if (command[0] === "verb") {
+          const verbEnd = readVerbEndHelper(source, command[1], end);
+          if (verbEnd >= end)
+            return null;
+          index = verbEnd;
+          continue;
+        }
+        if (command[0] === "left") {
+          const groupEnd = readLeftRightEnd(source, index, end);
+          if (groupEnd !== null) {
+            index = groupEnd;
+            continue;
+          }
+        }
+        if (braceDepth === 0 && command[0] === closingName) {
+          return consumePostfix(source, command[1], end);
+        }
+        index = command[1];
+        continue;
+      }
+    }
+    index++;
+  }
+  return null;
+}
+function consumeArguments(source, start, end, count) {
+  let index = start;
+  for (let i = 0; i < count; i++) {
+    const argumentEnd = readArgumentEnd(source, index, end);
+    if (argumentEnd === null)
+      return null;
+    index = argumentEnd;
+  }
+  return index;
+}
+function consumeOptionalBracket(source, start, end) {
+  const index = skipIgnorable(source, start, end);
+  if (index >= end || source[index] !== "[") {
+    return start;
+  }
+  return readGroupEnd(source, index, end);
+}
+function readVerbEndHelper(source, start, end) {
+  const index = start < end && source[start] === "*" ? start + 1 : start;
+  if (index >= end || /\s/.test(source[index])) {
+    return end;
+  }
+  const closing = source.indexOf(source[index], index + 1);
+  return closing < 0 || closing >= end ? end : closing + 1;
+}
+function containsVerbCommand(source, start, end) {
+  let index = start;
+  while (index < end) {
+    if (source[index] === "%") {
+      index = skipComment(source, index, end);
+      continue;
+    }
+    if (source[index] !== "\\") {
+      index++;
+      continue;
+    }
+    const command = readCommand(source, index, end);
+    if (command === null) {
+      index++;
+      continue;
+    }
+    if (command[0] === "verb") {
+      return true;
+    }
+    index = command[1];
+  }
+  return false;
+}
+function readNegatedRelationEnd(source, start, end) {
+  const index = skipIgnorable(source, start, end);
+  if (index < end && (source[index] === "=" || source[index] === "<" || source[index] === ">")) {
+    return index + 1;
+  }
+  const command = readCommand(source, index, end);
+  if (command !== null && NEGATABLE_RELATIONS.has(command[0])) {
+    return command[1];
+  }
+  return null;
+}
+function readOperand(source, start, end) {
+  end = end === void 0 ? source.length : end;
+  if (start >= end || /\s/.test(source[start])) {
+    return null;
+  }
+  if (source[start] === "\\") {
+    const command = readCommand(source, start, end);
+    if (command === null)
+      return null;
+    let [name, commandEnd] = command;
+    if (name === "operatorname" && commandEnd < end && source[commandEnd] === "*") {
+      commandEnd++;
+    }
+    if (name === "|" || name === "Vert" || name === "lVert") {
+      const normEnd = readNormEnd(source, start, end);
+      if (normEnd !== null) {
+        return { kind: "norm", start, end: normEnd };
+      }
+      return {
+        kind: name === "lVert" ? "opaque" : "structural",
+        start,
+        end: name !== "lVert" ? commandEnd : end
+      };
+    }
+    if (name === "verb") {
+      return { kind: "opaque", start, end: readVerbEndHelper(source, commandEnd, end) };
+    }
+    if (name === "not") {
+      const relationEnd = readNegatedRelationEnd(source, commandEnd, end);
+      return {
+        kind: "opaque",
+        start,
+        end: relationEnd !== null ? relationEnd : end
+      };
+    }
+    if (name === "begin") {
+      const env = readEnvironmentEnd(source, start, end);
+      if (env !== null) {
+        const [envName, envEnd] = env;
+        if (containsVerbCommand(source, start, envEnd)) {
+          return { kind: "opaque", start, end: envEnd };
+        }
+        const kind2 = MATRIX_ENVIRONMENTS.has(envName) ? "matrix" : "environment";
+        return {
+          kind: kind2,
+          start,
+          end: consumePostfix(source, envEnd, end)
+        };
+      }
+      return { kind: "opaque", start, end };
+    }
+    if (name === "left") {
+      const groupEnd = readLeftRightEnd(source, start, end);
+      if (groupEnd === null) {
+        return { kind: "opaque", start, end };
+      }
+      if (containsVerbCommand(source, start, groupEnd)) {
+        return { kind: "opaque", start, end: groupEnd };
+      }
+      return {
+        kind: "group",
+        start,
+        end: consumePostfix(source, groupEnd, end)
+      };
+    }
+    if (OPERATOR_COMMANDS.has(name)) {
+      return {
+        kind: "operator",
+        start,
+        end: consumeOperatorScripts(source, commandEnd, end)
+      };
+    }
+    if (name === "\\") {
+      let layoutEnd = commandEnd;
+      if (layoutEnd < end && source[layoutEnd] === "*") {
+        layoutEnd++;
+      }
+      const optionalStart = skipIgnorable(source, layoutEnd, end);
+      if (optionalStart < end && source[optionalStart] === "[") {
+        const optionalEnd = readGroupEnd(source, optionalStart, end);
+        if (optionalEnd === null) {
+          return { kind: "opaque", start, end };
+        }
+        layoutEnd = optionalEnd;
+      }
+      return { kind: "structural", start, end: layoutEnd };
+    }
+    if (NON_OPERAND_COMMANDS.has(name)) {
+      return { kind: "structural", start, end: commandEnd };
+    }
+    if (DELIMITER_SIZE_COMMANDS.has(name)) {
+      const delimiterEnd = readDelimiterEnd(source, commandEnd, end);
+      return {
+        kind: "structural",
+        start,
+        end: delimiterEnd !== null ? delimiterEnd : commandEnd
+      };
+    }
+    if (SYMBOL_MACROS.has(name)) {
+      return {
+        kind: "symbol",
+        start,
+        end: consumePostfix(source, commandEnd, end)
+      };
+    }
+    if (name === "color" || name === "colorbox" || name === "textcolor") {
+      const optionalEnd = consumeOptionalBracket(source, commandEnd, end);
+      const argsEnd = optionalEnd !== null ? consumeArguments(source, optionalEnd, end, 2) : null;
+      return {
+        kind: "opaque",
+        start,
+        end: argsEnd !== null ? argsEnd : end
+      };
+    }
+    if (name === "fcolorbox") {
+      const optionalEnd = consumeOptionalBracket(source, commandEnd, end);
+      const frameEnd = optionalEnd !== null ? consumeArguments(source, optionalEnd, end, 1) : null;
+      const bgModelEnd = frameEnd !== null ? consumeOptionalBracket(source, frameEnd, end) : null;
+      const argsEnd = bgModelEnd !== null ? consumeArguments(source, bgModelEnd, end, 2) : null;
+      return {
+        kind: "opaque",
+        start,
+        end: argsEnd !== null ? argsEnd : end
+      };
+    }
+    let argumentCount = 0;
+    if (name === "frac" || name === "dfrac" || name === "tfrac") {
+      argumentCount = 2;
+    } else if (STYLE_MACROS.has(name) || name === "boxed") {
+      argumentCount = 1;
+    } else if (name === "sqrt") {
+      const optional = skipIgnorable(source, commandEnd, end);
+      if (optional < end && source[optional] === "[") {
+        const optionalEnd = readGroupEnd(source, optional, end);
+        if (optionalEnd === null)
+          return null;
+        commandEnd = optionalEnd;
+      }
+      argumentCount = 1;
+    } else if (UNARY_MACROS.has(name)) {
+      argumentCount = 1;
+    } else if (name === "overset" || name === "stackrel" || name === "underset") {
+      argumentCount = 2;
+    }
+    let atomEnd = commandEnd;
+    if (argumentCount) {
+      const argumentsEnd = consumeArguments(source, commandEnd, end, argumentCount);
+      if (argumentsEnd === null) {
+        return { kind: "opaque", start, end };
+      }
+      atomEnd = argumentsEnd;
+    }
+    if (!argumentCount && !FUNCTION_MACROS.has(name)) {
+      return { kind: "opaque", start, end };
+    }
+    const scriptedEnd = consumeScripts(source, atomEnd, end);
+    if (FUNCTION_MACROS.has(name)) {
+      const groupStart = skipIgnorable(source, scriptedEnd, end);
+      if (groupStart < end && (source[groupStart] === "(" || source[groupStart] === "[")) {
+        const groupEnd = readGroupEnd(source, groupStart, end);
+        if (groupEnd !== null) {
+          atomEnd = groupEnd;
+        }
+      } else if (source.startsWith("\\left", groupStart) && ["(", "[", "lparen", "lbrack"].includes(leftDelimiter(source, groupStart, end) ?? "")) {
+        const groupEnd = readLeftRightEnd(source, groupStart, end);
+        if (groupEnd !== null) {
+          atomEnd = groupEnd;
+        }
+      } else {
+        atomEnd = scriptedEnd;
+      }
+    }
+    const kind = OPAQUE_MACROS.has(name) ? "opaque" : FUNCTION_MACROS.has(name) ? "function" : "operand";
+    return {
+      kind,
+      start,
+      end: consumePostfix(source, atomEnd, end)
+    };
+  }
+  if (source[start] === "(" || source[start] === "{" || source[start] === "[") {
+    const groupEnd = readGroupEnd(source, start, end);
+    if (groupEnd === null) {
+      return { kind: "opaque", start, end };
+    }
+    if (containsVerbCommand(source, start, groupEnd)) {
+      return { kind: "opaque", start, end: groupEnd };
+    }
+    const innerStart = skipIgnorable(source, start + 1, groupEnd - 1);
+    const innerCommand = readCommand(source, innerStart, groupEnd - 1);
+    const kind = source[start] === "{" && innerCommand !== null && innerCommand[0] === "color" ? "opaque" : "group";
+    return {
+      kind,
+      start,
+      end: consumePostfix(source, groupEnd, end)
+    };
+  }
+  const numberMatch = source.slice(start, end).match(/^(?:\d+(?:\.\d*)?|\.\d+)/);
+  if (numberMatch) {
+    return {
+      kind: "number",
+      start,
+      end: consumePostfix(source, start + numberMatch[0].length, end)
+    };
+  }
+  if (/[A-Za-z]/.test(source[start])) {
+    let nameEnd = start + 1;
+    while (nameEnd < end && source[nameEnd] === "'") {
+      nameEnd++;
+    }
+    const groupStart = skipIgnorable(source, nameEnd, end);
+    let atomEnd = nameEnd;
+    let kind = "symbol";
+    if (groupStart < end && source[groupStart] === "(") {
+      const groupEnd = readGroupEnd(source, groupStart, end);
+      if (groupEnd !== null) {
+        atomEnd = groupEnd;
+        kind = "function";
+      }
+    } else if (source.startsWith("\\left", groupStart) && ["(", "lparen"].includes(leftDelimiter(source, groupStart, end) ?? "")) {
+      const groupEnd = readLeftRightEnd(source, groupStart, end);
+      if (groupEnd !== null) {
+        atomEnd = groupEnd;
+        kind = "function";
+      }
+    }
+    return {
+      kind,
+      start,
+      end: consumePostfix(source, atomEnd, end)
+    };
+  }
+  return null;
+}
+function findOperandSpans(source, start = 0, end) {
+  end = end === void 0 ? source.length : end;
+  const operands = [];
+  let index = start;
+  while (index < end) {
+    index = skipWhitespace(source, index, end);
+    if (index >= end)
+      break;
+    if (source[index] === "%") {
+      index = skipComment(source, index, end);
+      continue;
+    }
+    const operand = readOperand(source, index, end);
+    if (operand === null) {
+      index++;
+      continue;
+    }
+    if (operand.kind !== "operator" && operand.kind !== "opaque" && operand.kind !== "structural") {
+      operands.push(operand);
+    }
+    index = Math.max(index + 1, operand.end);
+  }
+  return operands;
+}
+function findAllOperatorSpans(source, start = 0, end) {
+  end = end === void 0 ? source.length : end;
+  const operators = [];
+  let index = start;
+  while (index < end) {
+    if (source[index] === "%") {
+      index = skipComment(source, index, end);
+      continue;
+    }
+    const operand = readOperand(source, index, end);
+    if (operand !== null) {
+      if (operand.kind === "operator") {
+        operators.push(operand);
+        index = operand.end;
+        continue;
+      }
+      if (operand.kind === "opaque") {
+        index = operand.end;
+        continue;
+      }
+    }
+    if (source[index] === "\\") {
+      const command = readCommand(source, index, end);
+      if (command !== null) {
+        index = command[1];
+        continue;
+      }
+    }
+    index++;
+  }
+  return operators;
+}
+function findTopLevelTokens(source, tokens, start = 0, end) {
+  end = end === void 0 ? source.length : end;
+  const found = [];
+  let index = start;
+  const ordered = [...tokens].sort((a, b) => b.length - a.length);
+  while (index < end) {
+    index = skipWhitespace(source, index, end);
+    if (index >= end)
+      break;
+    if (source[index] === "%") {
+      index = skipComment(source, index, end);
+      continue;
+    }
+    let matchedToken = null;
+    for (const item of ordered) {
+      if (source.startsWith(item, index)) {
+        if (item.startsWith("\\") && /[A-Za-z]/.test(item[item.length - 1]) && index + item.length < end && /[A-Za-z]/.test(source[index + item.length])) {
+          continue;
+        }
+        matchedToken = item;
+        break;
+      }
+    }
+    if (matchedToken !== null) {
+      found.push([index, index + matchedToken.length, matchedToken]);
+      index += matchedToken.length;
+      continue;
+    }
+    const operand = readOperand(source, index, end);
+    if (operand !== null) {
+      index = Math.max(index + 1, operand.end);
+      continue;
+    }
+    index++;
+  }
+  return found;
+}
+function findScriptArgumentSpans(source) {
+  const spans = [];
+  let index = 0;
+  while (index < source.length) {
+    if (source[index] === "%") {
+      index = skipComment(source, index, source.length);
+      continue;
+    }
+    if (source[index] !== "_" && source[index] !== "^") {
+      const operand = readOperand(source, index);
+      if (operand !== null && operand.kind === "opaque") {
+        index = operand.end;
+        continue;
+      }
+      if (source[index] === "\\") {
+        const command = readCommand(source, index, source.length);
+        if (command !== null) {
+          index = command[1];
+          continue;
+        }
+      }
+      index++;
+      continue;
+    }
+    const argumentStart = skipIgnorable(source, index + 1, source.length);
+    const argumentEnd = readArgumentEnd(source, argumentStart, source.length);
+    if (argumentEnd === null) {
+      index++;
+      continue;
+    }
+    let innerStart = argumentStart;
+    let innerEnd = argumentEnd;
+    if (source[argumentStart] === "{") {
+      innerStart = argumentStart + 1;
+      innerEnd = argumentEnd - 1;
+    }
+    if (innerStart < innerEnd) {
+      spans.push({
+        kind: source[index] === "_" ? "subscript" : "superscript",
+        start: innerStart,
+        end: innerEnd
+      });
+    }
+    index = argumentEnd;
+  }
+  return spans;
+}
+
+// src/utils/coloring.ts
+function commandColor(command, palette = COLORS) {
+  if (BIG_OPERATORS.has(command) || INTEGRALS.has(command) || LIMIT_OPERATORS.has(command)) {
+    return palette.orange;
+  }
+  if (ARROWS.has(command)) {
+    return palette.arrow;
+  }
+  if (SET_SYMBOLS.has(command)) {
+    return palette.set;
+  }
+  if (SPACING_COMMANDS.has(command)) {
+    return palette.spacing;
+  }
+  if (MULTIPLICATION_SYMBOLS.has(command)) {
+    return palette.dot;
+  }
+  return palette.relation;
+}
+
+// src/utils/latex_helpers.ts
+function matchCommand(text, index) {
+  if (index >= text.length || text[index] !== "\\")
+    return null;
+  const match = text.slice(index).match(/^(\\[A-Za-z]+|\\.)/);
+  return match ? match[0] : null;
+}
+function readCommentEnd(text, start) {
+  let index = start + 1;
+  while (index < text.length && text[index] !== "\r" && text[index] !== "\n") {
+    index++;
+  }
+  if (text.startsWith("\r\n", index)) {
+    return index + 2;
+  }
+  return Math.min(index + 1, text.length);
+}
+function readVerbEnd(text, start) {
+  if (!text.startsWith("\\verb", start)) {
+    return null;
+  }
+  let commandEnd = start + 5;
+  if (commandEnd < text.length && /[A-Za-z]/.test(text[commandEnd])) {
+    return null;
+  }
+  if (commandEnd < text.length && text[commandEnd] === "*") {
+    commandEnd++;
+  }
+  if (commandEnd >= text.length || /\s/.test(text[commandEnd])) {
+    return [text.length, false];
+  }
+  const delimiter = text[commandEnd];
+  const closing = text.indexOf(delimiter, commandEnd + 1);
+  return closing < 0 ? [text.length, false] : [closing + 1, true];
+}
+function readBraced(text, start) {
+  if (start >= text.length || text[start] !== "{") {
+    return null;
+  }
+  let depth = 0;
+  let index = start;
+  while (index < text.length) {
+    const char = text[index];
+    if (char === "%") {
+      index = readCommentEnd(text, index);
+      continue;
+    }
+    if (char === "\\") {
+      const verb = readVerbEnd(text, index);
+      if (verb !== null) {
+        const [vEnd, closed] = verb;
+        if (!closed) {
+          return null;
+        }
+        index = vEnd;
+        continue;
+      }
+      const command = matchCommand(text, index);
+      index = command !== null ? index + command.length : index + 1;
+      continue;
+    }
+    if (char === "{") {
+      depth++;
+    } else if (char === "}") {
+      depth--;
+      if (depth === 0) {
+        return [text.slice(start, index + 1), index + 1];
+      }
+    }
+    index++;
+  }
+  return null;
+}
+function readColorWrapper(text, start) {
+  let command = null;
+  for (const candidate of ["\\textcolor", "\\color"]) {
+    if (text.startsWith(candidate, start) && (start + candidate.length === text.length || !/[A-Za-z]/.test(text[start + candidate.length]))) {
+      command = candidate;
+      break;
+    }
+  }
+  if (command === null) {
+    return null;
+  }
+  let index = start + command.length;
+  while (index < text.length && /\s/.test(text[index])) {
+    index++;
+  }
+  const colorData = readBraced(text, index);
+  if (colorData === null) {
+    return null;
+  }
+  index = colorData[1];
+  while (index < text.length && /\s/.test(text[index])) {
+    index++;
+  }
+  const valueData = readBraced(text, index);
+  if (valueData === null) {
+    return null;
+  }
+  const [value, end] = valueData;
+  return [value.slice(1, -1), end];
+}
+function readColorCommand(text, start) {
+  const wrapper = readColorWrapper(text, start);
+  if (wrapper === null) {
+    return null;
+  }
+  const [, end] = wrapper;
+  return [text.slice(start, end), end];
+}
+function containsColorWrapper(text) {
+  let index = 0;
+  while (index < text.length) {
+    if (text[index] === "%") {
+      index = readCommentEnd(text, index);
+      continue;
+    }
+    if (text[index] === "\\") {
+      if (readColorWrapper(text, index) !== null) {
+        return true;
+      }
+      const verb = readVerbEnd(text, index);
+      if (verb !== null) {
+        index = verb[0];
+        continue;
+      }
+      const command = matchCommand(text, index);
+      index = command !== null ? index + command.length : index + 1;
+      continue;
+    }
+    index++;
+  }
+  return false;
+}
+
+// src/utils/spans.ts
+function crosses(left, right) {
+  return left.start < right.start && right.start < left.end && left.end < right.end || right.start < left.start && left.start < right.end && right.end < left.end;
+}
+function selectColorSpans(source, spans) {
+  const candidates = /* @__PURE__ */ new Map();
+  for (const span of spans) {
+    const priority = span.priority ?? 0;
+    if (!(0 <= span.start && span.start < span.end && span.end <= source.length)) {
+      continue;
+    }
+    const key = `${span.start}:${span.end}`;
+    const previous = candidates.get(key);
+    if (!previous || priority > (previous.priority ?? 0)) {
+      candidates.set(key, { ...span, priority });
+    }
+  }
+  const sortedCandidates = Array.from(candidates.values()).sort((a, b) => {
+    const pa = a.priority ?? 0;
+    const pb = b.priority ?? 0;
+    if (pa !== pb)
+      return pb - pa;
+    if (a.start !== b.start)
+      return a.start - b.start;
+    return b.end - b.start - (a.end - a.start);
+  });
+  const accepted = [];
+  for (const span of sortedCandidates) {
+    if (accepted.some((other) => crosses(span, other))) {
+      continue;
+    }
+    accepted.push(span);
+  }
+  return accepted.sort((a, b) => {
+    if (a.start !== b.start)
+      return a.start - b.start;
+    return b.end - a.end;
+  });
+}
+function applyColorSpans(source, spans) {
+  const selected = selectColorSpans(source, spans);
+  const openings = /* @__PURE__ */ new Map();
+  const closings = /* @__PURE__ */ new Map();
+  for (const span of selected) {
+    if (!openings.has(span.start))
+      openings.set(span.start, []);
+    openings.get(span.start).push(span);
+    if (!closings.has(span.end))
+      closings.set(span.end, []);
+    closings.get(span.end).push(span);
+  }
+  const pieces = [];
+  for (let index = 0; index <= source.length; index++) {
+    const closeList = closings.get(index);
+    if (closeList) {
+      const sortedClosings = [...closeList].sort((a, b) => b.start - a.start);
+      for (let i = 0; i < sortedClosings.length; i++) {
+        pieces.push("}");
+      }
+    }
+    const openList = openings.get(index);
+    if (openList) {
+      const sortedOpenings = [...openList].sort((a, b) => b.end - a.end);
+      for (const span of sortedOpenings) {
+        pieces.push(`\\textcolor{${span.color}}{`);
+      }
+    }
+    if (index < source.length) {
+      pieces.push(source[index]);
+    }
+  }
+  return pieces.join("");
+}
+
+// src/parsers/scanner.ts
+function collectOperatorSpans(body, start = 0, end, palette = COLORS) {
+  const spans = [];
+  for (const operator of findAllOperatorSpans(body, start, end)) {
+    const match = body.slice(operator.start, operator.end).match(/^(\\[A-Za-z]+|\\.)/);
+    if (match) {
+      spans.push({
+        start: operator.start,
+        end: operator.end,
+        color: commandColor(match[0], palette),
+        priority: 30
+      });
+    }
+  }
+  return spans;
+}
+function collectScannerSpans(body, palette = COLORS) {
+  const scripts = findScriptArgumentSpans(body);
+  const operators = findAllOperatorSpans(body);
+  const spans = scripts.map((item) => ({
+    start: item.start,
+    end: item.end,
+    color: palette[item.kind === "subscript" ? "chain" : "upper"],
+    priority: 10
+  }));
+  spans.push(...collectOperatorSpans(body, 0, void 0, palette));
+  const scriptRanges = scripts.map((item) => [item.start, item.end]);
+  const operatorRanges = operators.map((item) => [item.start, item.end]);
+  let index = 0;
+  while (index < body.length) {
+    if (body[index] === "%") {
+      let lineEnd = index + 1;
+      while (lineEnd < body.length && body[lineEnd] !== "\r" && body[lineEnd] !== "\n") {
+        lineEnd++;
+      }
+      if (lineEnd < body.length && body[lineEnd] === "\r" && lineEnd + 1 < body.length && body[lineEnd + 1] === "\n") {
+        lineEnd += 2;
+      } else if (lineEnd < body.length) {
+        lineEnd += 1;
+      }
+      index = lineEnd;
+      continue;
+    }
+    const existing = readColorCommand(body, index);
+    if (existing !== null) {
+      index = existing[1];
+      continue;
+    }
+    const operand = readOperand(body, index);
+    if (operand !== null && operand.kind === "opaque") {
+      index = operand.end;
+      continue;
+    }
+    const containingOperator = operatorRanges.find(
+      ([start, end]) => start <= index && index < end
+    );
+    if (containingOperator !== void 0) {
+      index = containingOperator[1];
+      continue;
+    }
+    const containingScript = scriptRanges.find(
+      ([start, end]) => start <= index && index < end
+    );
+    if (containingScript !== void 0) {
+      index = containingScript[1];
+      continue;
+    }
+    const cmdMatch = body.slice(index).match(/^(\\[A-Za-z]+|\\.)/);
+    if (cmdMatch) {
+      const command = cmdMatch[0];
+      if (SORTED_COLOR_COMMANDS.includes(command)) {
+        spans.push({
+          start: index,
+          end: index + command.length,
+          color: commandColor(command, palette)
+        });
+      }
+      index += command.length;
+      if (index < body.length && body[index] === "*") {
+        index += 1;
+      }
+      continue;
+    }
+    const nonSlashCommand = SORTED_COLOR_COMMANDS.find(
+      (cand) => !cand.startsWith("\\") && body.startsWith(cand, index)
+    );
+    if (nonSlashCommand !== void 0) {
+      spans.push({
+        start: index,
+        end: index + nonSlashCommand.length,
+        color: commandColor(nonSlashCommand, palette)
+      });
+      index += nonSlashCommand.length;
+      continue;
+    }
+    index += 1;
+  }
+  return spans;
+}
+
+// src/converters/semantic.ts
+function parseMathBlock(source) {
+  const match = source.match(/^(\s*(?:#+\s*)?)\$\$([\s\S]*)\$\$([\s]*)$/);
+  if (!match)
+    return null;
+  const prefix = match[1];
+  const body = match[2];
+  const suffix = match[3];
+  return {
+    prefix,
+    body,
+    suffix,
+    render(coloredBody) {
+      return `${prefix}$$${coloredBody}$$${suffix}`;
+    }
+  };
+}
+function trimRange(source, start, end) {
+  while (start < end && /\s/.test(source[start])) {
+    start++;
+  }
+  while (end > start && /\s/.test(source[end - 1])) {
+    end--;
+  }
+  return [start, end];
+}
+function firstEquality(source) {
+  const matches = findTopLevelTokens(source, ["="]);
+  return matches.length > 0 ? [matches[0][0], matches[0][1]] : null;
+}
+function relationSpans(source, start = 0, end, palette = COLORS) {
+  const colorByToken = {
+    "=": palette.relation,
+    "+": palette.relation,
+    "-": palette.relation,
+    "\\cdot": palette.dot,
+    "\\otimes": palette.relation,
+    "\xB7": palette.dot,
+    "*": palette.dot
+  };
+  const tokens = Object.keys(colorByToken);
+  return findTopLevelTokens(source, tokens, start, end).map(([s, e, token]) => ({
+    start: s,
+    end: e,
+    color: colorByToken[token],
+    priority: 30
+  }));
+}
+
+// src/converters/derivative.ts
+function compact(value) {
+  return value.replace(/\s+/g, "");
+}
+function isDerivativePrefix(value) {
+  const c = compact(value);
+  return c.startsWith("\\frac{d}{d") || c.startsWith("\\dfrac{d}{d") || c.startsWith("\\tfrac{d}{d");
+}
+function isPrime(value) {
+  return /^(?:[A-Za-z]|\\[A-Za-z]+)'/.test(value.trimStart());
+}
+function isNumeric(value) {
+  const c = compact(value);
+  if (/^[+-]?\d+(?:\.\d+)?$/.test(c)) {
+    return true;
+  }
+  return /^\\(?:dfrac|tfrac|frac)\{[+-]?\d+(?:\.\d+)?\}\{[+-]?\d+(?:\.\d+)?\}$/.test(c);
+}
+function isOuterDerivative(value) {
+  const c = compact(value);
+  const prefixes = [
+    "\\cos",
+    "\\sin",
+    "\\tan",
+    "\\sec",
+    "\\ln",
+    "\\log",
+    "\\sqrt",
+    "\\frac",
+    "\\dfrac",
+    "\\tfrac",
+    "e^"
+  ];
+  return prefixes.some((p) => c.startsWith(p)) || isPrime(c);
+}
+function hasAdditiveSeparator(value) {
+  return /[+\-=<>]|\\(?:pm|mp|leq|geq|neq|approx|sim|equiv)(?![A-Za-z])/.test(value);
+}
+function isMultiplicativeGap(value) {
+  return /^(?:\s|[·*]|\\(?:cdot|times|,|:|;|!|quad|qquad)(?![A-Za-z]))*$/.test(value);
+}
+function fractionArguments(body, operandStart, end) {
+  const command = readCommand(body, operandStart, end);
+  if (command === null || !["frac", "dfrac", "tfrac"].includes(command[0])) {
+    return [];
+  }
+  const ranges = [];
+  let index = command[1];
+  for (let i = 0; i < 2; i++) {
+    index = skipIgnorable(body, index, end);
+    const groupEnd = readGroupEnd(body, index, end);
+    if (groupEnd === null) {
+      return [];
+    }
+    ranges.push([index + 1, groupEnd - 1]);
+    index = groupEnd;
+  }
+  return ranges;
+}
+function rhsSpans(body, start, end, palette = COLORS) {
+  end = end === void 0 ? body.length : end;
+  const operands = findOperandSpans(body, start, end);
+  const spans = [];
+  let primeSeen = false;
+  let previousEnd = start;
+  for (let index = 0; index < operands.length; index++) {
+    const operand = operands[index];
+    if (hasAdditiveSeparator(body.slice(previousEnd, operand.start))) {
+      primeSeen = false;
+    }
+    const value = body.slice(operand.start, operand.end);
+    const comp = compact(value);
+    const nextExists = index + 1 < operands.length;
+    const multiplicativeGap = nextExists ? body.slice(operand.end, operands[index + 1].start) : "";
+    const isCoeff = isNumeric(value) || nextExists && /^[A-Za-z]$/.test(comp) && isMultiplicativeGap(multiplicativeGap);
+    let colorName;
+    if (isCoeff) {
+      colorName = "orange";
+    } else if (isPrime(value)) {
+      colorName = primeSeen ? "chain" : "derivative";
+      primeSeen = true;
+    } else if (primeSeen) {
+      colorName = operand.kind === "symbol" ? "chain" : "main";
+    } else {
+      colorName = isOuterDerivative(value) ? "derivative" : "main";
+    }
+    let spanStart = operand.start;
+    if (isNumeric(value)) {
+      let sign = operand.start - 1;
+      while (sign >= start && /\s/.test(body[sign])) {
+        sign--;
+      }
+      if (sign >= start && (body[sign] === "+" || body[sign] === "-")) {
+        let before = sign - 1;
+        while (before >= start && /\s/.test(body[before])) {
+          before--;
+        }
+        if (before < start || "=+-(".includes(body[before])) {
+          spanStart = sign;
+        }
+      }
+    }
+    const primedMatch = value.match(/^[A-Za-z]+['’]+/);
+    let productGroup = null;
+    if (primedMatch) {
+      const groupStart = skipIgnorable(
+        body,
+        operand.start + primedMatch[0].length,
+        operand.end
+      );
+      const groupEnd = readGroupEnd(body, groupStart, operand.end);
+      if (groupEnd !== null && (body.slice(groupStart + 1, groupEnd - 1).includes("+") || body.slice(groupStart + 1, groupEnd - 1).includes("-"))) {
+        productGroup = [groupStart, operand.end];
+      }
+    }
+    if (productGroup === null) {
+      spans.push({
+        start: spanStart,
+        end: operand.end,
+        color: palette[colorName],
+        priority: 20
+      });
+    } else {
+      spans.push(
+        {
+          start: spanStart,
+          end: operand.start + primedMatch[0].length,
+          color: palette[colorName],
+          priority: 20
+        },
+        {
+          start: productGroup[0],
+          end: productGroup[1],
+          color: palette.main,
+          priority: 20
+        }
+      );
+    }
+    if (!isNumeric(value) && ["\\frac", "\\dfrac", "\\tfrac"].some((p) => value.trimStart().startsWith(p))) {
+      for (const [innerStart, innerEnd] of fractionArguments(
+        body,
+        operand.start,
+        operand.end
+      )) {
+        const innerSemantic = rhsSpans(body, innerStart, innerEnd, palette);
+        const innerRelations = relationSpans(body, innerStart, innerEnd, palette);
+        spans.push(
+          ...innerRelations.filter(
+            (rel) => !innerSemantic.some(
+              (sem) => sem.start <= rel.start && rel.end <= sem.end
+            )
+          )
+        );
+        spans.push(...innerSemantic);
+      }
+    }
+    previousEnd = operand.end;
+  }
+  return spans;
+}
+function convertDerivativeLine(source, palette = COLORS) {
+  const block = parseMathBlock(source);
+  if (block === null) {
+    return null;
+  }
+  if (containsColorWrapper(block.body)) {
+    return source;
+  }
+  const bodyStart = skipIgnorable(block.body, 0, block.body.length);
+  const prefix = readOperand(block.body, bodyStart);
+  if (prefix === null || !isDerivativePrefix(block.body.slice(prefix.start, prefix.end))) {
+    return null;
+  }
+  const equality = firstEquality(block.body);
+  if (equality === null || equality[0] <= prefix.end) {
+    return null;
+  }
+  const [targetStart, targetEnd] = trimRange(block.body, prefix.end, equality[0]);
+  let relations = relationSpans(block.body, 0, void 0, palette);
+  const operators = collectOperatorSpans(block.body, 0, void 0, palette);
+  let target = null;
+  if (targetStart < targetEnd) {
+    target = {
+      start: targetStart,
+      end: targetEnd,
+      color: palette.main,
+      priority: 20
+    };
+  }
+  const semanticRhs = rhsSpans(block.body, equality[1], void 0, palette);
+  relations = relations.filter(
+    (span) => !semanticRhs.some((sem) => sem.start <= span.start && span.end <= sem.end)
+  );
+  const spans = [...relations, ...operators, ...semanticRhs];
+  if (target !== null) {
+    spans.push(target);
+  }
+  return block.render(applyColorSpans(block.body, spans));
+}
+
+// src/parsers/math_parser.ts
+function readCommand2(text, start, end) {
+  if (start >= end || text[start] !== "\\")
+    return null;
+  const match = text.slice(start, end).match(/^(\\[A-Za-z]+|\\.)/);
+  if (!match)
+    return null;
+  return [match[0], start + match[0].length];
+}
+function skipWhitespace2(text, start, end) {
+  while (start < end && /\s/.test(text[start])) {
+    start++;
+  }
+  return start;
+}
+function skipComment2(text, start, end) {
+  let index = start + 1;
+  while (index < end && text[index] !== "\r" && text[index] !== "\n") {
+    index++;
+  }
+  if (index < end && text[index] === "\r" && index + 1 < end && text[index + 1] === "\n") {
+    return index + 2;
+  }
+  return Math.min(index + 1, end);
+}
+function readDelimiter(text, start, end) {
+  if (start >= end)
+    return null;
+  if (text[start] !== "\\") {
+    return [text[start], start + 1];
+  }
+  return readCommand2(text, start, end);
+}
+function skipOpaqueArgument(text, start, end) {
+  start = skipWhitespace2(text, start, end);
+  const group = readBraced(text, start);
+  return group !== null && group[1] <= end ? group[1] : start;
+}
+function readLeftRightGroup(text, start, end) {
+  const command = readCommand2(text, start, end);
+  if (command === null || command[0] !== "\\left") {
+    return null;
+  }
+  const delimiterData = readDelimiter(
+    text,
+    skipWhitespace2(text, command[1], end),
+    end
+  );
+  if (delimiterData === null) {
+    return null;
+  }
+  const [opening, contentStart] = delimiterData;
+  let depth = 1;
+  let index = contentStart;
+  while (index < end) {
+    if (text[index] === "%") {
+      index = skipComment2(text, index, end);
+      continue;
+    }
+    if (text[index] === "{") {
+      const group = readBraced(text, index);
+      if (group === null || group[1] > end) {
+        return null;
+      }
+      index = group[1];
+      continue;
+    }
+    if (text[index] !== "\\") {
+      index++;
+      continue;
+    }
+    const nestedCommand = readCommand2(text, index, end);
+    if (nestedCommand === null) {
+      index++;
+      continue;
+    }
+    const [name, commandEnd] = nestedCommand;
+    if (name === "\\left") {
+      const delimiter = readDelimiter(
+        text,
+        skipWhitespace2(text, commandEnd, end),
+        end
+      );
+      if (delimiter !== null) {
+        depth++;
+        index = delimiter[1];
+        continue;
+      }
+    } else if (name === "\\right") {
+      const delimiter = readDelimiter(
+        text,
+        skipWhitespace2(text, commandEnd, end),
+        end
+      );
+      if (delimiter !== null) {
+        depth--;
+        if (depth === 0) {
+          return [opening, contentStart, index, delimiter[1]];
+        }
+        index = delimiter[1];
+        continue;
+      }
+    } else {
+      const operand = readOperand(text, index, end);
+      if (operand !== null && operand.kind === "opaque") {
+        index = operand.end;
+        continue;
+      }
+    }
+    if (OPAQUE_MACROS.has(name.slice(1))) {
+      const opaqueEnd = skipOpaqueArgument(text, commandEnd, end);
+      if (opaqueEnd !== commandEnd) {
+        index = opaqueEnd;
+        continue;
+      }
+    }
+    index = commandEnd;
+  }
+  return null;
+}
+function readPlainParentheses(text, start, end) {
+  let depth = 1;
+  let index = start + 1;
+  while (index < end) {
+    if (text[index] === "%") {
+      index = skipComment2(text, index, end);
+      continue;
+    }
+    if (text[index] === "{") {
+      const group = readBraced(text, index);
+      if (group === null || group[1] > end) {
+        return null;
+      }
+      index = group[1];
+      continue;
+    }
+    if (text[index] === "\\") {
+      const operand = readOperand(text, index, end);
+      if (operand !== null && operand.kind === "opaque") {
+        index = operand.end;
+        continue;
+      }
+      const command = readCommand2(text, index, end);
+      if (command === null) {
+        index++;
+        continue;
+      }
+      const [name, commandEnd] = command;
+      if (name === "\\left") {
+        const group = readLeftRightGroup(text, index, end);
+        if (group !== null) {
+          index = group[3];
+          continue;
+        }
+      } else if (OPAQUE_MACROS.has(name.slice(1))) {
+        const opaqueEnd = skipOpaqueArgument(text, commandEnd, end);
+        if (opaqueEnd !== commandEnd) {
+          index = opaqueEnd;
+          continue;
+        }
+      }
+      index = commandEnd;
+      continue;
+    }
+    if (text[index] === "(") {
+      depth++;
+    } else if (text[index] === ")") {
+      depth--;
+      if (depth === 0) {
+        return [start + 1, index, index + 1];
+      }
+    }
+    index++;
+  }
+  return null;
+}
+function readFunctionArguments(text, start, end) {
+  if (start >= end)
+    return null;
+  if (text[start] === "(") {
+    return readPlainParentheses(text, start, end);
+  }
+  const group = readLeftRightGroup(text, start, end);
+  if (group === null || group[0] !== "(" && group[0] !== "\\(") {
+    return null;
+  }
+  return [group[1], group[2], group[3]];
+}
+function collectSemanticSpansInternal(text, start, end, depth, spans, errors) {
+  let index = start;
+  while (index < end) {
+    if (text[index] === "%") {
+      index = skipComment2(text, index, end);
+      continue;
+    }
+    if (text[index] === "\\") {
+      const operand = readOperand(text, index, end);
+      if (operand !== null && operand.kind === "opaque") {
+        index = operand.end;
+        continue;
+      }
+      const command = readCommand2(text, index, end);
+      if (command !== null) {
+        const [name, commandEnd] = command;
+        if (OPAQUE_MACROS.has(name.slice(1))) {
+          const opaqueEnd = skipOpaqueArgument(text, commandEnd, end);
+          if (opaqueEnd !== commandEnd) {
+            index = opaqueEnd;
+            continue;
+          }
+        }
+        index = commandEnd;
+        continue;
+      }
+    }
+    const nameMatch = text.slice(index, end).match(/^[A-Za-z][A-Za-z0-9]*(?:')*/);
+    if (nameMatch) {
+      const name = nameMatch[0];
+      const nameEnd = index + name.length;
+      const args = readFunctionArguments(text, nameEnd, end);
+      if (args !== null) {
+        const [argumentStart, argumentEnd, callEnd] = args;
+        spans.push({
+          kind: "function",
+          value: name,
+          start: index,
+          end: nameEnd,
+          depth
+        });
+        collectSemanticSpansInternal(
+          text,
+          argumentStart,
+          argumentEnd,
+          depth + 1,
+          spans,
+          errors
+        );
+        index = callEnd;
+        continue;
+      }
+      if (nameEnd < end && text[nameEnd] === "(") {
+        errors.push(`unclosed function call after '${name}'`);
+      }
+      index = nameEnd;
+      continue;
+    }
+    if (depth) {
+      const numberMatch = text.slice(index, end).match(/^\d+(?:\.\d+)?/);
+      if (numberMatch) {
+        const num = numberMatch[0];
+        spans.push({
+          kind: "constant",
+          value: num,
+          start: index,
+          end: index + num.length,
+          depth
+        });
+        index = index + num.length;
+        continue;
+      }
+    }
+    index++;
+  }
+}
+function findSemanticSpans(source) {
+  const spans = [];
+  const errors = [];
+  collectSemanticSpansInternal(source, 0, source.length, 0, spans, errors);
+  return [spans, errors.length > 0 ? errors[0] : null];
+}
+
+// src/converters/generic.ts
+var FUNCTION_COLOR_NAMES = [
+  "main",
+  "derivative",
+  "chain"
+];
+function collectFunctionSpans(body, palette = COLORS) {
+  const [semantic] = findSemanticSpans(body);
+  const spans = [];
+  for (const item of semantic) {
+    let colorName;
+    if (item.kind === "function") {
+      colorName = FUNCTION_COLOR_NAMES[Math.min(item.depth, 2)];
+    } else if (item.kind === "constant") {
+      colorName = "orange";
+    } else {
+      continue;
+    }
+    spans.push({
+      start: item.start,
+      end: item.end,
+      color: palette[colorName],
+      priority: 20
+    });
+  }
+  return spans;
+}
+function colorLatexBody(body, palette = COLORS) {
+  if (containsColorWrapper(body)) {
+    return body;
+  }
+  return applyColorSpans(body, [
+    ...collectFunctionSpans(body, palette),
+    ...collectScannerSpans(body, palette)
+  ]);
+}
+
+// src/converters/matrix.ts
+var MATRIX_COMMAND_RE = /\\(?:mathbf|mathcal|nabla|det|tr|Tr|trace|Vert|lVert)(?![A-Za-z])|\\\|(?![A-Za-z])|\\operatorname\s*\{\s*tr\s*\}/;
+var MATRIX_ENV_RE = /\\begin\s*\{\s*(?:Bmatrix|Vmatrix|array|bmatrix|matrix|pmatrix|smallmatrix|vmatrix)\s*\}/;
+var NUMBER_RE = /^[+-]?\d+(?:\.\d+)?$/;
+function structuralSource(body) {
+  const visible = body.split("");
+  let index = 0;
+  while (index < body.length) {
+    if (body[index] === "%") {
+      let end = index + 1;
+      while (end < body.length && body[end] !== "\r" && body[end] !== "\n") {
+        visible[end] = " ";
+        end++;
+      }
+      visible[index] = " ";
+      index = end;
+      continue;
+    }
+    const operand = readOperand(body, index);
+    if (operand !== null && operand.kind === "opaque") {
+      for (let position = operand.start; position < operand.end; position++) {
+        if (visible[position] !== "\r" && visible[position] !== "\n") {
+          visible[position] = " ";
+        }
+      }
+      index = operand.end;
+      continue;
+    }
+    index++;
+  }
+  return visible.join("");
+}
+function isMatrixExpression(body) {
+  const structural = structuralSource(body);
+  const operands = findOperandSpans(structural);
+  return MATRIX_COMMAND_RE.test(structural) || MATRIX_ENV_RE.test(structural) || operands.some(
+    (operand) => operand.kind === "matrix" || operand.kind === "symbol" && operandText(structural, operand).includes("_")
+  );
+}
+function operandColorSpans(body, operands, names, palette = COLORS) {
+  const spans = [];
+  let semanticIndex = 0;
+  for (const operand of operands) {
+    const value = operandText(body, operand).replace(/\s+/g, "");
+    let name;
+    if (NUMBER_RE.test(value)) {
+      name = "orange";
+    } else {
+      name = names[Math.min(semanticIndex, names.length - 1)];
+      semanticIndex++;
+    }
+    spans.push({
+      start: operand.start,
+      end: operand.end,
+      color: palette[name],
+      priority: 20
+    });
+  }
+  return spans;
+}
+function convertMatrixBlock(source, palette = COLORS) {
+  const block = parseMathBlock(source);
+  if (block === null || !isMatrixExpression(block.body)) {
+    return null;
+  }
+  if (containsColorWrapper(block.body)) {
+    return source;
+  }
+  const equality = firstEquality(block.body);
+  if (equality === null) {
+    return null;
+  }
+  const lhs = findOperandSpans(block.body, 0, equality[0]);
+  const rhs = findOperandSpans(block.body, equality[1]);
+  if (lhs.length === 0 || rhs.length === 0) {
+    return null;
+  }
+  const lhsFirst = lhs[0].start < block.body.length ? operandText(block.body, lhs[0]).replace(/\s+/g, "") : "";
+  let lhsColors;
+  if (lhs.length === 1) {
+    lhsColors = lhsFirst.startsWith("\\det") || lhsFirst.startsWith("\\operatorname{tr}") ? ["upper"] : ["main"];
+  } else if (lhsFirst.startsWith("\\frac{\\partial}") || lhsFirst.startsWith("\\nabla")) {
+    lhsColors = ["upper", "main"];
+  } else {
+    lhsColors = ["upper", "chain", "orange"];
+  }
+  const lhsText = block.body.slice(0, equality[0]).replace(/\s+/g, "");
+  let rhsColors;
+  if (lhsFirst.startsWith("\\frac{\\partial}")) {
+    rhsColors = ["chain", "main"];
+  } else if (lhs.length > 1 && rhs.length === 1) {
+    rhsColors = ["main"];
+  } else if (lhsText.startsWith("\\det") || lhsText.startsWith("\\operatorname{tr}")) {
+    rhsColors = ["main", "chain"];
+  } else if (block.body.includes("\\otimes")) {
+    rhsColors = ["upper", "chain", "orange"];
+  } else {
+    rhsColors = ["upper", "chain"];
+  }
+  const spans = relationSpans(block.body, 0, void 0, palette);
+  spans.push(...operandColorSpans(block.body, lhs, lhsColors, palette));
+  spans.push(...operandColorSpans(block.body, rhs, rhsColors, palette));
+  spans.push(...collectOperatorSpans(block.body, 0, void 0, palette));
+  return block.render(applyColorSpans(block.body, spans));
+}
+
+// src/converters/block.ts
+var LINE_CONVERTERS = [
+  (text, palette) => convertDerivativeLine(text, palette),
+  () => null,
+  // convert_integral_line stub
+  () => null,
+  // convert_limit_line stub
+  () => null
+  // convert_equation_line stub
+];
+var BLOCK_CONVERTERS = [
+  (text, palette) => convertMatrixBlock(text, palette),
+  () => null
+  // convert_align_block stub
+];
+function tryConverters(text, converters, palette) {
+  for (const converter of converters) {
+    const converted = converter(text, palette);
+    if (converted !== null) {
+      return converted;
+    }
+  }
+  return null;
+}
+function convertMathBlock(block, palette = COLORS) {
+  const match = block.match(/^(\s*#+\s*)?\$\$([\s\S]*)\$\$([\s]*)$/);
+  if (!match) {
+    return block;
+  }
+  const prefix = match[1] || "";
+  const body = match[2];
+  const suffix = match[3];
+  const lineMatch = tryConverters(block, LINE_CONVERTERS, palette);
+  if (lineMatch !== null) {
+    return lineMatch;
+  }
+  const blockMatch = tryConverters(block, BLOCK_CONVERTERS, palette);
+  if (blockMatch !== null) {
+    return blockMatch;
+  }
+  return `${prefix}$$${colorLatexBody(body, palette)}$$${suffix}`;
+}
+function convertText(text, palette = COLORS) {
+  const mathBlocks = scanMarkdown(text).mathBlocks;
+  if (mathBlocks.length === 0) {
+    return text;
+  }
+  const converted = [];
+  let index = 0;
+  for (const span of mathBlocks) {
+    converted.push(text.slice(index, span.start));
+    converted.push(convertMathBlock(text.slice(span.start, span.end), palette));
+    index = span.end;
+  }
+  converted.push(text.slice(index));
+  return converted.join("");
+}
+
+// src/editor/live_preview.ts
+var import_state = require("@codemirror/state");
+var import_view = require("@codemirror/view");
+function createColorMathLivePlugin(getPalette, isEnabled) {
+  return import_view.ViewPlugin.fromClass(
+    class {
+      decorations;
+      constructor(view) {
+        this.decorations = this.buildDecorations(view);
+      }
+      update(update) {
+        if (update.docChanged || update.viewportChanged) {
+          this.decorations = this.buildDecorations(update.view);
+        }
+      }
+      buildDecorations(view) {
+        if (!isEnabled()) {
+          return import_view.Decoration.none;
+        }
+        const builder = new import_state.RangeSetBuilder();
+        const doc = view.state.doc;
+        const text = doc.toString();
+        const palette = getPalette();
+        const mathBlocks = scanMarkdown(text).mathBlocks;
+        for (const block of mathBlocks) {
+          const blockStart = block.contentStart;
+          const blockEnd = block.contentEnd;
+          const isVisible = view.visibleRanges.some(
+            (r) => Math.max(r.from, blockStart) <= Math.min(r.to, blockEnd)
+          );
+          if (!isVisible)
+            continue;
+          const body = text.slice(blockStart, blockEnd);
+          if (containsColorWrapper(body))
+            continue;
+          const functionSpans = collectFunctionSpans(body, palette);
+          const scannerSpans = collectScannerSpans(body, palette);
+          const selected = selectColorSpans(body, [
+            ...functionSpans,
+            ...scannerSpans
+          ]);
+          const nonOverlapping = [];
+          let currentEnd = -1;
+          for (const span of selected) {
+            if (span.start >= currentEnd) {
+              nonOverlapping.push(span);
+              currentEnd = span.end;
+            }
+          }
+          for (const span of nonOverlapping) {
+            const from = blockStart + span.start;
+            const to = blockStart + span.end;
+            if (from < to && to <= doc.length) {
+              builder.add(
+                from,
+                to,
+                import_view.Decoration.mark({
+                  attributes: {
+                    style: `color: ${span.color}; font-weight: 500;`
+                  },
+                  class: "color-math-live-token"
+                })
+              );
+            }
+          }
+        }
+        return builder.finish();
+      }
+    },
+    {
+      decorations: (v) => v.decorations
+    }
+  );
+}
+
+// src/undo.ts
+function uncolorFragment(text) {
+  const output = [];
+  let index = 0;
+  while (index < text.length) {
+    if (text[index] === "%") {
+      const end = readCommentEnd(text, index);
+      output.push(text.slice(index, end));
+      index = end;
+      continue;
+    }
+    if (text[index] === "\\") {
+      const wrapper = readColorWrapper(text, index);
+      if (wrapper !== null) {
+        const [value, nextIndex] = wrapper;
+        output.push(uncolorFragment(value));
+        index = nextIndex;
+        continue;
+      }
+      const verb = readVerbEnd(text, index);
+      if (verb !== null) {
+        const [end] = verb;
+        output.push(text.slice(index, end));
+        index = end;
+        continue;
+      }
+      const command = matchCommand(text, index);
+      if (command !== null) {
+        output.push(command);
+        index += command.length;
+        continue;
+      }
+    }
+    output.push(text[index]);
+    index++;
+  }
+  return output.join("");
+}
+function uncolorText(text) {
+  const mathBlocks = scanMarkdown(text).mathBlocks;
+  if (mathBlocks.length === 0) {
+    return text;
+  }
+  const output = [];
+  let index = 0;
+  for (const span of mathBlocks) {
+    output.push(text.slice(index, span.start));
+    output.push(uncolorFragment(text.slice(span.start, span.end)));
+    index = span.end;
+  }
+  output.push(text.slice(index));
+  return output.join("");
+}
+
+// src/main.ts
+var DEFAULT_SETTINGS = {
+  palette: { ...DEFAULT_COLORS },
+  livePreviewHighlighting: true,
+  showRibbonIcon: true
+};
+var COLOR_ROLE_DESCRIPTIONS = {
+  main: "Primary expression / function color",
+  orange: "Constants, coefficients, and major operators",
+  dot: "Multiplication dots and symbols",
+  derivative: "Outer derivatives and prime markers",
+  chain: "Chain rule factors and subscripts",
+  upper: "Superscripts and matrix outer wrappers",
+  relation: "Relations, equalities, and tensors",
+  arrow: "Arrows and mappings",
+  set: "Set theory symbols",
+  spacing: "LaTeX spacing commands"
+};
+var ColorMathPlugin = class extends import_obsidian.Plugin {
+  settings = DEFAULT_SETTINGS;
+  ribbonIconEl = null;
+  async onload() {
+    await this.loadSettings();
+    setPalette(this.settings.palette);
+    this.registerEditorExtension([
+      createColorMathLivePlugin(
+        () => this.settings.palette,
+        () => this.settings.livePreviewHighlighting
+      )
+    ]);
+    this.refreshRibbonIcon();
+    this.addCommand({
+      id: "color-math-colorize-note",
+      name: "Colorize current note",
+      checkCallback: (checking) => {
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+        if (view) {
+          if (!checking) {
+            this.colorizeActiveNote();
+          }
+          return true;
+        }
+        return false;
+      }
+    });
+    this.addCommand({
+      id: "color-math-undo-note",
+      name: "Undo current note",
+      checkCallback: (checking) => {
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+        if (view) {
+          if (!checking) {
+            this.uncolorActiveNote();
+          }
+          return true;
+        }
+        return false;
+      }
+    });
+    this.addCommand({
+      id: "color-math-colorize-current-block",
+      name: "Colorize current math block",
+      editorCallback: (editor) => {
+        this.colorizeCurrentMathBlock(editor);
+      }
+    });
+    this.addCommand({
+      id: "color-math-undo-current-block",
+      name: "Undo current math block",
+      editorCallback: (editor) => {
+        this.uncolorCurrentMathBlock(editor);
+      }
+    });
+    this.addCommand({
+      id: "color-math-colorize-selection",
+      name: "Colorize selection",
+      editorCallback: (editor) => {
+        this.colorizeSelection(editor);
+      }
+    });
+    this.addCommand({
+      id: "color-math-undo-selection",
+      name: "Undo selection",
+      editorCallback: (editor) => {
+        this.uncolorSelection(editor);
+      }
+    });
+    this.addSettingTab(new ColorMathSettingTab(this.app, this));
+  }
+  refreshRibbonIcon() {
+    if (this.settings.showRibbonIcon) {
+      if (!this.ribbonIconEl) {
+        this.ribbonIconEl = this.addRibbonIcon(
+          "palette",
+          "Color Math",
+          (evt) => {
+            this.showRibbonMenu(evt);
+          }
+        );
+      }
+    } else {
+      if (this.ribbonIconEl) {
+        this.ribbonIconEl.detach();
+        this.ribbonIconEl = null;
+      }
+    }
+  }
+  showRibbonMenu(evt) {
+    const menu = new import_obsidian.Menu();
+    menu.addItem(
+      (item) => item.setTitle("Colorize current note").setIcon("file-text").onClick(() => this.colorizeActiveNote())
+    );
+    menu.addItem(
+      (item) => item.setTitle("Undo current note").setIcon("undo").onClick(() => this.uncolorActiveNote())
+    );
+    menu.addSeparator();
+    menu.addItem(
+      (item) => item.setTitle("Colorize current math block").setIcon("box").onClick(() => {
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+        if (view) {
+          this.colorizeCurrentMathBlock(view.editor);
+        } else {
+          new import_obsidian.Notice("Color Math: No active Markdown note.");
+        }
+      })
+    );
+    menu.addItem(
+      (item) => item.setTitle("Undo current math block").setIcon("rotate-ccw").onClick(() => {
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+        if (view) {
+          this.uncolorCurrentMathBlock(view.editor);
+        } else {
+          new import_obsidian.Notice("Color Math: No active Markdown note.");
+        }
+      })
+    );
+    menu.addSeparator();
+    menu.addItem(
+      (item) => item.setTitle("Colorize selection").setIcon("highlighter").onClick(() => {
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+        if (view) {
+          this.colorizeSelection(view.editor);
+        } else {
+          new import_obsidian.Notice("Color Math: No active Markdown note.");
+        }
+      })
+    );
+    menu.addItem(
+      (item) => item.setTitle("Undo selection").setIcon("rotate-ccw").onClick(() => {
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+        if (view) {
+          this.uncolorSelection(view.editor);
+        } else {
+          new import_obsidian.Notice("Color Math: No active Markdown note.");
+        }
+      })
+    );
+    menu.addSeparator();
+    menu.addItem(
+      (item) => item.setTitle("Open Color Math settings").setIcon("settings").onClick(() => {
+        const setting = this.app.setting;
+        if (setting) {
+          setting.open();
+          setting.openTabById("obsidian-color-math");
+        }
+      })
+    );
+    menu.showAtMouseEvent(evt);
+  }
+  colorizeCurrentMathBlock(editor) {
+    const content = editor.getValue();
+    const cursor = editor.getCursor();
+    const offset = editor.posToOffset(cursor);
+    const mathBlocks = scanMarkdown(content).mathBlocks;
+    const currentBlock = mathBlocks.find(
+      (span) => span.start <= offset && offset <= span.end
+    );
+    if (!currentBlock) {
+      new import_obsidian.Notice("Color Math: Cursor is not inside a math block ($$...$$).");
+      return;
+    }
+    const rawBlock = content.slice(currentBlock.start, currentBlock.end);
+    const colored = convertMathBlock(rawBlock, this.settings.palette);
+    if (colored === rawBlock) {
+      new import_obsidian.Notice("Color Math: Math block is already colorized.");
+      return;
+    }
+    const from = editor.offsetToPos(currentBlock.start);
+    const to = editor.offsetToPos(currentBlock.end);
+    editor.replaceRange(colored, from, to);
+    new import_obsidian.Notice("Color Math: Colorized current math block! \u{1F3A8}");
+  }
+  uncolorCurrentMathBlock(editor) {
+    const content = editor.getValue();
+    const cursor = editor.getCursor();
+    const offset = editor.posToOffset(cursor);
+    const mathBlocks = scanMarkdown(content).mathBlocks;
+    const currentBlock = mathBlocks.find(
+      (span) => span.start <= offset && offset <= span.end
+    );
+    if (!currentBlock) {
+      new import_obsidian.Notice("Color Math: Cursor is not inside a math block ($$...$$).");
+      return;
+    }
+    const rawBlock = content.slice(currentBlock.start, currentBlock.end);
+    const uncolored = uncolorFragment(rawBlock);
+    if (uncolored === rawBlock) {
+      new import_obsidian.Notice("Color Math: No color wrappers found to remove in this block.");
+      return;
+    }
+    const from = editor.offsetToPos(currentBlock.start);
+    const to = editor.offsetToPos(currentBlock.end);
+    editor.replaceRange(uncolored, from, to);
+    new import_obsidian.Notice("Color Math: Reverted math block to clean LaTeX.");
+  }
+  colorizeSelection(editor) {
+    const selection = editor.getSelection();
+    if (selection) {
+      const colored = convertText(selection, this.settings.palette);
+      editor.replaceSelection(colored);
+      new import_obsidian.Notice("Color Math: Colorized selection.");
+    } else {
+      new import_obsidian.Notice("Color Math: Please select text to colorize.");
+    }
+  }
+  uncolorSelection(editor) {
+    const selection = editor.getSelection();
+    if (selection) {
+      const uncolored = uncolorFragment(selection);
+      editor.replaceSelection(uncolored);
+      new import_obsidian.Notice("Color Math: Reverted selection to clean LaTeX.");
+    } else {
+      new import_obsidian.Notice("Color Math: Please select text to undo colors.");
+    }
+  }
+  async colorizeActiveNote() {
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+    if (!view) {
+      new import_obsidian.Notice("Color Math: No active Markdown note.");
+      return;
+    }
+    const editor = view.editor;
+    const content = editor.getValue();
+    const colored = convertText(content, this.settings.palette);
+    if (colored === content) {
+      new import_obsidian.Notice("Color Math: All math blocks are already colored.");
+      return;
+    }
+    const cursor = editor.getCursor();
+    editor.setValue(colored);
+    editor.setCursor(cursor);
+    new import_obsidian.Notice("Color Math: Successfully colorized note equations! \u{1F3A8}");
+  }
+  async uncolorActiveNote() {
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+    if (!view) {
+      new import_obsidian.Notice("Color Math: No active Markdown note.");
+      return;
+    }
+    const editor = view.editor;
+    const content = editor.getValue();
+    const uncolored = uncolorText(content);
+    if (uncolored === content) {
+      new import_obsidian.Notice("Color Math: No color wrappers found to remove.");
+      return;
+    }
+    const cursor = editor.getCursor();
+    editor.setValue(uncolored);
+    editor.setCursor(cursor);
+    new import_obsidian.Notice("Color Math: Reverted math colors to clean LaTeX.");
+  }
+  async loadSettings() {
+    const loadedData = await this.loadData();
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
+    if (!this.settings.palette) {
+      this.settings.palette = { ...DEFAULT_COLORS };
+    } else {
+      this.settings.palette = Object.assign({}, DEFAULT_COLORS, this.settings.palette);
+    }
+  }
+  async saveSettings() {
+    await this.saveData(this.settings);
+    setPalette(this.settings.palette);
+    this.app.workspace.updateOptions();
+  }
+};
+var ColorMathSettingTab = class extends import_obsidian.PluginSettingTab {
+  plugin;
+  constructor(app, plugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+  display() {
+    const { containerEl } = this;
+    containerEl.empty();
+    containerEl.createEl("h2", { text: "Color Math Settings" });
+    containerEl.createEl("p", {
+      text: "Automatically apply semantic colors to LaTeX and MathJax equations in Obsidian Markdown."
+    });
+    new import_obsidian.Setting(containerEl).setName("Show ribbon icon").setDesc("Display the Color Math palette icon on the left ribbon bar. Note: you can reorder or move ribbon icons via Settings > Appearance > Ribbon menu.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.showRibbonIcon).onChange(async (val) => {
+        this.plugin.settings.showRibbonIcon = val;
+        await this.plugin.saveSettings();
+        this.plugin.refreshRibbonIcon();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Real-time editor syntax highlighting").setDesc("Highlight equations inside the editor in real-time as you type.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.livePreviewHighlighting).onChange(async (val) => {
+        this.plugin.settings.livePreviewHighlighting = val;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Reset to default palette").setDesc("Restore all colors to their default values.").addButton(
+      (button) => button.setButtonText("Reset Defaults").onClick(async () => {
+        this.plugin.settings.palette = { ...DEFAULT_COLORS };
+        await this.plugin.saveSettings();
+        this.display();
+        new import_obsidian.Notice("Color Math: Reset palette to defaults.");
+      })
+    );
+    containerEl.createEl("h3", { text: "Color Palette" });
+    const roles = Object.keys(DEFAULT_COLORS);
+    for (const role of roles) {
+      const setting = new import_obsidian.Setting(containerEl).setName(role.charAt(0).toUpperCase() + role.slice(1)).setDesc(COLOR_ROLE_DESCRIPTIONS[role] || role);
+      const currentColor = this.plugin.settings.palette[role] || DEFAULT_COLORS[role];
+      if (currentColor.startsWith("#")) {
+        setting.addColorPicker((picker) => {
+          picker.setValue(currentColor).onChange(async (val) => {
+            this.plugin.settings.palette[role] = val;
+            await this.plugin.saveSettings();
+          });
+        });
+      }
+      setting.addText((text) => {
+        text.setPlaceholder(DEFAULT_COLORS[role]).setValue(this.plugin.settings.palette[role]).onChange(async (val) => {
+          if (val.trim()) {
+            this.plugin.settings.palette[role] = val.trim();
+            await this.plugin.saveSettings();
+          }
+        });
+      });
+    }
+  }
+};

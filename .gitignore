@@ -9,3 +9,6 @@ build/
 dist/
 wheelhouse/
 *.egg-info/
+
+node_modules/
+
