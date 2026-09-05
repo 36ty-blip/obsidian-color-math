@@ -236,9 +236,9 @@ export default class ColorMathPlugin extends Plugin {
         .setIcon("settings")
         .onClick(() => {
           const setting = (this.app as any).setting;
-          if (setting) {
+          if (setting && setting.openTabById) {
             setting.open();
-            setting.openTabById("obsidian-color-math");
+            setting.openTabById(this.manifest.id);
           }
         })
     );

@@ -2849,9 +2849,9 @@ var ColorMathPlugin = class extends import_obsidian.Plugin {
     menu.addItem(
       (item) => item.setTitle("Open Color Math settings").setIcon("settings").onClick(() => {
         const setting = this.app.setting;
-        if (setting) {
+        if (setting && setting.openTabById) {
           setting.open();
-          setting.openTabById("obsidian-color-math");
+          setting.openTabById(this.manifest.id);
         }
       })
     );

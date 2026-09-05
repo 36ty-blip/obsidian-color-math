@@ -19,7 +19,7 @@ Obsidian Color Math is an **official Obsidian Plugin** (and companion Python CLI
 
 1. Copy `manifest.json`, `main.js`, and `styles.css` into your vault:
    ```
-   <vault>/.obsidian/plugins/obsidian-color-math/
+   <vault>/.obsidian/plugins/color-math/
    ```
 2. In Obsidian, go to **Settings > Community plugins**, find **Color Math**, and enable it.
 
