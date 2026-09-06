@@ -27,7 +27,7 @@ interface ColorMathSettings {
 
 const DEFAULT_SETTINGS: ColorMathSettings = {
   palette: { ...DEFAULT_COLORS },
-  livePreviewHighlighting: true,
+  livePreviewHighlighting: false,
   showRibbonIcon: true,
   autoSyncTheme: false,
   autoLightDark: true,

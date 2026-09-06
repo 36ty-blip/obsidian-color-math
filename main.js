@@ -2770,7 +2770,7 @@ function extractThemePalette(isLight) {
 // src/main.ts
 var DEFAULT_SETTINGS = {
   palette: { ...DEFAULT_COLORS },
-  livePreviewHighlighting: true,
+  livePreviewHighlighting: false,
   showRibbonIcon: true,
   autoSyncTheme: false,
   autoLightDark: true
