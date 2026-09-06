@@ -15,17 +15,22 @@ import { convertMathBlock, convertText } from "./converters/block";
 import { createColorMathLivePlugin } from "./editor/live_preview";
 import { scanMarkdown } from "./parsers/markdown_scanner";
 import { uncolorFragment, uncolorText } from "./undo";
+import { extractThemePalette, isVaultLightMode } from "./utils/theme_colors";
 
 interface ColorMathSettings {
   palette: ColorPalette;
   livePreviewHighlighting: boolean;
   showRibbonIcon: boolean;
+  autoSyncTheme: boolean;
+  autoLightDark: boolean;
 }
 
 const DEFAULT_SETTINGS: ColorMathSettings = {
   palette: { ...DEFAULT_COLORS },
   livePreviewHighlighting: true,
   showRibbonIcon: true,
+  autoSyncTheme: false,
+  autoLightDark: true,
 };
 
 const COLOR_ROLE_DESCRIPTIONS: Record<ColorRole, string> = {
@@ -59,6 +64,13 @@ export default class ColorMathPlugin extends Plugin {
 
     // Setup Ribbon icon according to settings
     this.refreshRibbonIcon();
+
+    // Listen for theme and light/dark mode changes
+    this.registerEvent(
+      this.app.workspace.on("css-change", () => {
+        this.handleThemeChange();
+      })
+    );
 
     // 1. Colorize current note
     this.addCommand({
@@ -370,6 +382,22 @@ export default class ColorMathPlugin extends Plugin {
     new Notice("Color Math: Reverted math colors to clean LaTeX.");
   }
 
+  async handleThemeChange() {
+    if (this.settings.autoSyncTheme) {
+      this.settings.palette = extractThemePalette(this.settings.autoLightDark ? isVaultLightMode() : false);
+      await this.saveSettings();
+    } else if (this.settings.autoLightDark) {
+      const light = isVaultLightMode();
+      this.settings.palette = {
+        ...this.settings.palette,
+        relation: light ? "#1e293b" : "white",
+        dot: light ? "#334155" : "white",
+        spacing: light ? "#334155" : "white",
+      };
+      await this.saveSettings();
+    }
+  }
+
   async loadSettings() {
     const loadedData = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
@@ -429,19 +457,75 @@ class ColorMathSettingTab extends PluginSettingTab {
           })
       );
 
+    containerEl.createEl("h3", { text: "Theme Integration" });
+
     new Setting(containerEl)
-      .setName("Reset to default palette")
-      .setDesc("Restore all colors to their default values.")
+      .setName("Sync with active theme")
+      .setDesc("Extract and apply matching colors from your currently active Obsidian theme.")
       .addButton((button) =>
-        button.setButtonText("Reset Defaults").onClick(async () => {
+        button
+          .setButtonText("Sync with Theme")
+          .setCta()
+          .onClick(async () => {
+            this.plugin.settings.palette = extractThemePalette(
+              this.plugin.settings.autoLightDark ? isVaultLightMode() : false
+            );
+            await this.plugin.saveSettings();
+            this.display();
+            new Notice("Color Math: Synced colors with active Obsidian theme!");
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Auto-match on theme change")
+      .setDesc("Automatically re-sync palette whenever you switch themes in Obsidian.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.autoSyncTheme)
+          .onChange(async (val) => {
+            this.plugin.settings.autoSyncTheme = val;
+            if (val) {
+              this.plugin.settings.palette = extractThemePalette(
+                this.plugin.settings.autoLightDark ? isVaultLightMode() : false
+              );
+            }
+            await this.plugin.saveSettings();
+            this.display();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Auto-adapt for light / dark mode")
+      .setDesc("Adjust operator contrast (e.g. '=' and '\\cdot') so math never washes out on light backgrounds.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.autoLightDark)
+          .onChange(async (val) => {
+            this.plugin.settings.autoLightDark = val;
+            if (val) {
+              const light = isVaultLightMode();
+              this.plugin.settings.palette.relation = light ? "#1e293b" : "white";
+              this.plugin.settings.palette.dot = light ? "#334155" : "white";
+              this.plugin.settings.palette.spacing = light ? "#334155" : "white";
+            }
+            await this.plugin.saveSettings();
+            this.display();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Restore default palette")
+      .setDesc("Revert all colors back to our signature Tokyo Night palette.")
+      .addButton((button) =>
+        button.setButtonText("Restore Defaults").onClick(async () => {
           this.plugin.settings.palette = { ...DEFAULT_COLORS };
           await this.plugin.saveSettings();
           this.display();
-          new Notice("Color Math: Reset palette to defaults.");
+          new Notice("Color Math: Restored default Tokyo Night palette.");
         })
       );
 
-    containerEl.createEl("h3", { text: "Color Palette" });
+    containerEl.createEl("h3", { text: "Color Palette Roles" });
 
     const roles = Object.keys(DEFAULT_COLORS) as ColorRole[];
 

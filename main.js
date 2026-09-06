@@ -38,6 +38,7 @@ var DEFAULT_COLORS = {
   set: "#bb9af7",
   spacing: "white"
 };
+var DEFAULT_PALETTE = DEFAULT_COLORS;
 var COLORS = { ...DEFAULT_COLORS };
 function setPalette(palette) {
   Object.assign(COLORS, palette);
@@ -2688,11 +2689,91 @@ function uncolorText(text) {
   return output.join("");
 }
 
+// src/utils/theme_colors.ts
+function normalizeColorToHex(colorStr, fallback) {
+  if (!colorStr)
+    return fallback;
+  const trimmed = colorStr.trim();
+  if (!trimmed)
+    return fallback;
+  if (trimmed.startsWith("#")) {
+    if (trimmed.length === 4) {
+      const r = trimmed[1];
+      const g = trimmed[2];
+      const b = trimmed[3];
+      return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+    }
+    if (trimmed.length === 7) {
+      return trimmed.toLowerCase();
+    }
+    if (trimmed.length === 9) {
+      return trimmed.slice(0, 7).toLowerCase();
+    }
+  }
+  const rgbMatch = trimmed.match(/^rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (rgbMatch) {
+    const r = Math.min(255, Math.max(0, parseInt(rgbMatch[1], 10)));
+    const g = Math.min(255, Math.max(0, parseInt(rgbMatch[2], 10)));
+    const b = Math.min(255, Math.max(0, parseInt(rgbMatch[3], 10)));
+    const toHex = (n) => n.toString(16).padStart(2, "0");
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  }
+  if (trimmed.toLowerCase() === "white")
+    return "white";
+  if (trimmed.toLowerCase() === "black")
+    return "black";
+  return fallback;
+}
+function isVaultLightMode() {
+  if (typeof document === "undefined" || !document.body) {
+    return false;
+  }
+  return document.body.classList.contains("theme-light");
+}
+function extractThemePalette(isLight) {
+  const light = isLight !== void 0 ? isLight : isVaultLightMode();
+  const relationColor = light ? "#1e293b" : "white";
+  const dotColor = light ? "#334155" : "white";
+  if (typeof window === "undefined" || typeof document === "undefined" || !document.body) {
+    return {
+      ...DEFAULT_PALETTE,
+      relation: relationColor,
+      dot: dotColor,
+      spacing: dotColor
+    };
+  }
+  const style = getComputedStyle(document.body);
+  const getVar = (name, fallback) => {
+    const val = style.getPropertyValue(name).trim();
+    return normalizeColorToHex(val, fallback);
+  };
+  const blue = getVar("--color-blue", style.getPropertyValue("--text-accent").trim() || DEFAULT_PALETTE.main);
+  const purple = getVar("--color-purple", DEFAULT_PALETTE.derivative);
+  const green = getVar("--color-green", DEFAULT_PALETTE.chain);
+  const orange = getVar("--color-orange", DEFAULT_PALETTE.orange);
+  const red = getVar("--color-red", getVar("--color-pink", DEFAULT_PALETTE.arrow));
+  const cyan = getVar("--color-cyan", blue);
+  return {
+    main: blue,
+    derivative: purple,
+    chain: green,
+    orange,
+    arrow: red,
+    set: cyan,
+    upper: purple,
+    relation: relationColor,
+    dot: dotColor,
+    spacing: dotColor
+  };
+}
+
 // src/main.ts
 var DEFAULT_SETTINGS = {
   palette: { ...DEFAULT_COLORS },
   livePreviewHighlighting: true,
-  showRibbonIcon: true
+  showRibbonIcon: true,
+  autoSyncTheme: false,
+  autoLightDark: true
 };
 var COLOR_ROLE_DESCRIPTIONS = {
   main: "Primary expression / function color",
@@ -2719,6 +2800,11 @@ var ColorMathPlugin = class extends import_obsidian.Plugin {
       )
     ]);
     this.refreshRibbonIcon();
+    this.registerEvent(
+      this.app.workspace.on("css-change", () => {
+        this.handleThemeChange();
+      })
+    );
     this.addCommand({
       id: "color-math-colorize-note",
       name: "Colorize current note",
@@ -2959,6 +3045,21 @@ var ColorMathPlugin = class extends import_obsidian.Plugin {
     editor.setCursor(cursor);
     new import_obsidian.Notice("Color Math: Reverted math colors to clean LaTeX.");
   }
+  async handleThemeChange() {
+    if (this.settings.autoSyncTheme) {
+      this.settings.palette = extractThemePalette(this.settings.autoLightDark ? isVaultLightMode() : false);
+      await this.saveSettings();
+    } else if (this.settings.autoLightDark) {
+      const light = isVaultLightMode();
+      this.settings.palette = {
+        ...this.settings.palette,
+        relation: light ? "#1e293b" : "white",
+        dot: light ? "#334155" : "white",
+        spacing: light ? "#334155" : "white"
+      };
+      await this.saveSettings();
+    }
+  }
   async loadSettings() {
     const loadedData = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
@@ -3000,15 +3101,51 @@ var ColorMathSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Reset to default palette").setDesc("Restore all colors to their default values.").addButton(
-      (button) => button.setButtonText("Reset Defaults").onClick(async () => {
+    containerEl.createEl("h3", { text: "Theme Integration" });
+    new import_obsidian.Setting(containerEl).setName("Sync with active theme").setDesc("Extract and apply matching colors from your currently active Obsidian theme.").addButton(
+      (button) => button.setButtonText("Sync with Theme").setCta().onClick(async () => {
+        this.plugin.settings.palette = extractThemePalette(
+          this.plugin.settings.autoLightDark ? isVaultLightMode() : false
+        );
+        await this.plugin.saveSettings();
+        this.display();
+        new import_obsidian.Notice("Color Math: Synced colors with active Obsidian theme!");
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Auto-match on theme change").setDesc("Automatically re-sync palette whenever you switch themes in Obsidian.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.autoSyncTheme).onChange(async (val) => {
+        this.plugin.settings.autoSyncTheme = val;
+        if (val) {
+          this.plugin.settings.palette = extractThemePalette(
+            this.plugin.settings.autoLightDark ? isVaultLightMode() : false
+          );
+        }
+        await this.plugin.saveSettings();
+        this.display();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Auto-adapt for light / dark mode").setDesc("Adjust operator contrast (e.g. '=' and '\\cdot') so math never washes out on light backgrounds.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.autoLightDark).onChange(async (val) => {
+        this.plugin.settings.autoLightDark = val;
+        if (val) {
+          const light = isVaultLightMode();
+          this.plugin.settings.palette.relation = light ? "#1e293b" : "white";
+          this.plugin.settings.palette.dot = light ? "#334155" : "white";
+          this.plugin.settings.palette.spacing = light ? "#334155" : "white";
+        }
+        await this.plugin.saveSettings();
+        this.display();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Restore default palette").setDesc("Revert all colors back to our signature Tokyo Night palette.").addButton(
+      (button) => button.setButtonText("Restore Defaults").onClick(async () => {
         this.plugin.settings.palette = { ...DEFAULT_COLORS };
         await this.plugin.saveSettings();
         this.display();
-        new import_obsidian.Notice("Color Math: Reset palette to defaults.");
+        new import_obsidian.Notice("Color Math: Restored default Tokyo Night palette.");
       })
     );
-    containerEl.createEl("h3", { text: "Color Palette" });
+    containerEl.createEl("h3", { text: "Color Palette Roles" });
     const roles = Object.keys(DEFAULT_COLORS);
     for (const role of roles) {
       const setting = new import_obsidian.Setting(containerEl).setName(role.charAt(0).toUpperCase() + role.slice(1)).setDesc(COLOR_ROLE_DESCRIPTIONS[role] || role);

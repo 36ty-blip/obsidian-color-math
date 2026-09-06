@@ -27,6 +27,8 @@ export const DEFAULT_COLORS: ColorPalette = {
   spacing: "white",
 };
 
+export const DEFAULT_PALETTE = DEFAULT_COLORS;
+
 export const COLORS: ColorPalette = { ...DEFAULT_COLORS };
 
 export function setPalette(palette: Partial<ColorPalette>): void {
