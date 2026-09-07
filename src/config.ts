@@ -278,5 +278,6 @@ export interface ColorMathOptions {
   rainbowDelimiters?: boolean;
   variableDataFlow?: boolean;
   colorUnits?: boolean;
+  colorDifferentials?: boolean;
 }
 

@@ -29,6 +29,7 @@ interface ColorMathSettings {
   rainbowDelimiters: boolean;
   variableDataFlow: boolean;
   colorUnits: boolean;
+  colorDifferentials: boolean;
 }
 
 const DEFAULT_SETTINGS: ColorMathSettings = {
@@ -42,6 +43,7 @@ const DEFAULT_SETTINGS: ColorMathSettings = {
   rainbowDelimiters: true,
   variableDataFlow: false,
   colorUnits: true,
+  colorDifferentials: true,
 };
 
 const COLOR_ROLE_DESCRIPTIONS: Record<ColorRole, string> = {
@@ -306,6 +308,7 @@ export default class ColorMathPlugin extends Plugin {
       rainbowDelimiters: this.settings.rainbowDelimiters,
       variableDataFlow: this.settings.variableDataFlow,
       colorUnits: this.settings.colorUnits,
+      colorDifferentials: this.settings.colorDifferentials,
     };
   }
 
@@ -582,6 +585,19 @@ class ColorMathSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.colorUnits)
           .onChange(async (val) => {
             this.plugin.settings.colorUnits = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Calculus differentials & derivatives")
+      .setDesc("Color differentials (dx, dt, dθ) and derivative fractions (df/dx, ∂/∂t) with the derivative role to prevent misidentifying 'd' as a variable.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.colorDifferentials)
+          .onChange(async (val) => {
+            this.plugin.settings.colorDifferentials = val;
             await this.plugin.saveSettings();
             this.plugin.rerenderMath();
           })

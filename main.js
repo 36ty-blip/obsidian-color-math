@@ -2536,6 +2536,41 @@ function collectDelimiterSpans(text, options) {
   return spans.sort((a, b) => a.start - b.start);
 }
 
+// src/parsers/differentials.ts
+function findDifferentialSpans(body) {
+  const spans = [];
+  function addSpan(start, end, text, kind) {
+    if (start >= end)
+      return;
+    if (!spans.some((s) => start < s.end && end > s.start)) {
+      spans.push({ start, end, text, kind });
+    }
+  }
+  const derivFracRegex = /\\frac\s*\{\s*(?:d|\\partial|\\mathrm\{d\})(?:\^\{?\d+\}?)?\s*(?:[a-zA-Z\\]+)?\s*\}\s*\{\s*(?:d|\\partial|\\mathrm\{d\})\s*(?:[a-zA-Z]|\\\\[a-zA-Z]+)(?:\^\{?\d+\}?)?(?:\s*(?:d|\\partial|\\mathrm\{d\})\s*(?:[a-zA-Z]|\\\\[a-zA-Z]+))*\s*\}/g;
+  let match;
+  while ((match = derivFracRegex.exec(body)) !== null) {
+    addSpan(match.index, match.index + match[0].length, match[0], "derivative_fraction");
+  }
+  const diffRegex = /(?<=(?:^|[\s+\-=*(\[{]|\\,|\\:|\\;|\\quad|\\qquad|~))\s*(?:d|\\partial|\\mathrm\{d\}|\\delta)\s*(\\[a-zA-Z]+|[a-zA-Z])(?![a-zA-Z0-9_\({])(?:\^\{?\d+\}?)?/g;
+  while ((match = diffRegex.exec(body)) !== null) {
+    const dOffset = match[0].search(/(?:d|\\partial|\\mathrm\{d\}|\\delta)/);
+    const diffStart = match.index + dOffset;
+    const diffText = match[0].slice(dOffset);
+    const diffEnd = diffStart + diffText.length;
+    addSpan(diffStart, diffEnd, diffText, "differential");
+  }
+  return spans.sort((a, b) => a.start - b.start);
+}
+function collectDifferentialSpans(body, palette = COLORS, diffSpans) {
+  const diffs = diffSpans || findDifferentialSpans(body);
+  return diffs.map((d) => ({
+    start: d.start,
+    end: d.end,
+    color: palette.derivative || "#bb9af7",
+    priority: 24
+  }));
+}
+
 // src/parsers/math_parser.ts
 function readCommand2(text, start, end) {
   if (start >= end || text[start] !== "\\")
@@ -2883,8 +2918,9 @@ function skipComment4(text, start) {
   }
   return Math.min(index + 1, text.length);
 }
-function collectTaxonomySpans(body, palette = COLORS, unitSpans) {
+function collectTaxonomySpans(body, palette = COLORS, unitSpans, diffSpans) {
   const units = unitSpans || findUnitSpans(body);
+  const diffs = diffSpans || findDifferentialSpans(body);
   const spans = [];
   let index = 0;
   const indexPattern = /(\\(?:sum|prod|coprod|bigcup|bigcap|lim|inf|sup))_\{?\s*([A-Za-z])\s*(?:=|\to|\\to)/g;
@@ -2922,6 +2958,11 @@ function collectTaxonomySpans(body, palette = COLORS, unitSpans) {
     const inUnit = units.find((u) => u.start <= index && index < u.end);
     if (inUnit) {
       index = inUnit.end;
+      continue;
+    }
+    const inDiff = diffs.find((d) => d.start <= index && index < d.end);
+    if (inDiff) {
+      index = inDiff.end;
       continue;
     }
     if (body[index] === "\\") {
@@ -3012,8 +3053,9 @@ function skipComment5(text, start) {
   }
   return Math.min(index + 1, text.length);
 }
-function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans) {
+function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, diffSpans) {
   const units = unitSpans || findUnitSpans(body);
+  const diffs = diffSpans || findDifferentialSpans(body);
   const spans = [];
   let index = 0;
   while (index < body.length) {
@@ -3034,6 +3076,11 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans) 
     const inUnit = units.find((u) => u.start <= index && index < u.end);
     if (inUnit) {
       index = inUnit.end;
+      continue;
+    }
+    const inDiff = diffs.find((d) => d.start <= index && index < d.end);
+    if (inDiff) {
+      index = inDiff.end;
       continue;
     }
     if (body[index] === "\\") {
@@ -3148,6 +3195,7 @@ function colorLatexBody(body, palette = COLORS, options) {
     return body;
   }
   const unitSpans = findUnitSpans(body);
+  const diffSpans = findDifferentialSpans(body);
   const spans = [
     ...collectFunctionSpans(body, palette),
     ...collectScannerSpans(body, palette)
@@ -3155,14 +3203,17 @@ function colorLatexBody(body, palette = COLORS, options) {
   if (options?.colorUnits !== false) {
     spans.push(...collectUnitSpans(body, palette, unitSpans));
   }
+  if (options?.colorDifferentials !== false) {
+    spans.push(...collectDifferentialSpans(body, palette, diffSpans));
+  }
   if (options?.rainbowDelimiters) {
     spans.push(...collectDelimiterSpans(body, { forLatexWrap: true }));
   }
   if (options?.enableTaxonomy) {
-    spans.push(...collectTaxonomySpans(body, palette, unitSpans));
+    spans.push(...collectTaxonomySpans(body, palette, unitSpans, diffSpans));
   }
   if (options?.variableDataFlow) {
-    spans.push(...collectVariableSpans(body, void 0, unitSpans));
+    spans.push(...collectVariableSpans(body, void 0, unitSpans, diffSpans));
   }
   return applyColorSpans(body, spans);
 }
@@ -3379,6 +3430,7 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
           if (containsColorWrapper(body))
             continue;
           const unitSpans = findUnitSpans(body);
+          const diffSpans = findDifferentialSpans(body);
           const allSpans = [
             ...collectFunctionSpans(body, palette),
             ...collectScannerSpans(body, palette)
@@ -3386,14 +3438,17 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
           if (options?.colorUnits !== false) {
             allSpans.push(...collectUnitSpans(body, palette, unitSpans));
           }
+          if (options?.colorDifferentials !== false) {
+            allSpans.push(...collectDifferentialSpans(body, palette, diffSpans));
+          }
           if (options?.rainbowDelimiters) {
             allSpans.push(...collectDelimiterSpans(body, { forLatexWrap: false }));
           }
           if (options?.enableTaxonomy) {
-            allSpans.push(...collectTaxonomySpans(body, palette, unitSpans));
+            allSpans.push(...collectTaxonomySpans(body, palette, unitSpans, diffSpans));
           }
           if (options?.variableDataFlow) {
-            allSpans.push(...collectVariableSpans(body, void 0, unitSpans));
+            allSpans.push(...collectVariableSpans(body, void 0, unitSpans, diffSpans));
           }
           const selected = selectColorSpans(body, allSpans);
           const nonOverlapping = [];
@@ -3656,7 +3711,8 @@ var DEFAULT_SETTINGS = {
   enableTaxonomy: true,
   rainbowDelimiters: true,
   variableDataFlow: false,
-  colorUnits: true
+  colorUnits: true,
+  colorDifferentials: true
 };
 var COLOR_ROLE_DESCRIPTIONS = {
   main: "Primary expression / function color",
@@ -3856,7 +3912,8 @@ var ColorMathPlugin = class extends import_obsidian2.Plugin {
       enableTaxonomy: this.settings.enableTaxonomy,
       rainbowDelimiters: this.settings.rainbowDelimiters,
       variableDataFlow: this.settings.variableDataFlow,
-      colorUnits: this.settings.colorUnits
+      colorUnits: this.settings.colorUnits,
+      colorDifferentials: this.settings.colorDifferentials
     };
   }
   colorizeCurrentMathBlock(editor) {
@@ -4061,6 +4118,13 @@ var ColorMathSettingTab = class extends import_obsidian2.PluginSettingTab {
     new import_obsidian2.Setting(containerEl).setName("Color physical units").setDesc("Distinguish physical units and metric prefixes (e.g. \u03BCm, m/s, kg) from algebraic variables and parameters. Turn off to keep units in natural text color.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.colorUnits).onChange(async (val) => {
         this.plugin.settings.colorUnits = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Calculus differentials & derivatives").setDesc("Color differentials (dx, dt, d\u03B8) and derivative fractions (df/dx, \u2202/\u2202t) with the derivative role to prevent misidentifying 'd' as a variable.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.colorDifferentials).onChange(async (val) => {
+        this.plugin.settings.colorDifferentials = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })

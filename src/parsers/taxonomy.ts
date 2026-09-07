@@ -10,6 +10,7 @@ import {
 import { readCommand, readOperand, OPAQUE_MACROS } from "./latex_spans";
 import { readBraced, readColorCommand } from "../utils/latex_helpers";
 import { ColorSpan } from "../utils/spans";
+import { findDifferentialSpans, DifferentialSpan } from "./differentials";
 import { findUnitSpans, UnitSpan } from "./units";
 
 function skipComment(text: string, start: number): number {
@@ -33,9 +34,11 @@ function skipComment(text: string, start: number): number {
 export function collectTaxonomySpans(
   body: string,
   palette: ColorPalette = COLORS,
-  unitSpans?: UnitSpan[]
+  unitSpans?: UnitSpan[],
+  diffSpans?: DifferentialSpan[]
 ): ColorSpan[] {
   const units = unitSpans || findUnitSpans(body);
+  const diffs = diffSpans || findDifferentialSpans(body);
   const spans: ColorSpan[] = [];
   let index = 0;
 
@@ -79,6 +82,12 @@ export function collectTaxonomySpans(
     const inUnit = units.find((u) => u.start <= index && index < u.end);
     if (inUnit) {
       index = inUnit.end;
+      continue;
+    }
+
+    const inDiff = diffs.find((d) => d.start <= index && index < d.end);
+    if (inDiff) {
+      index = inDiff.end;
       continue;
     }
 
