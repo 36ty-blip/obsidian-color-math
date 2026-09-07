@@ -9,8 +9,10 @@ import {
   ViewUpdate,
 } from "@codemirror/view";
 import { ColorPalette, ColorMathOptions } from "../config";
+import { collectBraKetDelimiterSpans } from "../parsers/braket";
 import { collectDelimiterSpans } from "../parsers/delimiters";
 import { collectDifferentialSpans, findDifferentialSpans } from "../parsers/differentials";
+import { collectDimensionlessSpans, findDimensionlessSpans } from "../parsers/dimensionless";
 import { collectFunctionSpans } from "../converters/generic";
 import { scanMarkdown } from "../parsers/markdown_scanner";
 import { collectScannerSpans } from "../parsers/scanner";
@@ -68,6 +70,7 @@ export function createColorMathLivePlugin(
 
           const unitSpans = findUnitSpans(body);
           const diffSpans = findDifferentialSpans(body);
+          const dimSpans = findDimensionlessSpans(body);
 
           const allSpans: ColorSpan[] = [
             ...collectFunctionSpans(body, palette),
@@ -82,16 +85,24 @@ export function createColorMathLivePlugin(
             allSpans.push(...collectDifferentialSpans(body, palette, diffSpans));
           }
 
+          if (options?.colorDimensionless !== false) {
+            allSpans.push(...collectDimensionlessSpans(body, palette, dimSpans));
+          }
+
+          if (options?.colorBraKet !== false) {
+            allSpans.push(...collectBraKetDelimiterSpans(body, palette));
+          }
+
           if (options?.rainbowDelimiters) {
             allSpans.push(...collectDelimiterSpans(body, { forLatexWrap: false }));
           }
 
           if (options?.enableTaxonomy) {
-            allSpans.push(...collectTaxonomySpans(body, palette, unitSpans, diffSpans));
+            allSpans.push(...collectTaxonomySpans(body, palette, unitSpans, diffSpans, dimSpans));
           }
 
           if (options?.variableDataFlow) {
-            allSpans.push(...collectVariableSpans(body, undefined, unitSpans, diffSpans));
+            allSpans.push(...collectVariableSpans(body, undefined, unitSpans, diffSpans, dimSpans));
           }
 
           const selected = selectColorSpans(body, allSpans);

@@ -279,5 +279,7 @@ export interface ColorMathOptions {
   variableDataFlow?: boolean;
   colorUnits?: boolean;
   colorDifferentials?: boolean;
+  colorBraKet?: boolean;
+  colorDimensionless?: boolean;
 }
 

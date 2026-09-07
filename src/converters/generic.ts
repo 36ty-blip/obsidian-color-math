@@ -1,8 +1,10 @@
 // src/converters/generic.ts
 
 import { COLORS, ColorPalette, ColorMathOptions } from "../config";
+import { collectBraKetDelimiterSpans } from "../parsers/braket";
 import { collectDelimiterSpans } from "../parsers/delimiters";
 import { collectDifferentialSpans, findDifferentialSpans } from "../parsers/differentials";
+import { collectDimensionlessSpans, findDimensionlessSpans } from "../parsers/dimensionless";
 import { findSemanticSpans } from "../parsers/math_parser";
 import { collectScannerSpans } from "../parsers/scanner";
 import { collectTaxonomySpans } from "../parsers/taxonomy";
@@ -53,6 +55,7 @@ export function colorLatexBody(
 
   const unitSpans = findUnitSpans(body);
   const diffSpans = findDifferentialSpans(body);
+  const dimSpans = findDimensionlessSpans(body);
 
   const spans: ColorSpan[] = [
     ...collectFunctionSpans(body, palette),
@@ -67,16 +70,24 @@ export function colorLatexBody(
     spans.push(...collectDifferentialSpans(body, palette, diffSpans));
   }
 
+  if (options?.colorDimensionless !== false) {
+    spans.push(...collectDimensionlessSpans(body, palette, dimSpans));
+  }
+
+  if (options?.colorBraKet !== false) {
+    spans.push(...collectBraKetDelimiterSpans(body, palette));
+  }
+
   if (options?.rainbowDelimiters) {
     spans.push(...collectDelimiterSpans(body, { forLatexWrap: true }));
   }
 
   if (options?.enableTaxonomy) {
-    spans.push(...collectTaxonomySpans(body, palette, unitSpans, diffSpans));
+    spans.push(...collectTaxonomySpans(body, palette, unitSpans, diffSpans, dimSpans));
   }
 
   if (options?.variableDataFlow) {
-    spans.push(...collectVariableSpans(body, undefined, unitSpans, diffSpans));
+    spans.push(...collectVariableSpans(body, undefined, unitSpans, diffSpans, dimSpans));
   }
 
   return applyColorSpans(body, spans);

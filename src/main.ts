@@ -30,6 +30,8 @@ interface ColorMathSettings {
   variableDataFlow: boolean;
   colorUnits: boolean;
   colorDifferentials: boolean;
+  colorBraKet: boolean;
+  colorDimensionless: boolean;
 }
 
 const DEFAULT_SETTINGS: ColorMathSettings = {
@@ -44,6 +46,8 @@ const DEFAULT_SETTINGS: ColorMathSettings = {
   variableDataFlow: false,
   colorUnits: true,
   colorDifferentials: true,
+  colorBraKet: true,
+  colorDimensionless: true,
 };
 
 const COLOR_ROLE_DESCRIPTIONS: Record<ColorRole, string> = {
@@ -309,6 +313,8 @@ export default class ColorMathPlugin extends Plugin {
       variableDataFlow: this.settings.variableDataFlow,
       colorUnits: this.settings.colorUnits,
       colorDifferentials: this.settings.colorDifferentials,
+      colorBraKet: this.settings.colorBraKet,
+      colorDimensionless: this.settings.colorDimensionless,
     };
   }
 
@@ -598,6 +604,32 @@ class ColorMathSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.colorDifferentials)
           .onChange(async (val) => {
             this.plugin.settings.colorDifferentials = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Quantum bra-ket notation")
+      .setDesc("Highlight Dirac bra-ket state vectors (|ψ⟩, ⟨ϕ|, ⟨ϕ|ψ⟩) with clean delimiter styling.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.colorBraKet)
+          .onChange(async (val) => {
+            this.plugin.settings.colorBraKet = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Engineering dimensionless numbers")
+      .setDesc("Recognize contiguous dimensionless numbers (Re, Ma, Pr, Nu) as unified coefficients. Separate letters like 'R e' remain separate variables.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.colorDimensionless)
+          .onChange(async (val) => {
+            this.plugin.settings.colorDimensionless = val;
             await this.plugin.saveSettings();
             this.plugin.rerenderMath();
           })
