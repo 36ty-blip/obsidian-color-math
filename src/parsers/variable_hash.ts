@@ -93,7 +93,7 @@ export function collectVariableSpans(
             if (body[targetStart] === "{") {
               const braced = readBraced(body, targetStart);
               if (braced) {
-                const inner = body.slice(braced[0], braced[1]);
+                const inner = braced[0];
                 const baseMatch = inner.match(/[a-zA-Z]/);
                 const baseLetter = baseMatch ? baseMatch[0] : "x";
                 const color = hashStringToColor(baseLetter, palette);

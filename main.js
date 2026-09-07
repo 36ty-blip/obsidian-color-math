@@ -3229,7 +3229,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
             if (body[targetStart] === "{") {
               const braced = readBraced(body, targetStart);
               if (braced) {
-                const inner = body.slice(braced[0], braced[1]);
+                const inner = braced[0];
                 const baseMatch = inner.match(/[a-zA-Z]/);
                 const baseLetter = baseMatch ? baseMatch[0] : "x";
                 const color = hashStringToColor(baseLetter, palette);
@@ -3830,6 +3830,7 @@ function extractThemePalette(isLight) {
   const orange = getVar("--color-orange", DEFAULT_PALETTE.orange);
   const red = getVar("--color-red", getVar("--color-pink", DEFAULT_PALETTE.arrow));
   const cyan = getVar("--color-cyan", blue);
+  const teal = getVar("--color-teal", cyan);
   return {
     main: blue,
     derivative: purple,
@@ -3841,7 +3842,8 @@ function extractThemePalette(isLight) {
     relation: relationColor,
     dot: dotColor,
     spacing: dotColor,
-    parameter: purple
+    parameter: purple,
+    unit: teal
   };
 }
 
