@@ -87,6 +87,31 @@ export function collectTaxonomySpans(
           }
         }
 
+        if (name === "\\dot" || name === "\\ddot" || name === "\\dddot") {
+          let targetStart = cmdEnd;
+          while (targetStart < body.length && /\s/.test(body[targetStart])) {
+            targetStart++;
+          }
+          if (targetStart < body.length) {
+            let targetEnd = targetStart + 1;
+            if (body[targetStart] === "{") {
+              const braced = readBraced(body, targetStart);
+              if (braced) targetEnd = braced[1];
+            } else {
+              const letMatch = body.slice(targetStart).match(/^[a-zA-Z](')*/);
+              if (letMatch) targetEnd = targetStart + letMatch[0].length;
+            }
+            spans.push({
+              start: index,
+              end: targetEnd,
+              color: palette.derivative,
+              priority: 22,
+            });
+            index = targetEnd;
+            continue;
+          }
+        }
+
         if (MATH_CONSTANTS.has(name)) {
           spans.push({
             start: index,

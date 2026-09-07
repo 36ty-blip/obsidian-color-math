@@ -143,6 +143,23 @@ var MATH_CONSTANTS = /* @__PURE__ */ new Set([
   "\\top",
   "\\bot"
 ]);
+var MATH_ACCENTS = /* @__PURE__ */ new Set([
+  "\\dot",
+  "\\ddot",
+  "\\dddot",
+  "\\ddddot",
+  "\\hat",
+  "\\widehat",
+  "\\tilde",
+  "\\widetilde",
+  "\\bar",
+  "\\vec",
+  "\\check",
+  "\\breve",
+  "\\acute",
+  "\\grave",
+  "\\mathring"
+]);
 var MATH_PARAMETERS = /* @__PURE__ */ new Set([
   "\\alpha",
   "\\beta",
@@ -254,6 +271,7 @@ function hashStringToColor(str, palette = VARIABLE_HASH_PALETTE) {
 var FENCED_CODE = "fenced_code";
 var CODE_SPAN = "code_span";
 var MATH_BLOCK = "math_block";
+var MATH_INLINE = "math_inline";
 function lineRanges(text) {
   const ranges = [];
   let start = 0;
@@ -616,13 +634,65 @@ function findMathBlocks(text, protectedSpans) {
   }
   return spans;
 }
+function findMathInlines(text, protectedSpans) {
+  const spans = [];
+  for (const [start, end] of visibleRanges(text.length, protectedSpans)) {
+    let index = start;
+    while (index < end) {
+      if (text[index] === "$" && (index === 0 || text[index - 1] !== "\\")) {
+        if (index + 1 < end && text[index + 1] === "$") {
+          index += 2;
+          continue;
+        }
+        if (index + 1 < end && (text[index + 1] === " " || text[index + 1] === "	" || text[index + 1] === "\r" || text[index + 1] === "\n")) {
+          index++;
+          continue;
+        }
+        const contentStart = index + 1;
+        let closing = contentStart;
+        let found = false;
+        while (closing < end) {
+          if (text[closing] === "\r" || text[closing] === "\n") {
+            break;
+          }
+          if (text[closing] === "$" && text[closing - 1] !== "\\") {
+            if (text[closing - 1] !== " " && text[closing - 1] !== "	") {
+              found = true;
+              break;
+            }
+          }
+          closing++;
+        }
+        if (found) {
+          spans.push({
+            kind: MATH_INLINE,
+            start: index,
+            contentStart,
+            contentEnd: closing,
+            end: closing + 1
+          });
+          index = closing + 1;
+          continue;
+        }
+      }
+      index++;
+    }
+  }
+  return spans;
+}
 function scanMarkdown(text) {
   const fenced = findFencedCode(text);
   const codeSpans = findCodeSpans(text, fenced);
   const protectedSpans = [...fenced, ...codeSpans].sort((a, b) => a.start - b.start);
+  const mathBlocks = findMathBlocks(text, protectedSpans);
+  const allProtected = [...protectedSpans, ...mathBlocks].sort(
+    (a, b) => a.start - b.start
+  );
+  const mathInlines = findMathInlines(text, allProtected);
   return {
     protected: protectedSpans,
-    mathBlocks: findMathBlocks(text, protectedSpans)
+    mathBlocks,
+    mathInlines
   };
 }
 
@@ -2794,6 +2864,32 @@ function collectTaxonomySpans(body, palette = COLORS) {
             continue;
           }
         }
+        if (name === "\\dot" || name === "\\ddot" || name === "\\dddot") {
+          let targetStart = cmdEnd;
+          while (targetStart < body.length && /\s/.test(body[targetStart])) {
+            targetStart++;
+          }
+          if (targetStart < body.length) {
+            let targetEnd = targetStart + 1;
+            if (body[targetStart] === "{") {
+              const braced = readBraced(body, targetStart);
+              if (braced)
+                targetEnd = braced[1];
+            } else {
+              const letMatch = body.slice(targetStart).match(/^[a-zA-Z](')*/);
+              if (letMatch)
+                targetEnd = targetStart + letMatch[0].length;
+            }
+            spans.push({
+              start: index,
+              end: targetEnd,
+              color: palette.derivative,
+              priority: 22
+            });
+            index = targetEnd;
+            continue;
+          }
+        }
         if (MATH_CONSTANTS.has(name)) {
           spans.push({
             start: index,
@@ -2863,10 +2959,51 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE) {
       continue;
     }
     if (body[index] === "\\") {
-      const cmd = readCommand(body, index);
-      if (cmd !== null) {
-        const [name, cmdEnd] = cmd;
-        if (OPAQUE_MACROS.has(name.slice(1))) {
+      const match = body.slice(index).match(/^(\\[A-Za-z]+|\\.)/);
+      if (match) {
+        const cmdName = match[0];
+        const cmdEnd = index + cmdName.length;
+        if (MATH_ACCENTS.has(cmdName)) {
+          let targetStart = cmdEnd;
+          while (targetStart < body.length && /\s/.test(body[targetStart])) {
+            targetStart++;
+          }
+          if (targetStart < body.length) {
+            if (body[targetStart] === "{") {
+              const braced = readBraced(body, targetStart);
+              if (braced) {
+                const inner = body.slice(braced[0], braced[1]);
+                const baseMatch = inner.match(/[a-zA-Z]/);
+                const baseLetter = baseMatch ? baseMatch[0] : "x";
+                const color = hashStringToColor(baseLetter, palette);
+                spans.push({
+                  start: index,
+                  end: braced[1],
+                  color,
+                  priority: 15
+                });
+                index = braced[1];
+                continue;
+              }
+            } else {
+              const letterMatch = body.slice(targetStart).match(/^[a-zA-Z](')*/);
+              if (letterMatch) {
+                const fullVar = letterMatch[0];
+                const baseLetter = fullVar.replace(/'/g, "");
+                const color = hashStringToColor(baseLetter, palette);
+                spans.push({
+                  start: index,
+                  end: targetStart + fullVar.length,
+                  color,
+                  priority: 15
+                });
+                index = targetStart + fullVar.length;
+                continue;
+              }
+            }
+          }
+        }
+        if (OPAQUE_MACROS.has(cmdName.slice(1))) {
           const braced = readBraced(body, cmdEnd);
           if (braced !== null) {
             index = braced[1];
@@ -3097,17 +3234,25 @@ function convertMathBlock(block, palette = COLORS, options) {
   return `${prefix}$$${colorLatexBody(body, palette, options)}$$${suffix}`;
 }
 function convertText(text, palette = COLORS, options) {
-  const mathBlocks = scanMarkdown(text).mathBlocks;
-  if (mathBlocks.length === 0) {
+  const scan = scanMarkdown(text);
+  const allSpans = [...scan.mathBlocks, ...scan.mathInlines].sort(
+    (a, b) => a.start - b.start
+  );
+  if (allSpans.length === 0) {
     return text;
   }
   const converted = [];
   let index = 0;
-  for (const span of mathBlocks) {
+  for (const span of allSpans) {
     converted.push(text.slice(index, span.start));
-    converted.push(
-      convertMathBlock(text.slice(span.start, span.end), palette, options)
-    );
+    if (span.kind === "math_inline") {
+      const raw = text.slice(span.contentStart, span.contentEnd);
+      converted.push(`$${colorLatexBody(raw, palette, options)}$`);
+    } else {
+      converted.push(
+        convertMathBlock(text.slice(span.start, span.end), palette, options)
+      );
+    }
     index = span.end;
   }
   converted.push(text.slice(index));
@@ -3138,8 +3283,9 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
         const text = doc.toString();
         const palette = getPalette();
         const options = getOptions ? getOptions() : void 0;
-        const mathBlocks = scanMarkdown(text).mathBlocks;
-        for (const block of mathBlocks) {
+        const scan = scanMarkdown(text);
+        const allMath = [...scan.mathBlocks, ...scan.mathInlines];
+        for (const block of allMath) {
           const blockStart = block.contentStart;
           const blockEnd = block.contentEnd;
           const isVisible = view.visibleRanges.some(

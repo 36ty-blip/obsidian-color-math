@@ -151,6 +151,24 @@ export const MATH_CONSTANTS = new Set([
   "\\bot",
 ]);
 
+export const MATH_ACCENTS = new Set([
+  "\\dot",
+  "\\ddot",
+  "\\dddot",
+  "\\ddddot",
+  "\\hat",
+  "\\widehat",
+  "\\tilde",
+  "\\widetilde",
+  "\\bar",
+  "\\vec",
+  "\\check",
+  "\\breve",
+  "\\acute",
+  "\\grave",
+  "\\mathring",
+]);
+
 export const MATH_PARAMETERS = new Set([
   "\\alpha",
   "\\beta",

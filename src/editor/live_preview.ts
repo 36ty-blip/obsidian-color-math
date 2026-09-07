@@ -48,9 +48,10 @@ export function createColorMathLivePlugin(
         const palette = getPalette();
         const options = getOptions ? getOptions() : undefined;
 
-        const mathBlocks = scanMarkdown(text).mathBlocks;
+        const scan = scanMarkdown(text);
+        const allMath = [...scan.mathBlocks, ...scan.mathInlines];
 
-        for (const block of mathBlocks) {
+        for (const block of allMath) {
           const blockStart = block.contentStart;
           const blockEnd = block.contentEnd;
 

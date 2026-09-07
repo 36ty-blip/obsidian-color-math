@@ -79,18 +79,26 @@ export function convertText(
   palette: ColorPalette = COLORS,
   options?: ColorMathOptions
 ): string {
-  const mathBlocks = scanMarkdown(text).mathBlocks;
-  if (mathBlocks.length === 0) {
+  const scan = scanMarkdown(text);
+  const allSpans = [...scan.mathBlocks, ...scan.mathInlines].sort(
+    (a, b) => a.start - b.start
+  );
+  if (allSpans.length === 0) {
     return text;
   }
 
   const converted: string[] = [];
   let index = 0;
-  for (const span of mathBlocks) {
+  for (const span of allSpans) {
     converted.push(text.slice(index, span.start));
-    converted.push(
-      convertMathBlock(text.slice(span.start, span.end), palette, options)
-    );
+    if (span.kind === "math_inline") {
+      const raw = text.slice(span.contentStart, span.contentEnd);
+      converted.push(`$${colorLatexBody(raw, palette, options)}$`);
+    } else {
+      converted.push(
+        convertMathBlock(text.slice(span.start, span.end), palette, options)
+      );
+    }
     index = span.end;
   }
   converted.push(text.slice(index));

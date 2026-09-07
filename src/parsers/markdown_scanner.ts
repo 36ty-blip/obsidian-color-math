@@ -3,6 +3,7 @@
 export const FENCED_CODE = "fenced_code";
 export const CODE_SPAN = "code_span";
 export const MATH_BLOCK = "math_block";
+export const MATH_INLINE = "math_inline";
 
 export interface MarkdownSpan {
   kind: string;
@@ -15,6 +16,7 @@ export interface MarkdownSpan {
 export interface MarkdownScan {
   protected: MarkdownSpan[];
   mathBlocks: MarkdownSpan[];
+  mathInlines: MarkdownSpan[];
 }
 
 interface ListItem {
@@ -465,12 +467,78 @@ function findMathBlocks(text: string, protectedSpans: MarkdownSpan[]): MarkdownS
   return spans;
 }
 
+function findMathInlines(text: string, protectedSpans: MarkdownSpan[]): MarkdownSpan[] {
+  const spans: MarkdownSpan[] = [];
+  for (const [start, end] of visibleRanges(text.length, protectedSpans)) {
+    let index = start;
+    while (index < end) {
+      if (text[index] === "$" && (index === 0 || text[index - 1] !== "\\")) {
+        // Skip $$ display math delimiters
+        if (index + 1 < end && text[index + 1] === "$") {
+          index += 2;
+          continue;
+        }
+        // Opening $ must not be followed by whitespace
+        if (
+          index + 1 < end &&
+          (text[index + 1] === " " ||
+            text[index + 1] === "\t" ||
+            text[index + 1] === "\r" ||
+            text[index + 1] === "\n")
+        ) {
+          index++;
+          continue;
+        }
+
+        const contentStart = index + 1;
+        let closing = contentStart;
+        let found = false;
+
+        while (closing < end) {
+          if (text[closing] === "\r" || text[closing] === "\n") {
+            break; // Inline math must not cross lines
+          }
+          if (text[closing] === "$" && text[closing - 1] !== "\\") {
+            // Closing $ must not be preceded by whitespace
+            if (text[closing - 1] !== " " && text[closing - 1] !== "\t") {
+              found = true;
+              break;
+            }
+          }
+          closing++;
+        }
+
+        if (found) {
+          spans.push({
+            kind: MATH_INLINE,
+            start: index,
+            contentStart,
+            contentEnd: closing,
+            end: closing + 1,
+          });
+          index = closing + 1;
+          continue;
+        }
+      }
+      index++;
+    }
+  }
+  return spans;
+}
+
 export function scanMarkdown(text: string): MarkdownScan {
   const fenced = findFencedCode(text);
   const codeSpans = findCodeSpans(text, fenced);
   const protectedSpans = [...fenced, ...codeSpans].sort((a, b) => a.start - b.start);
+  const mathBlocks = findMathBlocks(text, protectedSpans);
+  const allProtected = [...protectedSpans, ...mathBlocks].sort(
+    (a, b) => a.start - b.start
+  );
+  const mathInlines = findMathInlines(text, allProtected);
+
   return {
     protected: protectedSpans,
-    mathBlocks: findMathBlocks(text, protectedSpans),
+    mathBlocks,
+    mathInlines,
   };
 }

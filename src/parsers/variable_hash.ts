@@ -3,6 +3,7 @@
 import {
   VARIABLE_HASH_PALETTE,
   hashStringToColor,
+  MATH_ACCENTS,
 } from "../config";
 import { readCommand, readOperand, OPAQUE_MACROS } from "./latex_spans";
 import { readBraced, readColorCommand } from "../utils/latex_helpers";
@@ -48,12 +49,56 @@ export function collectVariableSpans(
       continue;
     }
 
-    // Skip backslash commands
+    // Backslash commands
     if (body[index] === "\\") {
-      const cmd = readCommand(body, index);
-      if (cmd !== null) {
-        const [name, cmdEnd] = cmd;
-        if (OPAQUE_MACROS.has(name.slice(1))) {
+      const match = body.slice(index).match(/^(\\[A-Za-z]+|\\.)/);
+      if (match) {
+        const cmdName = match[0];
+        const cmdEnd = index + cmdName.length;
+
+        // Check if math accent command like \dot, \ddot, \vec, \hat, \bar
+        if (MATH_ACCENTS.has(cmdName)) {
+          let targetStart = cmdEnd;
+          while (targetStart < body.length && /\s/.test(body[targetStart])) {
+            targetStart++;
+          }
+          if (targetStart < body.length) {
+            if (body[targetStart] === "{") {
+              const braced = readBraced(body, targetStart);
+              if (braced) {
+                const inner = body.slice(braced[0], braced[1]);
+                const baseMatch = inner.match(/[a-zA-Z]/);
+                const baseLetter = baseMatch ? baseMatch[0] : "x";
+                const color = hashStringToColor(baseLetter, palette);
+                spans.push({
+                  start: index,
+                  end: braced[1],
+                  color,
+                  priority: 15,
+                });
+                index = braced[1];
+                continue;
+              }
+            } else {
+              const letterMatch = body.slice(targetStart).match(/^[a-zA-Z](')*/);
+              if (letterMatch) {
+                const fullVar = letterMatch[0];
+                const baseLetter = fullVar.replace(/'/g, "");
+                const color = hashStringToColor(baseLetter, palette);
+                spans.push({
+                  start: index,
+                  end: targetStart + fullVar.length,
+                  color,
+                  priority: 15,
+                });
+                index = targetStart + fullVar.length;
+                continue;
+              }
+            }
+          }
+        }
+
+        if (OPAQUE_MACROS.has(cmdName.slice(1))) {
           const braced = readBraced(body, cmdEnd);
           if (braced !== null) {
             index = braced[1];
