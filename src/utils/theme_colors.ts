@@ -99,5 +99,6 @@ export function extractThemePalette(isLight?: boolean): ColorPalette {
     relation: relationColor,
     dot: dotColor,
     spacing: dotColor,
+    parameter: purple,
   };
 }

@@ -8,16 +8,20 @@ import {
   ViewPlugin,
   ViewUpdate,
 } from "@codemirror/view";
-import { ColorPalette } from "../config";
+import { ColorPalette, ColorMathOptions } from "../config";
+import { collectDelimiterSpans } from "../parsers/delimiters";
 import { collectFunctionSpans } from "../converters/generic";
 import { scanMarkdown } from "../parsers/markdown_scanner";
 import { collectScannerSpans } from "../parsers/scanner";
+import { collectTaxonomySpans } from "../parsers/taxonomy";
+import { collectVariableSpans } from "../parsers/variable_hash";
 import { containsColorWrapper } from "../utils/latex_helpers";
 import { ColorSpan, selectColorSpans } from "../utils/spans";
 
 export function createColorMathLivePlugin(
   getPalette: () => ColorPalette,
-  isEnabled: () => boolean
+  isEnabled: () => boolean,
+  getOptions?: () => ColorMathOptions
 ) {
   return ViewPlugin.fromClass(
     class {
@@ -42,6 +46,7 @@ export function createColorMathLivePlugin(
         const doc = view.state.doc;
         const text = doc.toString();
         const palette = getPalette();
+        const options = getOptions ? getOptions() : undefined;
 
         const mathBlocks = scanMarkdown(text).mathBlocks;
 
@@ -58,12 +63,24 @@ export function createColorMathLivePlugin(
           const body = text.slice(blockStart, blockEnd);
           if (containsColorWrapper(body)) continue;
 
-          const functionSpans = collectFunctionSpans(body, palette);
-          const scannerSpans = collectScannerSpans(body, palette);
-          const selected = selectColorSpans(body, [
-            ...functionSpans,
-            ...scannerSpans,
-          ]);
+          const allSpans: ColorSpan[] = [
+            ...collectFunctionSpans(body, palette),
+            ...collectScannerSpans(body, palette),
+          ];
+
+          if (options?.rainbowDelimiters) {
+            allSpans.push(...collectDelimiterSpans(body, { forLatexWrap: false }));
+          }
+
+          if (options?.enableTaxonomy) {
+            allSpans.push(...collectTaxonomySpans(body, palette));
+          }
+
+          if (options?.variableDataFlow) {
+            allSpans.push(...collectVariableSpans(body));
+          }
+
+          const selected = selectColorSpans(body, allSpans);
 
           // Keep strictly non-overlapping spans in ascending order for CodeMirror RangeSetBuilder
           const nonOverlapping: ColorSpan[] = [];

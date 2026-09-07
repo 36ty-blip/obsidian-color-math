@@ -10,7 +10,8 @@ export type ColorRole =
   | "relation"
   | "arrow"
   | "set"
-  | "spacing";
+  | "spacing"
+  | "parameter";
 
 export type ColorPalette = Record<ColorRole, string>;
 
@@ -25,6 +26,7 @@ export const DEFAULT_COLORS: ColorPalette = {
   arrow: "#f7768e",
   set: "#bb9af7",
   spacing: "white",
+  parameter: "#bb9af7",
 };
 
 export const DEFAULT_PALETTE = DEFAULT_COLORS;
@@ -135,3 +137,125 @@ export const COLOR_COMMANDS = new Set([
 export const SORTED_COLOR_COMMANDS: string[] = Array.from(COLOR_COMMANDS).sort(
   (a, b) => b.length - a.length
 );
+
+export const MATH_CONSTANTS = new Set([
+  "\\pi",
+  "\\varpi",
+  "\\hbar",
+  "\\infty",
+  "\\ell",
+  "\\aleph",
+  "\\Re",
+  "\\Im",
+  "\\top",
+  "\\bot",
+]);
+
+export const MATH_PARAMETERS = new Set([
+  "\\alpha",
+  "\\beta",
+  "\\gamma",
+  "\\delta",
+  "\\epsilon",
+  "\\varepsilon",
+  "\\zeta",
+  "\\eta",
+  "\\theta",
+  "\\vartheta",
+  "\\iota",
+  "\\kappa",
+  "\\lambda",
+  "\\mu",
+  "\\nu",
+  "\\xi",
+  "\\rho",
+  "\\varrho",
+  "\\sigma",
+  "\\varsigma",
+  "\\tau",
+  "\\upsilon",
+  "\\phi",
+  "\\varphi",
+  "\\chi",
+  "\\psi",
+  "\\omega",
+  "\\Gamma",
+  "\\Delta",
+  "\\Theta",
+  "\\Lambda",
+  "\\Xi",
+  "\\Pi",
+  "\\Sigma",
+  "\\Upsilon",
+  "\\Phi",
+  "\\Psi",
+  "\\Omega",
+]);
+
+export const MATH_FUNCTIONS = new Set([
+  "\\sin",
+  "\\cos",
+  "\\tan",
+  "\\csc",
+  "\\sec",
+  "\\cot",
+  "\\arcsin",
+  "\\arccos",
+  "\\arctan",
+  "\\sinh",
+  "\\cosh",
+  "\\tanh",
+  "\\coth",
+  "\\ln",
+  "\\log",
+  "\\exp",
+  "\\det",
+  "\\gcd",
+  "\\max",
+  "\\min",
+  "\\dim",
+  "\\ker",
+  "\\hom",
+  "\\deg",
+  "\\arg",
+  "\\Pr",
+  "\\sup",
+  "\\inf",
+]);
+
+export const RAINBOW_DELIMITER_COLORS: string[] = [
+  "#e0af68", // Tier 0: Gold
+  "#7aa2f7", // Tier 1: Cyan / Blue
+  "#bb9af7", // Tier 2: Purple / Lavender
+  "#f7768e", // Tier 3: Coral / Pink
+];
+
+export const VARIABLE_HASH_PALETTE: string[] = [
+  "#7aa2f7", // Tokyo Blue
+  "#7dcfff", // Tokyo Cyan
+  "#bb9af7", // Tokyo Purple
+  "#f7768e", // Tokyo Pink
+  "#e0af68", // Tokyo Orange/Gold
+  "#9ece6a", // Tokyo Green
+  "#2ac3de", // Light Cyan
+  "#ff9e64", // Peach
+];
+
+export function hashStringToColor(
+  str: string,
+  palette: string[] = VARIABLE_HASH_PALETTE
+): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 31 + str.charCodeAt(i)) | 0;
+  }
+  const index = Math.abs(hash) % palette.length;
+  return palette[index];
+}
+
+export interface ColorMathOptions {
+  enableTaxonomy?: boolean;
+  rainbowDelimiters?: boolean;
+  variableDataFlow?: boolean;
+}
+

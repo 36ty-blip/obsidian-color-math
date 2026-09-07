@@ -1,8 +1,11 @@
 // src/converters/generic.ts
 
-import { COLORS, ColorPalette } from "../config";
+import { COLORS, ColorPalette, ColorMathOptions } from "../config";
+import { collectDelimiterSpans } from "../parsers/delimiters";
 import { findSemanticSpans } from "../parsers/math_parser";
 import { collectScannerSpans } from "../parsers/scanner";
+import { collectTaxonomySpans } from "../parsers/taxonomy";
+import { collectVariableSpans } from "../parsers/variable_hash";
 import { containsColorWrapper } from "../utils/latex_helpers";
 import { ColorSpan, applyColorSpans } from "../utils/spans";
 
@@ -37,17 +40,40 @@ export function collectFunctionSpans(
   return spans;
 }
 
-export function colorLatexBody(body: string, palette: ColorPalette = COLORS): string {
+export function colorLatexBody(
+  body: string,
+  palette: ColorPalette = COLORS,
+  options?: ColorMathOptions
+): string {
   if (containsColorWrapper(body)) {
     return body;
   }
-  return applyColorSpans(body, [
+
+  const spans: ColorSpan[] = [
     ...collectFunctionSpans(body, palette),
     ...collectScannerSpans(body, palette),
-  ]);
+  ];
+
+  if (options?.rainbowDelimiters) {
+    spans.push(...collectDelimiterSpans(body, { forLatexWrap: true }));
+  }
+
+  if (options?.enableTaxonomy) {
+    spans.push(...collectTaxonomySpans(body, palette));
+  }
+
+  if (options?.variableDataFlow) {
+    spans.push(...collectVariableSpans(body));
+  }
+
+  return applyColorSpans(body, spans);
 }
 
-export function colorGenericMathLine(line: string, palette: ColorPalette = COLORS): string {
+export function colorGenericMathLine(
+  line: string,
+  palette: ColorPalette = COLORS,
+  options?: ColorMathOptions
+): string {
   const match = line.match(/^(\s*#+\s*)?\$\$(.*)\$\$([\s]*)$/s);
   if (!match) {
     return line;
@@ -55,5 +81,5 @@ export function colorGenericMathLine(line: string, palette: ColorPalette = COLOR
   const prefix = match[1] || "";
   const body = match[2];
   const suffix = match[3];
-  return `${prefix}$$${colorLatexBody(body, palette)}$$${suffix}`;
+  return `${prefix}$$${colorLatexBody(body, palette, options)}$$${suffix}`;
 }

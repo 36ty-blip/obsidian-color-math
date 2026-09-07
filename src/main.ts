@@ -10,7 +10,7 @@ import {
   PluginSettingTab,
   Setting,
 } from "obsidian";
-import { ColorPalette, ColorRole, DEFAULT_COLORS, setPalette } from "./config";
+import { ColorPalette, ColorRole, ColorMathOptions, DEFAULT_COLORS, setPalette } from "./config";
 import { convertMathBlock, convertText } from "./converters/block";
 import { createColorMathLivePlugin } from "./editor/live_preview";
 import { scanMarkdown } from "./parsers/markdown_scanner";
@@ -23,6 +23,9 @@ interface ColorMathSettings {
   showRibbonIcon: boolean;
   autoSyncTheme: boolean;
   autoLightDark: boolean;
+  enableTaxonomy: boolean;
+  rainbowDelimiters: boolean;
+  variableDataFlow: boolean;
 }
 
 const DEFAULT_SETTINGS: ColorMathSettings = {
@@ -31,6 +34,9 @@ const DEFAULT_SETTINGS: ColorMathSettings = {
   showRibbonIcon: true,
   autoSyncTheme: false,
   autoLightDark: true,
+  enableTaxonomy: true,
+  rainbowDelimiters: true,
+  variableDataFlow: false,
 };
 
 const COLOR_ROLE_DESCRIPTIONS: Record<ColorRole, string> = {
@@ -44,6 +50,7 @@ const COLOR_ROLE_DESCRIPTIONS: Record<ColorRole, string> = {
   arrow: "Arrows and mappings",
   set: "Set theory symbols",
   spacing: "LaTeX spacing commands",
+  parameter: "Parameters, angles, and Greek coefficients",
 };
 
 export default class ColorMathPlugin extends Plugin {
@@ -58,7 +65,12 @@ export default class ColorMathPlugin extends Plugin {
     this.registerEditorExtension([
       createColorMathLivePlugin(
         () => this.settings.palette,
-        () => this.settings.livePreviewHighlighting
+        () => this.settings.livePreviewHighlighting,
+        () => ({
+          enableTaxonomy: this.settings.enableTaxonomy,
+          rainbowDelimiters: this.settings.rainbowDelimiters,
+          variableDataFlow: this.settings.variableDataFlow,
+        })
       ),
     ]);
 
@@ -258,6 +270,14 @@ export default class ColorMathPlugin extends Plugin {
     menu.showAtMouseEvent(evt);
   }
 
+  getMathOptions(): ColorMathOptions {
+    return {
+      enableTaxonomy: this.settings.enableTaxonomy,
+      rainbowDelimiters: this.settings.rainbowDelimiters,
+      variableDataFlow: this.settings.variableDataFlow,
+    };
+  }
+
   colorizeCurrentMathBlock(editor: Editor) {
     const content = editor.getValue();
     const cursor = editor.getCursor();
@@ -274,7 +294,11 @@ export default class ColorMathPlugin extends Plugin {
     }
 
     const rawBlock = content.slice(currentBlock.start, currentBlock.end);
-    const colored = convertMathBlock(rawBlock, this.settings.palette);
+    const colored = convertMathBlock(
+      rawBlock,
+      this.settings.palette,
+      this.getMathOptions()
+    );
 
     if (colored === rawBlock) {
       new Notice("Color Math: Math block is already colorized.");
@@ -319,7 +343,11 @@ export default class ColorMathPlugin extends Plugin {
   colorizeSelection(editor: Editor) {
     const selection = editor.getSelection();
     if (selection) {
-      const colored = convertText(selection, this.settings.palette);
+      const colored = convertText(
+        selection,
+        this.settings.palette,
+        this.getMathOptions()
+      );
       editor.replaceSelection(colored);
       new Notice("Color Math: Colorized selection.");
     } else {
@@ -347,7 +375,11 @@ export default class ColorMathPlugin extends Plugin {
 
     const editor = view.editor;
     const content = editor.getValue();
-    const colored = convertText(content, this.settings.palette);
+    const colored = convertText(
+      content,
+      this.settings.palette,
+      this.getMathOptions()
+    );
 
     if (colored === content) {
       new Notice("Color Math: All math blocks are already colored.");
@@ -453,6 +485,44 @@ class ColorMathSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.livePreviewHighlighting)
           .onChange(async (val) => {
             this.plugin.settings.livePreviewHighlighting = val;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    containerEl.createEl("h3", { text: "IDE Visual Enhancements" });
+
+    new Setting(containerEl)
+      .setName("Rainbow delimiters")
+      .setDesc("Color nested parentheses, brackets, and braces by depth to prevent delimiter blindness.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.rainbowDelimiters)
+          .onChange(async (val) => {
+            this.plugin.settings.rainbowDelimiters = val;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Mathematical symbol taxonomy")
+      .setDesc("Semantically categorize and color constants, standard functions, parameters, and bound indices.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.enableTaxonomy)
+          .onChange(async (val) => {
+            this.plugin.settings.enableTaxonomy = val;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Variable data-flow hashing")
+      .setDesc("Deterministically assign a unique color to each variable in an expression to trace its flow.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.variableDataFlow)
+          .onChange(async (val) => {
+            this.plugin.settings.variableDataFlow = val;
             await this.plugin.saveSettings();
           })
       );

@@ -1,6 +1,6 @@
 // src/converters/block.ts
 
-import { COLORS, ColorPalette } from "../config";
+import { COLORS, ColorPalette, ColorMathOptions } from "../config";
 import { scanMarkdown } from "../parsers/markdown_scanner";
 import { convertDerivativeLine } from "./derivative";
 import { colorGenericMathLine, colorLatexBody } from "./generic";
@@ -34,7 +34,11 @@ function tryConverters(
   return null;
 }
 
-export function convertMathBlock(block: string, palette: ColorPalette = COLORS): string {
+export function convertMathBlock(
+  block: string,
+  palette: ColorPalette = COLORS,
+  options?: ColorMathOptions
+): string {
   const match = block.match(/^(\s*#+\s*)?\$\$([\s\S]*)\$\$([\s]*)$/);
   if (!match) {
     return block;
@@ -55,18 +59,26 @@ export function convertMathBlock(block: string, palette: ColorPalette = COLORS):
   }
 
   // fallback to generic coloring
-  return `${prefix}$$${colorLatexBody(body, palette)}$$${suffix}`;
+  return `${prefix}$$${colorLatexBody(body, palette, options)}$$${suffix}`;
 }
 
-export function convertLine(line: string, palette: ColorPalette = COLORS): string {
+export function convertLine(
+  line: string,
+  palette: ColorPalette = COLORS,
+  options?: ColorMathOptions
+): string {
   const converted = tryConverters(line, LINE_CONVERTERS, palette);
   if (converted !== null) {
     return converted;
   }
-  return colorGenericMathLine(line, palette);
+  return colorGenericMathLine(line, palette, options);
 }
 
-export function convertText(text: string, palette: ColorPalette = COLORS): string {
+export function convertText(
+  text: string,
+  palette: ColorPalette = COLORS,
+  options?: ColorMathOptions
+): string {
   const mathBlocks = scanMarkdown(text).mathBlocks;
   if (mathBlocks.length === 0) {
     return text;
@@ -76,7 +88,9 @@ export function convertText(text: string, palette: ColorPalette = COLORS): strin
   let index = 0;
   for (const span of mathBlocks) {
     converted.push(text.slice(index, span.start));
-    converted.push(convertMathBlock(text.slice(span.start, span.end), palette));
+    converted.push(
+      convertMathBlock(text.slice(span.start, span.end), palette, options)
+    );
     index = span.end;
   }
   converted.push(text.slice(index));
