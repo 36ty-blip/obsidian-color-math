@@ -60,11 +60,14 @@ export function findDimensionlessSpans(body: string): DimensionlessSpan[] {
   // Must NOT be preceded by backslash (e.g. \Re) or any letter.
   // Must NOT be followed by any letter.
   const bareRegex = new RegExp(
-    `(?<![\\\\a-zA-Z])(${list})(?![a-zA-Z])`,
+    `(?:^|[^\\\\a-zA-Z])(${list})(?![a-zA-Z])`,
     "g"
   );
   while ((match = bareRegex.exec(body)) !== null) {
-    addSpan(match.index, match.index + match[0].length, match[0]);
+    const symbol = match[1];
+    const symStart = match.index + (match[0].length - symbol.length);
+    const symEnd = symStart + symbol.length;
+    addSpan(symStart, symEnd, symbol);
   }
 
   return spans.sort((a, b) => a.start - b.start);

@@ -417,7 +417,7 @@ function pairRuns(
     filteredRuns = runs.filter((run) => run[1] - run[0] === exactLength);
   }
 
-  const nextSame: (number | null)[] = new Array(filteredRuns.length).fill(null);
+  const nextSame: (number | null)[] = new Array<number | null>(filteredRuns.length).fill(null);
   const nearest = new Map<number, number>();
   for (let index = filteredRuns.length - 1; index >= 0; index--) {
     const len = filteredRuns[index][1] - filteredRuns[index][0];

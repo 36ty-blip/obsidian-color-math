@@ -1,9 +1,9 @@
 {
   "id": "color-math",
   "name": "Color Math",
-  "version": "1.0.0",
-  "minAppVersion": "0.15.0",
-  "description": "Automatically apply semantic colors to LaTeX and MathJax equations in Obsidian Markdown.",
+  "version": "1.0.1",
+  "minAppVersion": "1.4.0",
+  "description": "Automatically apply semantic colors to LaTeX and MathJax equations in markdown notes.",
   "author": "36ty-blip",
   "authorUrl": "https://github.com/36ty-blip",
   "isDesktopOnly": false

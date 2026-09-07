@@ -2597,13 +2597,16 @@ function findDifferentialSpans(body) {
   while ((match = derivFracRegex.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, match[0], "derivative_fraction");
   }
-  const diffRegex = /(?<=(?:^|[\s+\-=*(\[{]|\\,|\\:|\\;|\\quad|\\qquad|~))\s*(?:d|\\partial|\\mathrm\{d\}|\\delta)\s*(\\[a-zA-Z]+|[a-zA-Z])(?![a-zA-Z0-9_\({])(?:\^\{?\d+\}?)?/g;
+  const diffRegex = /(?:^|[\s+\-=*({]|\[|\\,|\\:|\\;|\\quad|\\qquad|~)(\s*(?:d|\\partial|\\mathrm\{d\}|\\delta)\s*(?:\\[a-zA-Z]+|[a-zA-Z])(?![a-zA-Z0-9_({])(?:\^\{?\d+\}?)?)/g;
   while ((match = diffRegex.exec(body)) !== null) {
-    const dOffset = match[0].search(/(?:d|\\partial|\\mathrm\{d\}|\\delta)/);
-    const diffStart = match.index + dOffset;
-    const diffText = match[0].slice(dOffset);
-    const diffEnd = diffStart + diffText.length;
-    addSpan(diffStart, diffEnd, diffText, "differential");
+    const fullMatch = match[0];
+    const diffGroup = match[1];
+    const diffStart = match.index + (fullMatch.length - diffGroup.length);
+    const dOffset = diffGroup.search(/(?:d|\\partial|\\mathrm\{d\}|\\delta)/);
+    const actualStart = diffStart + dOffset;
+    const diffText = diffGroup.slice(dOffset);
+    const diffEnd = actualStart + diffText.length;
+    addSpan(actualStart, diffEnd, diffText, "differential");
   }
   return spans.sort((a, b) => a.start - b.start);
 }
@@ -2667,11 +2670,14 @@ function findDimensionlessSpans(body) {
     addSpan(match.index, match.index + match[0].length, match[0]);
   }
   const bareRegex = new RegExp(
-    `(?<![\\\\a-zA-Z])(${list})(?![a-zA-Z])`,
+    `(?:^|[^\\\\a-zA-Z])(${list})(?![a-zA-Z])`,
     "g"
   );
   while ((match = bareRegex.exec(body)) !== null) {
-    addSpan(match.index, match.index + match[0].length, match[0]);
+    const symbol = match[1];
+    const symStart = match.index + (match[0].length - symbol.length);
+    const symEnd = symStart + symbol.length;
+    addSpan(symStart, symEnd, symbol);
   }
   return spans.sort((a, b) => a.start - b.start);
 }
@@ -2970,7 +2976,7 @@ function findUnitSpans(body) {
       spans.push({ start, end, text });
     }
   }
-  const microTextRegex = /\\mu\s*(?:\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%Ωμ/\^\-0-9\s\.\\]+?)\s*\})(?:\^\{?-?\d+\}?)?/g;
+  const microTextRegex = /\\mu\s*(?:\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%Ωμ/^0-9\s.\\-]+?)\s*\})(?:\^\{?-?\d+\}?)?/g;
   let match;
   while ((match = microTextRegex.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, match[0]);
@@ -2987,7 +2993,7 @@ function findUnitSpans(body) {
     addSpan(match.index, match.index + match[0].length, match[0]);
   }
   const numberUnitRegex = new RegExp(
-    `(?<=^|[^A-Za-z0-9_])(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:\\s*(?:\\\\times|\\\\cdot|\xB7|\\*)\\s*10\\^\\{?[+-]?\\d+\\}?|\\s*[eE][+-]?\\d+)?(?:\\s*|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)*(\\\\(?:text|mathrm)\\s*\\{[^}]+\\}(?:\\^\\{?-?\\d+\\}?)?|\\\\mu\\s*(?:${SAFE_MICRO_UNITS}|${AMBIGUOUS_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?|(?:(?:${PREFIXES})?(?:${SI_UNITS}))(?:\\/(?:(?:${PREFIXES})?(?:${SI_UNITS})))*(?:\\^\\{?-?\\d+\\}?)?(?![A-Za-z0-9_\\(\\{]))`,
+    `(?:^|[^A-Za-z0-9_])(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:\\s*(?:\\\\times|\\\\cdot|\xB7|\\*)\\s*10\\^\\{?[+-]?\\d+\\}?|\\s*[eE][+-]?\\d+)?(?:\\s*|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)*(\\\\(?:text|mathrm)\\s*\\{[^}]+\\}(?:\\^\\{?-?\\d+\\}?)?|\\\\mu\\s*(?:${SAFE_MICRO_UNITS}|${AMBIGUOUS_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?|(?:(?:${PREFIXES})?(?:${SI_UNITS}))(?:\\/(?:(?:${PREFIXES})?(?:${SI_UNITS})))*(?:\\^\\{?-?\\d+\\}?)?(?![A-Za-z0-9_({]))`,
     "g"
   );
   while ((match = numberUnitRegex.exec(body)) !== null) {
@@ -2998,7 +3004,7 @@ function findUnitSpans(body) {
     const unitEnd = unitStart + unitPart.length;
     addSpan(unitStart, unitEnd, unitPart);
   }
-  const textUnitRegex = /\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%Ωμ/\^\-0-9\s\.\\]+?)\s*\}(?:\^\{?-?\d+\}?)?/g;
+  const textUnitRegex = /\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%Ωμ/^0-9\s.\\-]+?)\s*\}(?:\^\{?-?\d+\}?)?/g;
   while ((match = textUnitRegex.exec(body)) !== null) {
     const inner = match[1].trim();
     const isUnit = new RegExp(
@@ -3648,12 +3654,11 @@ var MathJaxInterceptor = class {
       console.warn("Color Math: window.MathJax is not defined yet.");
       return;
     }
-    const self = this;
     const transform = (latex) => {
-      if (!self.isEnabled())
+      if (!this.isEnabled())
         return latex;
       try {
-        return colorLatexBody(latex, self.getPalette(), self.getOptions());
+        return colorLatexBody(latex, this.getPalette(), this.getOptions());
       } catch (err) {
         console.error("Color Math transformation error:", err);
         return latex;
@@ -3700,7 +3705,7 @@ var MathJaxInterceptor = class {
     for (const unpatch of this.unpatchFns) {
       try {
         unpatch();
-      } catch (e) {
+      } catch {
       }
     }
     this.unpatchFns = [];
@@ -3893,17 +3898,17 @@ var ColorMathPlugin = class extends import_obsidian2.Plugin {
     this.refreshRibbonIcon();
     this.registerEvent(
       this.app.workspace.on("css-change", () => {
-        this.handleThemeChange();
+        void this.handleThemeChange();
       })
     );
     this.addCommand({
-      id: "color-math-colorize-note",
+      id: "colorize-note",
       name: "Bake colors into note (Permanent)",
       checkCallback: (checking) => {
         const view = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
         if (view) {
           if (!checking) {
-            this.colorizeActiveNote();
+            void this.colorizeActiveNote();
           }
           return true;
         }
@@ -3911,13 +3916,13 @@ var ColorMathPlugin = class extends import_obsidian2.Plugin {
       }
     });
     this.addCommand({
-      id: "color-math-undo-note",
+      id: "undo-note",
       name: "Clean baked colors from note",
       checkCallback: (checking) => {
         const view = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
         if (view) {
           if (!checking) {
-            this.uncolorActiveNote();
+            void this.uncolorActiveNote();
           }
           return true;
         }
@@ -3925,31 +3930,31 @@ var ColorMathPlugin = class extends import_obsidian2.Plugin {
       }
     });
     this.addCommand({
-      id: "color-math-colorize-current-block",
+      id: "colorize-current-block",
       name: "Bake colors into current math block",
       editorCallback: (editor) => {
-        this.colorizeCurrentMathBlock(editor);
+        void this.colorizeCurrentMathBlock(editor);
       }
     });
     this.addCommand({
-      id: "color-math-undo-current-block",
+      id: "undo-current-block",
       name: "Clean baked colors from current math block",
       editorCallback: (editor) => {
-        this.uncolorCurrentMathBlock(editor);
+        void this.uncolorCurrentMathBlock(editor);
       }
     });
     this.addCommand({
-      id: "color-math-colorize-selection",
+      id: "colorize-selection",
       name: "Bake colors into selection",
       editorCallback: (editor) => {
-        this.colorizeSelection(editor);
+        void this.colorizeSelection(editor);
       }
     });
     this.addCommand({
-      id: "color-math-undo-selection",
+      id: "undo-selection",
       name: "Clean baked colors from selection",
       editorCallback: (editor) => {
-        this.uncolorSelection(editor);
+        void this.uncolorSelection(editor);
       }
     });
     this.addSettingTab(new ColorMathSettingTab(this.app, this));
@@ -3961,7 +3966,8 @@ var ColorMathPlugin = class extends import_obsidian2.Plugin {
   rerenderMath() {
     this.app.workspace.iterateAllLeaves((leaf) => {
       if (leaf.view instanceof import_obsidian2.MarkdownView) {
-        leaf.view.previewMode?.rerender(true);
+        const previewMode = leaf.view.previewMode;
+        previewMode?.rerender(true);
         const cm = leaf.view.editor?.cm;
         if (cm) {
           cm.dispatch({});
@@ -4040,10 +4046,10 @@ var ColorMathPlugin = class extends import_obsidian2.Plugin {
     menu.addSeparator();
     menu.addItem(
       (item) => item.setTitle("Open Color Math settings").setIcon("settings").onClick(() => {
-        const setting = this.app.setting;
-        if (setting && setting.openTabById) {
-          setting.open();
-          setting.openTabById(this.manifest.id);
+        const appWithSetting = this.app;
+        if (appWithSetting.setting && appWithSetting.setting.openTabById) {
+          appWithSetting.setting.open();
+          appWithSetting.setting.openTabById(this.manifest.id);
         }
       })
     );
@@ -4191,7 +4197,7 @@ var ColorMathPlugin = class extends import_obsidian2.Plugin {
   }
   async loadSettings() {
     const loadedData = await this.loadData();
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData || {});
     if (!this.settings.palette) {
       this.settings.palette = { ...DEFAULT_COLORS };
     } else {
@@ -4213,9 +4219,9 @@ var ColorMathSettingTab = class extends import_obsidian2.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Color Math Settings" });
+    new import_obsidian2.Setting(containerEl).setName("Color Math Settings").setHeading();
     containerEl.createEl("p", {
-      text: "Automatically apply semantic colors to LaTeX and MathJax equations in Obsidian Markdown."
+      text: "Automatically apply semantic colors to LaTeX and MathJax equations in markdown notes."
     });
     new import_obsidian2.Setting(containerEl).setName("Show ribbon icon").setDesc("Display the Color Math palette icon on the left ribbon bar. Note: you can reorder or move ribbon icons via Settings > Appearance > Ribbon menu.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.showRibbonIcon).onChange(async (val) => {
@@ -4237,7 +4243,7 @@ var ColorMathSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    containerEl.createEl("h3", { text: "IDE Visual Enhancements" });
+    new import_obsidian2.Setting(containerEl).setName("IDE Visual Enhancements").setHeading();
     new import_obsidian2.Setting(containerEl).setName("Rainbow delimiters").setDesc("Color nested parentheses, brackets, and braces by depth to prevent delimiter blindness.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.rainbowDelimiters).onChange(async (val) => {
         this.plugin.settings.rainbowDelimiters = val;
@@ -4287,7 +4293,7 @@ var ColorMathSettingTab = class extends import_obsidian2.PluginSettingTab {
         this.plugin.rerenderMath();
       })
     );
-    containerEl.createEl("h3", { text: "Theme Integration" });
+    new import_obsidian2.Setting(containerEl).setName("Theme Integration").setHeading();
     new import_obsidian2.Setting(containerEl).setName("Sync with active theme").setDesc("Extract and apply matching colors from your currently active Obsidian theme.").addButton(
       (button) => button.setButtonText("Sync with Theme").setCta().onClick(async () => {
         this.plugin.settings.palette = extractThemePalette(
@@ -4335,7 +4341,7 @@ var ColorMathSettingTab = class extends import_obsidian2.PluginSettingTab {
         new import_obsidian2.Notice("Color Math: Restored default Tokyo Night palette.");
       })
     );
-    containerEl.createEl("h3", { text: "Color Palette Roles" });
+    new import_obsidian2.Setting(containerEl).setName("Color Palette Roles").setHeading();
     const roles = Object.keys(DEFAULT_COLORS);
     for (const role of roles) {
       const setting = new import_obsidian2.Setting(containerEl).setName(role.charAt(0).toUpperCase() + role.slice(1)).setDesc(COLOR_ROLE_DESCRIPTIONS[role] || role);

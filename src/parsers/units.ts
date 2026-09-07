@@ -40,7 +40,7 @@ export function findUnitSpans(body: string): UnitSpan[] {
   // 1. Micro units with \text or bare
   // 1a. \mu\text{...} or \mu\mathrm{...}
   const microTextRegex =
-    /\\mu\s*(?:\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%Ωμ/\^\-0-9\s\.\\]+?)\s*\})(?:\^\{?-?\d+\}?)?/g;
+    /\\mu\s*(?:\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%Ωμ/^0-9\s.\\-]+?)\s*\})(?:\^\{?-?\d+\}?)?/g;
   let match: RegExpExecArray | null;
   while ((match = microTextRegex.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, match[0]);
@@ -64,7 +64,7 @@ export function findUnitSpans(body: string): UnitSpan[] {
 
   // 3. Units preceded by a number (Magnitude + Unit)
   const numberUnitRegex = new RegExp(
-    `(?<=^|[^A-Za-z0-9_])(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:\\s*(?:\\\\times|\\\\cdot|·|\\*)\\s*10\\^\\{?[+-]?\\d+\\}?|\\s*[eE][+-]?\\d+)?(?:\\s*|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)*` +
+    `(?:^|[^A-Za-z0-9_])(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:\\s*(?:\\\\times|\\\\cdot|·|\\*)\\s*10\\^\\{?[+-]?\\d+\\}?|\\s*[eE][+-]?\\d+)?(?:\\s*|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)*` +
       `(` +
       // Sub-case A: \text{...} or \mathrm{...}
       `\\\\(?:text|mathrm)\\s*\\{[^}]+\\}(?:\\^\\{?-?\\d+\\}?)?` +
@@ -73,7 +73,7 @@ export function findUnitSpans(body: string): UnitSpan[] {
       `\\\\mu\\s*(?:${SAFE_MICRO_UNITS}|${AMBIGUOUS_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?` +
       `|` +
       // Sub-case C: Bare SI units (with optional prefix, compound '/', and exponents)
-      `(?:(?:${PREFIXES})?(?:${SI_UNITS}))(?:\\/(?:(?:${PREFIXES})?(?:${SI_UNITS})))*(?:\\^\\{?-?\\d+\\}?)?(?![A-Za-z0-9_\\(\\{])` +
+      `(?:(?:${PREFIXES})?(?:${SI_UNITS}))(?:\\/(?:(?:${PREFIXES})?(?:${SI_UNITS})))*(?:\\^\\{?-?\\d+\\}?)?(?![A-Za-z0-9_({])` +
       `)`,
     "g"
   );
@@ -89,7 +89,7 @@ export function findUnitSpans(body: string): UnitSpan[] {
 
   // 4. Standalone Text / mathrm units with \text{...} or \mathrm{...}
   const textUnitRegex =
-    /\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%Ωμ/\^\-0-9\s\.\\]+?)\s*\}(?:\^\{?-?\d+\}?)?/g;
+    /\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%Ωμ/^0-9\s.\\-]+?)\s*\}(?:\^\{?-?\d+\}?)?/g;
   while ((match = textUnitRegex.exec(body)) !== null) {
     const inner = match[1].trim();
     const isUnit = new RegExp(

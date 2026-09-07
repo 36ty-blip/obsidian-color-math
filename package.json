@@ -1,13 +1,17 @@
 {
   "name": "obsidian-color-math",
-  "version": "1.0.0",
-  "description": "Automatically apply semantic colors to LaTeX and MathJax equations in Obsidian Markdown.",
+  "version": "1.0.1",
+  "description": "Automatically apply semantic colors to LaTeX and MathJax equations in markdown notes.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
     "test": "vitest run",
     "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/view": "^6.26.3"
   },
   "keywords": [
     "obsidian",

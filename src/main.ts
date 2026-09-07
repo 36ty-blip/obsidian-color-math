@@ -97,19 +97,19 @@ export default class ColorMathPlugin extends Plugin {
     // Listen for theme and light/dark mode changes
     this.registerEvent(
       this.app.workspace.on("css-change", () => {
-        this.handleThemeChange();
+        void this.handleThemeChange();
       })
     );
 
     // 1. Bake colors into note (Permanent)
     this.addCommand({
-      id: "color-math-colorize-note",
+      id: "colorize-note",
       name: "Bake colors into note (Permanent)",
       checkCallback: (checking: boolean) => {
         const view = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (view) {
           if (!checking) {
-            this.colorizeActiveNote();
+            void this.colorizeActiveNote();
           }
           return true;
         }
@@ -119,13 +119,13 @@ export default class ColorMathPlugin extends Plugin {
 
     // 2. Clean baked colors from note
     this.addCommand({
-      id: "color-math-undo-note",
+      id: "undo-note",
       name: "Clean baked colors from note",
       checkCallback: (checking: boolean) => {
         const view = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (view) {
           if (!checking) {
-            this.uncolorActiveNote();
+            void this.uncolorActiveNote();
           }
           return true;
         }
@@ -135,37 +135,37 @@ export default class ColorMathPlugin extends Plugin {
 
     // 3. Bake colors into current math block
     this.addCommand({
-      id: "color-math-colorize-current-block",
+      id: "colorize-current-block",
       name: "Bake colors into current math block",
       editorCallback: (editor: Editor) => {
-        this.colorizeCurrentMathBlock(editor);
+        void this.colorizeCurrentMathBlock(editor);
       },
     });
 
     // 4. Clean baked colors from current math block
     this.addCommand({
-      id: "color-math-undo-current-block",
+      id: "undo-current-block",
       name: "Clean baked colors from current math block",
       editorCallback: (editor: Editor) => {
-        this.uncolorCurrentMathBlock(editor);
+        void this.uncolorCurrentMathBlock(editor);
       },
     });
 
     // 5. Bake colors into selection
     this.addCommand({
-      id: "color-math-colorize-selection",
+      id: "colorize-selection",
       name: "Bake colors into selection",
       editorCallback: (editor: Editor) => {
-        this.colorizeSelection(editor);
+        void this.colorizeSelection(editor);
       },
     });
 
     // 6. Clean baked colors from selection
     this.addCommand({
-      id: "color-math-undo-selection",
+      id: "undo-selection",
       name: "Clean baked colors from selection",
       editorCallback: (editor: Editor) => {
-        this.uncolorSelection(editor);
+        void this.uncolorSelection(editor);
       },
     });
 
@@ -183,8 +183,9 @@ export default class ColorMathPlugin extends Plugin {
   rerenderMath() {
     this.app.workspace.iterateAllLeaves((leaf) => {
       if (leaf.view instanceof MarkdownView) {
-        (leaf.view as any).previewMode?.rerender(true);
-        const cm = (leaf.view.editor as any)?.cm;
+        const previewMode = (leaf.view as MarkdownView & { previewMode?: { rerender: (full: boolean) => void } }).previewMode;
+        previewMode?.rerender(true);
+        const cm = (leaf.view.editor as Editor & { cm?: { dispatch: (tr: Record<string, unknown>) => void } })?.cm;
         if (cm) {
           cm.dispatch({});
         }
@@ -295,10 +296,12 @@ export default class ColorMathPlugin extends Plugin {
         .setTitle("Open Color Math settings")
         .setIcon("settings")
         .onClick(() => {
-          const setting = (this.app as any).setting;
-          if (setting && setting.openTabById) {
-            setting.open();
-            setting.openTabById(this.manifest.id);
+          const appWithSetting = this.app as unknown as {
+            setting?: { open: () => void; openTabById: (id: string) => void };
+          };
+          if (appWithSetting.setting && appWithSetting.setting.openTabById) {
+            appWithSetting.setting.open();
+            appWithSetting.setting.openTabById(this.manifest.id);
           }
         })
     );
@@ -471,8 +474,8 @@ export default class ColorMathPlugin extends Plugin {
   }
 
   async loadSettings() {
-    const loadedData = await this.loadData();
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
+    const loadedData = (await this.loadData()) as Partial<ColorMathSettings> | null;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData || {});
     if (!this.settings.palette) {
       this.settings.palette = { ...DEFAULT_COLORS };
     } else {
@@ -499,9 +502,9 @@ class ColorMathSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Color Math Settings" });
+    new Setting(containerEl).setName("Color Math Settings").setHeading();
     containerEl.createEl("p", {
-      text: "Automatically apply semantic colors to LaTeX and MathJax equations in Obsidian Markdown.",
+      text: "Automatically apply semantic colors to LaTeX and MathJax equations in markdown notes.",
     });
 
     new Setting(containerEl)
@@ -542,7 +545,7 @@ class ColorMathSettingTab extends PluginSettingTab {
           })
       );
 
-    containerEl.createEl("h3", { text: "IDE Visual Enhancements" });
+    new Setting(containerEl).setName("IDE Visual Enhancements").setHeading();
 
     new Setting(containerEl)
       .setName("Rainbow delimiters")
@@ -635,7 +638,7 @@ class ColorMathSettingTab extends PluginSettingTab {
           })
       );
 
-    containerEl.createEl("h3", { text: "Theme Integration" });
+    new Setting(containerEl).setName("Theme Integration").setHeading();
 
     new Setting(containerEl)
       .setName("Sync with active theme")
@@ -707,7 +710,7 @@ class ColorMathSettingTab extends PluginSettingTab {
         })
       );
 
-    containerEl.createEl("h3", { text: "Color Palette Roles" });
+    new Setting(containerEl).setName("Color Palette Roles").setHeading();
 
     const roles = Object.keys(DEFAULT_COLORS) as ColorRole[];
 

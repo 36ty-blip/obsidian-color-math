@@ -36,13 +36,16 @@ export function findDifferentialSpans(body: string): DifferentialSpan[] {
 
   // 2. Infinitesimal differentials: dx, dt, dy, dz, dr, d\theta, d\phi, \partial x, \partial t
   const diffRegex =
-    /(?<=(?:^|[\s+\-=*(\[{]|\\,|\\:|\\;|\\quad|\\qquad|~))\s*(?:d|\\partial|\\mathrm\{d\}|\\delta)\s*(\\[a-zA-Z]+|[a-zA-Z])(?![a-zA-Z0-9_\({])(?:\^\{?\d+\}?)?/g;
+    /(?:^|[\s+\-=*({]|\[|\\,|\\:|\\;|\\quad|\\qquad|~)(\s*(?:d|\\partial|\\mathrm\{d\}|\\delta)\s*(?:\\[a-zA-Z]+|[a-zA-Z])(?![a-zA-Z0-9_({])(?:\^\{?\d+\}?)?)/g;
   while ((match = diffRegex.exec(body)) !== null) {
-    const dOffset = match[0].search(/(?:d|\\partial|\\mathrm\{d\}|\\delta)/);
-    const diffStart = match.index + dOffset;
-    const diffText = match[0].slice(dOffset);
-    const diffEnd = diffStart + diffText.length;
-    addSpan(diffStart, diffEnd, diffText, "differential");
+    const fullMatch = match[0];
+    const diffGroup = match[1];
+    const diffStart = match.index + (fullMatch.length - diffGroup.length);
+    const dOffset = diffGroup.search(/(?:d|\\partial|\\mathrm\{d\}|\\delta)/);
+    const actualStart = diffStart + dOffset;
+    const diffText = diffGroup.slice(dOffset);
+    const diffEnd = actualStart + diffText.length;
+    addSpan(actualStart, diffEnd, diffText, "differential");
   }
 
   return spans.sort((a, b) => a.start - b.start);

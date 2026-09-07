@@ -7,7 +7,7 @@ import {
   MATH_FUNCTIONS,
   MATH_PARAMETERS,
 } from "../config";
-import { readCommand, readOperand, OPAQUE_MACROS } from "./latex_spans";
+import { readOperand, OPAQUE_MACROS } from "./latex_spans";
 import { readBraced, readColorCommand } from "../utils/latex_helpers";
 import { ColorSpan } from "../utils/spans";
 import { findDifferentialSpans, DifferentialSpan } from "./differentials";

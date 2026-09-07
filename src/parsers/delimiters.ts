@@ -1,7 +1,6 @@
 // src/parsers/delimiters.ts
 
 import { RAINBOW_DELIMITER_COLORS } from "../config";
-import { readBraced } from "../utils/latex_helpers";
 import { ColorSpan } from "../utils/spans";
 
 export interface DelimiterItem {
