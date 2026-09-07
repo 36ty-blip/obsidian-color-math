@@ -5,6 +5,7 @@ import { collectDelimiterSpans } from "../parsers/delimiters";
 import { findSemanticSpans } from "../parsers/math_parser";
 import { collectScannerSpans } from "../parsers/scanner";
 import { collectTaxonomySpans } from "../parsers/taxonomy";
+import { collectUnitSpans, findUnitSpans } from "../parsers/units";
 import { collectVariableSpans } from "../parsers/variable_hash";
 import { containsColorWrapper } from "../utils/latex_helpers";
 import { ColorSpan, applyColorSpans } from "../utils/spans";
@@ -49,21 +50,27 @@ export function colorLatexBody(
     return body;
   }
 
+  const unitSpans = findUnitSpans(body);
+
   const spans: ColorSpan[] = [
     ...collectFunctionSpans(body, palette),
     ...collectScannerSpans(body, palette),
   ];
+
+  if (options?.colorUnits !== false) {
+    spans.push(...collectUnitSpans(body, palette, unitSpans));
+  }
 
   if (options?.rainbowDelimiters) {
     spans.push(...collectDelimiterSpans(body, { forLatexWrap: true }));
   }
 
   if (options?.enableTaxonomy) {
-    spans.push(...collectTaxonomySpans(body, palette));
+    spans.push(...collectTaxonomySpans(body, palette, unitSpans));
   }
 
   if (options?.variableDataFlow) {
-    spans.push(...collectVariableSpans(body));
+    spans.push(...collectVariableSpans(body, undefined, unitSpans));
   }
 
   return applyColorSpans(body, spans);

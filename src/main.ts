@@ -28,6 +28,7 @@ interface ColorMathSettings {
   enableTaxonomy: boolean;
   rainbowDelimiters: boolean;
   variableDataFlow: boolean;
+  colorUnits: boolean;
 }
 
 const DEFAULT_SETTINGS: ColorMathSettings = {
@@ -40,6 +41,7 @@ const DEFAULT_SETTINGS: ColorMathSettings = {
   enableTaxonomy: true,
   rainbowDelimiters: true,
   variableDataFlow: false,
+  colorUnits: true,
 };
 
 const COLOR_ROLE_DESCRIPTIONS: Record<ColorRole, string> = {
@@ -54,6 +56,7 @@ const COLOR_ROLE_DESCRIPTIONS: Record<ColorRole, string> = {
   set: "Set theory symbols",
   spacing: "LaTeX spacing commands",
   parameter: "Parameters, angles, and Greek coefficients",
+  unit: "Physical units and metric prefixes (e.g. μm, m/s, nm)",
 };
 
 export default class ColorMathPlugin extends Plugin {
@@ -302,6 +305,7 @@ export default class ColorMathPlugin extends Plugin {
       enableTaxonomy: this.settings.enableTaxonomy,
       rainbowDelimiters: this.settings.rainbowDelimiters,
       variableDataFlow: this.settings.variableDataFlow,
+      colorUnits: this.settings.colorUnits,
     };
   }
 
@@ -565,6 +569,19 @@ class ColorMathSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.variableDataFlow)
           .onChange(async (val) => {
             this.plugin.settings.variableDataFlow = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Color physical units")
+      .setDesc("Distinguish physical units and metric prefixes (e.g. μm, m/s, kg) from algebraic variables and parameters. Turn off to keep units in natural text color.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.colorUnits)
+          .onChange(async (val) => {
+            this.plugin.settings.colorUnits = val;
             await this.plugin.saveSettings();
             this.plugin.rerenderMath();
           })

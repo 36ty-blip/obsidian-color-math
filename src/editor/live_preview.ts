@@ -14,6 +14,7 @@ import { collectFunctionSpans } from "../converters/generic";
 import { scanMarkdown } from "../parsers/markdown_scanner";
 import { collectScannerSpans } from "../parsers/scanner";
 import { collectTaxonomySpans } from "../parsers/taxonomy";
+import { collectUnitSpans, findUnitSpans } from "../parsers/units";
 import { collectVariableSpans } from "../parsers/variable_hash";
 import { containsColorWrapper } from "../utils/latex_helpers";
 import { ColorSpan, selectColorSpans } from "../utils/spans";
@@ -64,21 +65,27 @@ export function createColorMathLivePlugin(
           const body = text.slice(blockStart, blockEnd);
           if (containsColorWrapper(body)) continue;
 
+          const unitSpans = findUnitSpans(body);
+
           const allSpans: ColorSpan[] = [
             ...collectFunctionSpans(body, palette),
             ...collectScannerSpans(body, palette),
           ];
+
+          if (options?.colorUnits !== false) {
+            allSpans.push(...collectUnitSpans(body, palette, unitSpans));
+          }
 
           if (options?.rainbowDelimiters) {
             allSpans.push(...collectDelimiterSpans(body, { forLatexWrap: false }));
           }
 
           if (options?.enableTaxonomy) {
-            allSpans.push(...collectTaxonomySpans(body, palette));
+            allSpans.push(...collectTaxonomySpans(body, palette, unitSpans));
           }
 
           if (options?.variableDataFlow) {
-            allSpans.push(...collectVariableSpans(body));
+            allSpans.push(...collectVariableSpans(body, undefined, unitSpans));
           }
 
           const selected = selectColorSpans(body, allSpans);

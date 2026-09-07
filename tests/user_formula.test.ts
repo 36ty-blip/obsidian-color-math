@@ -16,8 +16,9 @@ describe("User Formula Test", () => {
     expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.arrow}}{\\rightarrow}`);
     // \lambda colored with parameter color
     expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.parameter}}{\\lambda}`);
-    // \mu colored with parameter color
-    expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.parameter}}{\\mu}`);
+    // \mu\text{m} colored with physical unit color (not parameter!)
+    expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.unit}}{\\mu\\text{m}}`);
+    expect(result).not.toContain(`\\textcolor{${DEFAULT_COLORS.parameter}}{\\mu}`);
     // = colored with relation color
     expect(result).toContain(`\\textcolor{white}{=}`);
   });

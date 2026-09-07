@@ -37,7 +37,8 @@ var DEFAULT_COLORS = {
   arrow: "#f7768e",
   set: "#bb9af7",
   spacing: "white",
-  parameter: "#bb9af7"
+  parameter: "#bb9af7",
+  unit: "#73daca"
 };
 var DEFAULT_PALETTE = DEFAULT_COLORS;
 var COLORS = { ...DEFAULT_COLORS };
@@ -2806,6 +2807,71 @@ function findSemanticSpans(source) {
   return [spans, errors.length > 0 ? errors[0] : null];
 }
 
+// src/parsers/units.ts
+var SI_UNITS = "m|s|g|Hz|N|Pa|J|W|C|V|F|T|H|mol|L|l|K|bar|atm|torr|eV|cal|rad|deg|\\\\Omega|dB|bps|B|\u03A9";
+var PREFIXES = "k|M|G|T|c|m|n|p|f|d|da|\\\\mu|\xB5";
+var SAFE_MICRO_UNITS = "m|s|g|mol|Hz|Pa|bar|rad|\\\\Omega|L|l";
+var AMBIGUOUS_MICRO_UNITS = "N|A|V|F|H|W|J|C";
+function findUnitSpans(body) {
+  const spans = [];
+  function addSpan(start, end, text) {
+    if (start >= end)
+      return;
+    if (!spans.some((s) => start < s.end && end > s.start)) {
+      spans.push({ start, end, text });
+    }
+  }
+  const microTextRegex = /\\mu\s*(?:\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%Ωμ/\^\-0-9\s\.\\]+?)\s*\})(?:\^\{?-?\d+\}?)?/g;
+  let match;
+  while ((match = microTextRegex.exec(body)) !== null) {
+    addSpan(match.index, match.index + match[0].length, match[0]);
+  }
+  const safeMicroRegex = new RegExp(
+    `\\\\mu\\s*(${SAFE_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?`,
+    "g"
+  );
+  while ((match = safeMicroRegex.exec(body)) !== null) {
+    addSpan(match.index, match.index + match[0].length, match[0]);
+  }
+  const degRegex = /\^\s*\\circ\s*(?:\\(?:text|mathrm)\s*\{[A-Za-z]+\}|[A-Za-z]+)/g;
+  while ((match = degRegex.exec(body)) !== null) {
+    addSpan(match.index, match.index + match[0].length, match[0]);
+  }
+  const numberUnitRegex = new RegExp(
+    `(?<=^|[^A-Za-z0-9_])(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:\\s*(?:\\\\times|\\\\cdot|\xB7|\\*)\\s*10\\^\\{?[+-]?\\d+\\}?|\\s*[eE][+-]?\\d+)?(?:\\s*|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)*(\\\\(?:text|mathrm)\\s*\\{[^}]+\\}(?:\\^\\{?-?\\d+\\}?)?|\\\\mu\\s*(?:${SAFE_MICRO_UNITS}|${AMBIGUOUS_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?|(?:(?:${PREFIXES})?(?:${SI_UNITS}))(?:\\/(?:(?:${PREFIXES})?(?:${SI_UNITS})))*(?:\\^\\{?-?\\d+\\}?)?(?![A-Za-z0-9_\\(\\{]))`,
+    "g"
+  );
+  while ((match = numberUnitRegex.exec(body)) !== null) {
+    const fullMatch = match[0];
+    const unitPart = match[1];
+    const unitOffset = fullMatch.lastIndexOf(unitPart);
+    const unitStart = match.index + unitOffset;
+    const unitEnd = unitStart + unitPart.length;
+    addSpan(unitStart, unitEnd, unitPart);
+  }
+  const textUnitRegex = /\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%Ωμ/\^\-0-9\s\.\\]+?)\s*\}(?:\^\{?-?\d+\}?)?/g;
+  while ((match = textUnitRegex.exec(body)) !== null) {
+    const inner = match[1].trim();
+    const isUnit = new RegExp(
+      `^(?:${PREFIXES})?(?:${SI_UNITS})(?:\\/(?:${PREFIXES})?(?:${SI_UNITS}))*(?:\\^\\{?-?\\d+\\}?)?$`,
+      "i"
+    ).test(inner);
+    if (isUnit) {
+      addSpan(match.index, match.index + match[0].length, match[0]);
+    }
+  }
+  return spans.sort((a, b) => a.start - b.start);
+}
+function collectUnitSpans(body, palette = COLORS, unitSpans) {
+  const units = unitSpans || findUnitSpans(body);
+  return units.map((u) => ({
+    start: u.start,
+    end: u.end,
+    color: palette.unit || "#73daca",
+    priority: 25
+  }));
+}
+
 // src/parsers/taxonomy.ts
 function skipComment4(text, start) {
   let index = start + 1;
@@ -2817,7 +2883,8 @@ function skipComment4(text, start) {
   }
   return Math.min(index + 1, text.length);
 }
-function collectTaxonomySpans(body, palette = COLORS) {
+function collectTaxonomySpans(body, palette = COLORS, unitSpans) {
+  const units = unitSpans || findUnitSpans(body);
   const spans = [];
   let index = 0;
   const indexPattern = /(\\(?:sum|prod|coprod|bigcup|bigcap|lim|inf|sup))_\{?\s*([A-Za-z])\s*(?:=|\to|\\to)/g;
@@ -2850,6 +2917,11 @@ function collectTaxonomySpans(body, palette = COLORS) {
     const operand = readOperand(body, index);
     if (operand !== null && operand.kind === "opaque") {
       index = operand.end;
+      continue;
+    }
+    const inUnit = units.find((u) => u.start <= index && index < u.end);
+    if (inUnit) {
+      index = inUnit.end;
       continue;
     }
     if (body[index] === "\\") {
@@ -2940,7 +3012,8 @@ function skipComment5(text, start) {
   }
   return Math.min(index + 1, text.length);
 }
-function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE) {
+function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans) {
+  const units = unitSpans || findUnitSpans(body);
   const spans = [];
   let index = 0;
   while (index < body.length) {
@@ -2956,6 +3029,11 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE) {
     const operand = readOperand(body, index);
     if (operand !== null && operand.kind === "opaque") {
       index = operand.end;
+      continue;
+    }
+    const inUnit = units.find((u) => u.start <= index && index < u.end);
+    if (inUnit) {
+      index = inUnit.end;
       continue;
     }
     if (body[index] === "\\") {
@@ -3069,18 +3147,22 @@ function colorLatexBody(body, palette = COLORS, options) {
   if (containsColorWrapper(body)) {
     return body;
   }
+  const unitSpans = findUnitSpans(body);
   const spans = [
     ...collectFunctionSpans(body, palette),
     ...collectScannerSpans(body, palette)
   ];
+  if (options?.colorUnits !== false) {
+    spans.push(...collectUnitSpans(body, palette, unitSpans));
+  }
   if (options?.rainbowDelimiters) {
     spans.push(...collectDelimiterSpans(body, { forLatexWrap: true }));
   }
   if (options?.enableTaxonomy) {
-    spans.push(...collectTaxonomySpans(body, palette));
+    spans.push(...collectTaxonomySpans(body, palette, unitSpans));
   }
   if (options?.variableDataFlow) {
-    spans.push(...collectVariableSpans(body));
+    spans.push(...collectVariableSpans(body, void 0, unitSpans));
   }
   return applyColorSpans(body, spans);
 }
@@ -3296,18 +3378,22 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
           const body = text.slice(blockStart, blockEnd);
           if (containsColorWrapper(body))
             continue;
+          const unitSpans = findUnitSpans(body);
           const allSpans = [
             ...collectFunctionSpans(body, palette),
             ...collectScannerSpans(body, palette)
           ];
+          if (options?.colorUnits !== false) {
+            allSpans.push(...collectUnitSpans(body, palette, unitSpans));
+          }
           if (options?.rainbowDelimiters) {
             allSpans.push(...collectDelimiterSpans(body, { forLatexWrap: false }));
           }
           if (options?.enableTaxonomy) {
-            allSpans.push(...collectTaxonomySpans(body, palette));
+            allSpans.push(...collectTaxonomySpans(body, palette, unitSpans));
           }
           if (options?.variableDataFlow) {
-            allSpans.push(...collectVariableSpans(body));
+            allSpans.push(...collectVariableSpans(body, void 0, unitSpans));
           }
           const selected = selectColorSpans(body, allSpans);
           const nonOverlapping = [];
@@ -3569,7 +3655,8 @@ var DEFAULT_SETTINGS = {
   autoLightDark: true,
   enableTaxonomy: true,
   rainbowDelimiters: true,
-  variableDataFlow: false
+  variableDataFlow: false,
+  colorUnits: true
 };
 var COLOR_ROLE_DESCRIPTIONS = {
   main: "Primary expression / function color",
@@ -3582,7 +3669,8 @@ var COLOR_ROLE_DESCRIPTIONS = {
   arrow: "Arrows and mappings",
   set: "Set theory symbols",
   spacing: "LaTeX spacing commands",
-  parameter: "Parameters, angles, and Greek coefficients"
+  parameter: "Parameters, angles, and Greek coefficients",
+  unit: "Physical units and metric prefixes (e.g. \u03BCm, m/s, nm)"
 };
 var ColorMathPlugin = class extends import_obsidian2.Plugin {
   settings = DEFAULT_SETTINGS;
@@ -3767,7 +3855,8 @@ var ColorMathPlugin = class extends import_obsidian2.Plugin {
     return {
       enableTaxonomy: this.settings.enableTaxonomy,
       rainbowDelimiters: this.settings.rainbowDelimiters,
-      variableDataFlow: this.settings.variableDataFlow
+      variableDataFlow: this.settings.variableDataFlow,
+      colorUnits: this.settings.colorUnits
     };
   }
   colorizeCurrentMathBlock(editor) {
@@ -3965,6 +4054,13 @@ var ColorMathSettingTab = class extends import_obsidian2.PluginSettingTab {
     new import_obsidian2.Setting(containerEl).setName("Variable data-flow hashing").setDesc("Deterministically assign a unique color to each variable in an expression to trace its flow.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.variableDataFlow).onChange(async (val) => {
         this.plugin.settings.variableDataFlow = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Color physical units").setDesc("Distinguish physical units and metric prefixes (e.g. \u03BCm, m/s, kg) from algebraic variables and parameters. Turn off to keep units in natural text color.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.colorUnits).onChange(async (val) => {
+        this.plugin.settings.colorUnits = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })

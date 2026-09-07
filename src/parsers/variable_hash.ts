@@ -8,6 +8,7 @@ import {
 import { readCommand, readOperand, OPAQUE_MACROS } from "./latex_spans";
 import { readBraced, readColorCommand } from "../utils/latex_helpers";
 import { ColorSpan } from "../utils/spans";
+import { findUnitSpans, UnitSpan } from "./units";
 
 function skipComment(text: string, start: number): number {
   let index = start + 1;
@@ -26,8 +27,10 @@ function skipComment(text: string, start: number): number {
  */
 export function collectVariableSpans(
   body: string,
-  palette: string[] = VARIABLE_HASH_PALETTE
+  palette: string[] = VARIABLE_HASH_PALETTE,
+  unitSpans?: UnitSpan[]
 ): ColorSpan[] {
+  const units = unitSpans || findUnitSpans(body);
   const spans: ColorSpan[] = [];
   let index = 0;
 
@@ -46,6 +49,12 @@ export function collectVariableSpans(
     const operand = readOperand(body, index);
     if (operand !== null && operand.kind === "opaque") {
       index = operand.end;
+      continue;
+    }
+
+    const inUnit = units.find((u) => u.start <= index && index < u.end);
+    if (inUnit) {
+      index = inUnit.end;
       continue;
     }
 

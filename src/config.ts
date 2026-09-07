@@ -11,7 +11,8 @@ export type ColorRole =
   | "arrow"
   | "set"
   | "spacing"
-  | "parameter";
+  | "parameter"
+  | "unit";
 
 export type ColorPalette = Record<ColorRole, string>;
 
@@ -27,6 +28,7 @@ export const DEFAULT_COLORS: ColorPalette = {
   set: "#bb9af7",
   spacing: "white",
   parameter: "#bb9af7",
+  unit: "#73daca",
 };
 
 export const DEFAULT_PALETTE = DEFAULT_COLORS;
@@ -275,5 +277,6 @@ export interface ColorMathOptions {
   enableTaxonomy?: boolean;
   rainbowDelimiters?: boolean;
   variableDataFlow?: boolean;
+  colorUnits?: boolean;
 }
 
