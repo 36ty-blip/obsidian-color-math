@@ -4221,7 +4221,6 @@ var ColorMathSettingTab = class extends import_obsidian2.PluginSettingTab {
     this.buildTab(this.containerEl);
   }
   buildTab(containerEl) {
-    new import_obsidian2.Setting(containerEl).setName("General").setHeading();
     containerEl.createEl("p", {
       text: "Automatically apply semantic colors to LaTeX and MathJax equations in markdown notes."
     });

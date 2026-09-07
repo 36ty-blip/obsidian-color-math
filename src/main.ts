@@ -504,7 +504,6 @@ class ColorMathSettingTab extends PluginSettingTab {
   }
 
   private buildTab(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName("General").setHeading();
     containerEl.createEl("p", {
       text: "Automatically apply semantic colors to LaTeX and MathJax equations in markdown notes.",
     });
