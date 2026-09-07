@@ -499,10 +499,12 @@ class ColorMathSettingTab extends PluginSettingTab {
   }
 
   display(): void {
-    const { containerEl } = this;
-    containerEl.empty();
+    this.containerEl.empty();
+    this.buildTab(this.containerEl);
+  }
 
-    new Setting(containerEl).setName("Color Math Settings").setHeading();
+  private buildTab(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("General").setHeading();
     containerEl.createEl("p", {
       text: "Automatically apply semantic colors to LaTeX and MathJax equations in markdown notes.",
     });
@@ -653,7 +655,8 @@ class ColorMathSettingTab extends PluginSettingTab {
             );
             await this.plugin.saveSettings();
             this.plugin.rerenderMath();
-            this.display();
+            this.containerEl.empty();
+            this.buildTab(this.containerEl);
             new Notice("Color Math: Synced colors with active Obsidian theme!");
           })
       );
@@ -673,7 +676,8 @@ class ColorMathSettingTab extends PluginSettingTab {
               this.plugin.rerenderMath();
             }
             await this.plugin.saveSettings();
-            this.display();
+            this.containerEl.empty();
+            this.buildTab(this.containerEl);
           })
       );
 
@@ -693,7 +697,8 @@ class ColorMathSettingTab extends PluginSettingTab {
               this.plugin.rerenderMath();
             }
             await this.plugin.saveSettings();
-            this.display();
+            this.containerEl.empty();
+            this.buildTab(this.containerEl);
           })
       );
 
@@ -705,7 +710,8 @@ class ColorMathSettingTab extends PluginSettingTab {
           this.plugin.settings.palette = { ...DEFAULT_COLORS };
           await this.plugin.saveSettings();
           this.plugin.rerenderMath();
-          this.display();
+          this.containerEl.empty();
+          this.buildTab(this.containerEl);
           new Notice("Color Math: Restored default Tokyo Night palette.");
         })
       );

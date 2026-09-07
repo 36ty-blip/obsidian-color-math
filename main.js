@@ -4217,9 +4217,11 @@ var ColorMathSettingTab = class extends import_obsidian2.PluginSettingTab {
     this.plugin = plugin;
   }
   display() {
-    const { containerEl } = this;
-    containerEl.empty();
-    new import_obsidian2.Setting(containerEl).setName("Color Math Settings").setHeading();
+    this.containerEl.empty();
+    this.buildTab(this.containerEl);
+  }
+  buildTab(containerEl) {
+    new import_obsidian2.Setting(containerEl).setName("General").setHeading();
     containerEl.createEl("p", {
       text: "Automatically apply semantic colors to LaTeX and MathJax equations in markdown notes."
     });
@@ -4301,7 +4303,8 @@ var ColorMathSettingTab = class extends import_obsidian2.PluginSettingTab {
         );
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
-        this.display();
+        this.containerEl.empty();
+        this.buildTab(this.containerEl);
         new import_obsidian2.Notice("Color Math: Synced colors with active Obsidian theme!");
       })
     );
@@ -4315,7 +4318,8 @@ var ColorMathSettingTab = class extends import_obsidian2.PluginSettingTab {
           this.plugin.rerenderMath();
         }
         await this.plugin.saveSettings();
-        this.display();
+        this.containerEl.empty();
+        this.buildTab(this.containerEl);
       })
     );
     new import_obsidian2.Setting(containerEl).setName("Auto-adapt for light / dark mode").setDesc("Adjust operator contrast (e.g. '=' and '\\cdot') so math never washes out on light backgrounds.").addToggle(
@@ -4329,7 +4333,8 @@ var ColorMathSettingTab = class extends import_obsidian2.PluginSettingTab {
           this.plugin.rerenderMath();
         }
         await this.plugin.saveSettings();
-        this.display();
+        this.containerEl.empty();
+        this.buildTab(this.containerEl);
       })
     );
     new import_obsidian2.Setting(containerEl).setName("Restore default palette").setDesc("Revert all colors back to our signature Tokyo Night palette.").addButton(
@@ -4337,7 +4342,8 @@ var ColorMathSettingTab = class extends import_obsidian2.PluginSettingTab {
         this.plugin.settings.palette = { ...DEFAULT_COLORS };
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
-        this.display();
+        this.containerEl.empty();
+        this.buildTab(this.containerEl);
         new import_obsidian2.Notice("Color Math: Restored default Tokyo Night palette.");
       })
     );
