@@ -23,7 +23,7 @@ __export(main_exports, {
   default: () => ColorMathPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian = require("obsidian");
+var import_obsidian2 = require("obsidian");
 
 // src/config.ts
 var DEFAULT_COLORS = {
@@ -3198,6 +3198,88 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
   );
 }
 
+// src/editor/mathjax_interceptor.ts
+var import_obsidian = require("obsidian");
+var MathJaxInterceptor = class {
+  unpatchFns = [];
+  getPalette;
+  getOptions;
+  isEnabled;
+  constructor(getPalette, getOptions, isEnabled = () => true) {
+    this.getPalette = getPalette;
+    this.getOptions = getOptions;
+    this.isEnabled = isEnabled;
+  }
+  async install() {
+    try {
+      await (0, import_obsidian.loadMathJax)();
+    } catch (e) {
+      console.error("Color Math: Failed to load MathJax", e);
+    }
+    const mathJax = window?.MathJax;
+    if (!mathJax) {
+      console.warn("Color Math: window.MathJax is not defined yet.");
+      return;
+    }
+    const self = this;
+    const transform = (latex) => {
+      if (!self.isEnabled())
+        return latex;
+      try {
+        return colorLatexBody(latex, self.getPalette(), self.getOptions());
+      } catch (err) {
+        console.error("Color Math transformation error:", err);
+        return latex;
+      }
+    };
+    if (typeof mathJax.tex2chtml === "function") {
+      const orig = mathJax.tex2chtml;
+      mathJax.tex2chtml = function(latex, options) {
+        return orig.call(this, transform(latex), options);
+      };
+      this.unpatchFns.push(() => {
+        mathJax.tex2chtml = orig;
+      });
+    }
+    if (typeof mathJax.tex2chtmlPromise === "function") {
+      const orig = mathJax.tex2chtmlPromise;
+      mathJax.tex2chtmlPromise = function(latex, options) {
+        return orig.call(this, transform(latex), options);
+      };
+      this.unpatchFns.push(() => {
+        mathJax.tex2chtmlPromise = orig;
+      });
+    }
+    if (typeof mathJax.tex2svg === "function") {
+      const orig = mathJax.tex2svg;
+      mathJax.tex2svg = function(latex, options) {
+        return orig.call(this, transform(latex), options);
+      };
+      this.unpatchFns.push(() => {
+        mathJax.tex2svg = orig;
+      });
+    }
+    if (typeof mathJax.tex2svgPromise === "function") {
+      const orig = mathJax.tex2svgPromise;
+      mathJax.tex2svgPromise = function(latex, options) {
+        return orig.call(this, transform(latex), options);
+      };
+      this.unpatchFns.push(() => {
+        mathJax.tex2svgPromise = orig;
+      });
+    }
+  }
+  uninstall() {
+    for (const unpatch of this.unpatchFns) {
+      try {
+        unpatch();
+      } catch (e) {
+      }
+    }
+    this.unpatchFns = [];
+  }
+};
+
 // src/undo.ts
 function uncolorFragment(text) {
   const output = [];
@@ -3334,6 +3416,7 @@ function extractThemePalette(isLight) {
 // src/main.ts
 var DEFAULT_SETTINGS = {
   palette: { ...DEFAULT_COLORS },
+  liveRendering: true,
   livePreviewHighlighting: false,
   showRibbonIcon: true,
   autoSyncTheme: false,
@@ -3355,21 +3438,24 @@ var COLOR_ROLE_DESCRIPTIONS = {
   spacing: "LaTeX spacing commands",
   parameter: "Parameters, angles, and Greek coefficients"
 };
-var ColorMathPlugin = class extends import_obsidian.Plugin {
+var ColorMathPlugin = class extends import_obsidian2.Plugin {
   settings = DEFAULT_SETTINGS;
   ribbonIconEl = null;
+  interceptor = null;
   async onload() {
     await this.loadSettings();
     setPalette(this.settings.palette);
+    this.interceptor = new MathJaxInterceptor(
+      () => this.settings.palette,
+      () => this.getMathOptions(),
+      () => this.settings.liveRendering
+    );
+    await this.interceptor.install();
     this.registerEditorExtension([
       createColorMathLivePlugin(
         () => this.settings.palette,
         () => this.settings.livePreviewHighlighting,
-        () => ({
-          enableTaxonomy: this.settings.enableTaxonomy,
-          rainbowDelimiters: this.settings.rainbowDelimiters,
-          variableDataFlow: this.settings.variableDataFlow
-        })
+        () => this.getMathOptions()
       )
     ]);
     this.refreshRibbonIcon();
@@ -3380,9 +3466,9 @@ var ColorMathPlugin = class extends import_obsidian.Plugin {
     );
     this.addCommand({
       id: "color-math-colorize-note",
-      name: "Colorize current note",
+      name: "Bake colors into note (Permanent)",
       checkCallback: (checking) => {
-        const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
         if (view) {
           if (!checking) {
             this.colorizeActiveNote();
@@ -3394,9 +3480,9 @@ var ColorMathPlugin = class extends import_obsidian.Plugin {
     });
     this.addCommand({
       id: "color-math-undo-note",
-      name: "Undo current note",
+      name: "Clean baked colors from note",
       checkCallback: (checking) => {
-        const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
         if (view) {
           if (!checking) {
             this.uncolorActiveNote();
@@ -3408,33 +3494,48 @@ var ColorMathPlugin = class extends import_obsidian.Plugin {
     });
     this.addCommand({
       id: "color-math-colorize-current-block",
-      name: "Colorize current math block",
+      name: "Bake colors into current math block",
       editorCallback: (editor) => {
         this.colorizeCurrentMathBlock(editor);
       }
     });
     this.addCommand({
       id: "color-math-undo-current-block",
-      name: "Undo current math block",
+      name: "Clean baked colors from current math block",
       editorCallback: (editor) => {
         this.uncolorCurrentMathBlock(editor);
       }
     });
     this.addCommand({
       id: "color-math-colorize-selection",
-      name: "Colorize selection",
+      name: "Bake colors into selection",
       editorCallback: (editor) => {
         this.colorizeSelection(editor);
       }
     });
     this.addCommand({
       id: "color-math-undo-selection",
-      name: "Undo selection",
+      name: "Clean baked colors from selection",
       editorCallback: (editor) => {
         this.uncolorSelection(editor);
       }
     });
     this.addSettingTab(new ColorMathSettingTab(this.app, this));
+    this.rerenderMath();
+  }
+  onunload() {
+    this.interceptor?.uninstall();
+  }
+  rerenderMath() {
+    this.app.workspace.iterateAllLeaves((leaf) => {
+      if (leaf.view instanceof import_obsidian2.MarkdownView) {
+        leaf.view.previewMode?.rerender(true);
+        const cm = leaf.view.editor?.cm;
+        if (cm) {
+          cm.dispatch({});
+        }
+      }
+    });
   }
   refreshRibbonIcon() {
     if (this.settings.showRibbonIcon) {
@@ -3455,52 +3556,52 @@ var ColorMathPlugin = class extends import_obsidian.Plugin {
     }
   }
   showRibbonMenu(evt) {
-    const menu = new import_obsidian.Menu();
+    const menu = new import_obsidian2.Menu();
     menu.addItem(
-      (item) => item.setTitle("Colorize current note").setIcon("file-text").onClick(() => this.colorizeActiveNote())
+      (item) => item.setTitle("Bake colors into note (Permanent)").setIcon("file-text").onClick(() => this.colorizeActiveNote())
     );
     menu.addItem(
-      (item) => item.setTitle("Undo current note").setIcon("undo").onClick(() => this.uncolorActiveNote())
+      (item) => item.setTitle("Clean baked colors from note").setIcon("undo").onClick(() => this.uncolorActiveNote())
     );
     menu.addSeparator();
     menu.addItem(
-      (item) => item.setTitle("Colorize current math block").setIcon("box").onClick(() => {
-        const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+      (item) => item.setTitle("Bake colors into current math block").setIcon("box").onClick(() => {
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
         if (view) {
           this.colorizeCurrentMathBlock(view.editor);
         } else {
-          new import_obsidian.Notice("Color Math: No active Markdown note.");
+          new import_obsidian2.Notice("Color Math: No active Markdown note.");
         }
       })
     );
     menu.addItem(
-      (item) => item.setTitle("Undo current math block").setIcon("rotate-ccw").onClick(() => {
-        const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+      (item) => item.setTitle("Clean baked colors from current math block").setIcon("rotate-ccw").onClick(() => {
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
         if (view) {
           this.uncolorCurrentMathBlock(view.editor);
         } else {
-          new import_obsidian.Notice("Color Math: No active Markdown note.");
+          new import_obsidian2.Notice("Color Math: No active Markdown note.");
         }
       })
     );
     menu.addSeparator();
     menu.addItem(
-      (item) => item.setTitle("Colorize selection").setIcon("highlighter").onClick(() => {
-        const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+      (item) => item.setTitle("Bake colors into selection").setIcon("highlighter").onClick(() => {
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
         if (view) {
           this.colorizeSelection(view.editor);
         } else {
-          new import_obsidian.Notice("Color Math: No active Markdown note.");
+          new import_obsidian2.Notice("Color Math: No active Markdown note.");
         }
       })
     );
     menu.addItem(
-      (item) => item.setTitle("Undo selection").setIcon("rotate-ccw").onClick(() => {
-        const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+      (item) => item.setTitle("Clean baked colors from selection").setIcon("rotate-ccw").onClick(() => {
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
         if (view) {
           this.uncolorSelection(view.editor);
         } else {
-          new import_obsidian.Notice("Color Math: No active Markdown note.");
+          new import_obsidian2.Notice("Color Math: No active Markdown note.");
         }
       })
     );
@@ -3532,7 +3633,7 @@ var ColorMathPlugin = class extends import_obsidian.Plugin {
       (span) => span.start <= offset && offset <= span.end
     );
     if (!currentBlock) {
-      new import_obsidian.Notice("Color Math: Cursor is not inside a math block ($$...$$).");
+      new import_obsidian2.Notice("Color Math: Cursor is not inside a math block ($$...$$).");
       return;
     }
     const rawBlock = content.slice(currentBlock.start, currentBlock.end);
@@ -3542,13 +3643,13 @@ var ColorMathPlugin = class extends import_obsidian.Plugin {
       this.getMathOptions()
     );
     if (colored === rawBlock) {
-      new import_obsidian.Notice("Color Math: Math block is already colorized.");
+      new import_obsidian2.Notice("Color Math: Math block is already colorized.");
       return;
     }
     const from = editor.offsetToPos(currentBlock.start);
     const to = editor.offsetToPos(currentBlock.end);
     editor.replaceRange(colored, from, to);
-    new import_obsidian.Notice("Color Math: Colorized current math block! \u{1F3A8}");
+    new import_obsidian2.Notice("Color Math: Colorized current math block! \u{1F3A8}");
   }
   uncolorCurrentMathBlock(editor) {
     const content = editor.getValue();
@@ -3559,19 +3660,19 @@ var ColorMathPlugin = class extends import_obsidian.Plugin {
       (span) => span.start <= offset && offset <= span.end
     );
     if (!currentBlock) {
-      new import_obsidian.Notice("Color Math: Cursor is not inside a math block ($$...$$).");
+      new import_obsidian2.Notice("Color Math: Cursor is not inside a math block ($$...$$).");
       return;
     }
     const rawBlock = content.slice(currentBlock.start, currentBlock.end);
     const uncolored = uncolorFragment(rawBlock);
     if (uncolored === rawBlock) {
-      new import_obsidian.Notice("Color Math: No color wrappers found to remove in this block.");
+      new import_obsidian2.Notice("Color Math: No color wrappers found to remove in this block.");
       return;
     }
     const from = editor.offsetToPos(currentBlock.start);
     const to = editor.offsetToPos(currentBlock.end);
     editor.replaceRange(uncolored, from, to);
-    new import_obsidian.Notice("Color Math: Reverted math block to clean LaTeX.");
+    new import_obsidian2.Notice("Color Math: Reverted math block to clean LaTeX.");
   }
   colorizeSelection(editor) {
     const selection = editor.getSelection();
@@ -3582,9 +3683,9 @@ var ColorMathPlugin = class extends import_obsidian.Plugin {
         this.getMathOptions()
       );
       editor.replaceSelection(colored);
-      new import_obsidian.Notice("Color Math: Colorized selection.");
+      new import_obsidian2.Notice("Color Math: Colorized selection.");
     } else {
-      new import_obsidian.Notice("Color Math: Please select text to colorize.");
+      new import_obsidian2.Notice("Color Math: Please select text to colorize.");
     }
   }
   uncolorSelection(editor) {
@@ -3592,15 +3693,15 @@ var ColorMathPlugin = class extends import_obsidian.Plugin {
     if (selection) {
       const uncolored = uncolorFragment(selection);
       editor.replaceSelection(uncolored);
-      new import_obsidian.Notice("Color Math: Reverted selection to clean LaTeX.");
+      new import_obsidian2.Notice("Color Math: Reverted selection to clean LaTeX.");
     } else {
-      new import_obsidian.Notice("Color Math: Please select text to undo colors.");
+      new import_obsidian2.Notice("Color Math: Please select text to undo colors.");
     }
   }
   async colorizeActiveNote() {
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
     if (!view) {
-      new import_obsidian.Notice("Color Math: No active Markdown note.");
+      new import_obsidian2.Notice("Color Math: No active Markdown note.");
       return;
     }
     const editor = view.editor;
@@ -3611,31 +3712,31 @@ var ColorMathPlugin = class extends import_obsidian.Plugin {
       this.getMathOptions()
     );
     if (colored === content) {
-      new import_obsidian.Notice("Color Math: All math blocks are already colored.");
+      new import_obsidian2.Notice("Color Math: All math blocks are already colored.");
       return;
     }
     const cursor = editor.getCursor();
     editor.setValue(colored);
     editor.setCursor(cursor);
-    new import_obsidian.Notice("Color Math: Successfully colorized note equations! \u{1F3A8}");
+    new import_obsidian2.Notice("Color Math: Successfully colorized note equations! \u{1F3A8}");
   }
   async uncolorActiveNote() {
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
     if (!view) {
-      new import_obsidian.Notice("Color Math: No active Markdown note.");
+      new import_obsidian2.Notice("Color Math: No active Markdown note.");
       return;
     }
     const editor = view.editor;
     const content = editor.getValue();
     const uncolored = uncolorText(content);
     if (uncolored === content) {
-      new import_obsidian.Notice("Color Math: No color wrappers found to remove.");
+      new import_obsidian2.Notice("Color Math: No color wrappers found to remove.");
       return;
     }
     const cursor = editor.getCursor();
     editor.setValue(uncolored);
     editor.setCursor(cursor);
-    new import_obsidian.Notice("Color Math: Reverted math colors to clean LaTeX.");
+    new import_obsidian2.Notice("Color Math: Reverted math colors to clean LaTeX.");
   }
   async handleThemeChange() {
     if (this.settings.autoSyncTheme) {
@@ -3667,7 +3768,7 @@ var ColorMathPlugin = class extends import_obsidian.Plugin {
     this.app.workspace.updateOptions();
   }
 };
-var ColorMathSettingTab = class extends import_obsidian.PluginSettingTab {
+var ColorMathSettingTab = class extends import_obsidian2.PluginSettingTab {
   plugin;
   constructor(app, plugin) {
     super(app, plugin);
@@ -3680,62 +3781,74 @@ var ColorMathSettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.createEl("p", {
       text: "Automatically apply semantic colors to LaTeX and MathJax equations in Obsidian Markdown."
     });
-    new import_obsidian.Setting(containerEl).setName("Show ribbon icon").setDesc("Display the Color Math palette icon on the left ribbon bar. Note: you can reorder or move ribbon icons via Settings > Appearance > Ribbon menu.").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Show ribbon icon").setDesc("Display the Color Math palette icon on the left ribbon bar. Note: you can reorder or move ribbon icons via Settings > Appearance > Ribbon menu.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.showRibbonIcon).onChange(async (val) => {
         this.plugin.settings.showRibbonIcon = val;
         await this.plugin.saveSettings();
         this.plugin.refreshRibbonIcon();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Real-time editor syntax highlighting").setDesc("Highlight equations inside the editor in real-time as you type.").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Live rendered math coloring").setDesc("Automatically colorize rendered MathJax equations in Reading View and Live Preview without modifying your raw Markdown notes.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.liveRendering).onChange(async (val) => {
+        this.plugin.settings.liveRendering = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Real-time editor syntax highlighting").setDesc("Highlight equations inside the editor in real-time as you type.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.livePreviewHighlighting).onChange(async (val) => {
         this.plugin.settings.livePreviewHighlighting = val;
         await this.plugin.saveSettings();
       })
     );
     containerEl.createEl("h3", { text: "IDE Visual Enhancements" });
-    new import_obsidian.Setting(containerEl).setName("Rainbow delimiters").setDesc("Color nested parentheses, brackets, and braces by depth to prevent delimiter blindness.").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Rainbow delimiters").setDesc("Color nested parentheses, brackets, and braces by depth to prevent delimiter blindness.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.rainbowDelimiters).onChange(async (val) => {
         this.plugin.settings.rainbowDelimiters = val;
         await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Mathematical symbol taxonomy").setDesc("Semantically categorize and color constants, standard functions, parameters, and bound indices.").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Mathematical symbol taxonomy").setDesc("Semantically categorize and color constants, standard functions, parameters, and bound indices.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.enableTaxonomy).onChange(async (val) => {
         this.plugin.settings.enableTaxonomy = val;
         await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Variable data-flow hashing").setDesc("Deterministically assign a unique color to each variable in an expression to trace its flow.").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Variable data-flow hashing").setDesc("Deterministically assign a unique color to each variable in an expression to trace its flow.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.variableDataFlow).onChange(async (val) => {
         this.plugin.settings.variableDataFlow = val;
         await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
       })
     );
     containerEl.createEl("h3", { text: "Theme Integration" });
-    new import_obsidian.Setting(containerEl).setName("Sync with active theme").setDesc("Extract and apply matching colors from your currently active Obsidian theme.").addButton(
+    new import_obsidian2.Setting(containerEl).setName("Sync with active theme").setDesc("Extract and apply matching colors from your currently active Obsidian theme.").addButton(
       (button) => button.setButtonText("Sync with Theme").setCta().onClick(async () => {
         this.plugin.settings.palette = extractThemePalette(
           this.plugin.settings.autoLightDark ? isVaultLightMode() : false
         );
         await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
         this.display();
-        new import_obsidian.Notice("Color Math: Synced colors with active Obsidian theme!");
+        new import_obsidian2.Notice("Color Math: Synced colors with active Obsidian theme!");
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Auto-match on theme change").setDesc("Automatically re-sync palette whenever you switch themes in Obsidian.").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Auto-match on theme change").setDesc("Automatically re-sync palette whenever you switch themes in Obsidian.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.autoSyncTheme).onChange(async (val) => {
         this.plugin.settings.autoSyncTheme = val;
         if (val) {
           this.plugin.settings.palette = extractThemePalette(
             this.plugin.settings.autoLightDark ? isVaultLightMode() : false
           );
+          this.plugin.rerenderMath();
         }
         await this.plugin.saveSettings();
         this.display();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Auto-adapt for light / dark mode").setDesc("Adjust operator contrast (e.g. '=' and '\\cdot') so math never washes out on light backgrounds.").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Auto-adapt for light / dark mode").setDesc("Adjust operator contrast (e.g. '=' and '\\cdot') so math never washes out on light backgrounds.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.autoLightDark).onChange(async (val) => {
         this.plugin.settings.autoLightDark = val;
         if (val) {
@@ -3743,29 +3856,32 @@ var ColorMathSettingTab = class extends import_obsidian.PluginSettingTab {
           this.plugin.settings.palette.relation = light ? "#1e293b" : "white";
           this.plugin.settings.palette.dot = light ? "#334155" : "white";
           this.plugin.settings.palette.spacing = light ? "#334155" : "white";
+          this.plugin.rerenderMath();
         }
         await this.plugin.saveSettings();
         this.display();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Restore default palette").setDesc("Revert all colors back to our signature Tokyo Night palette.").addButton(
+    new import_obsidian2.Setting(containerEl).setName("Restore default palette").setDesc("Revert all colors back to our signature Tokyo Night palette.").addButton(
       (button) => button.setButtonText("Restore Defaults").onClick(async () => {
         this.plugin.settings.palette = { ...DEFAULT_COLORS };
         await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
         this.display();
-        new import_obsidian.Notice("Color Math: Restored default Tokyo Night palette.");
+        new import_obsidian2.Notice("Color Math: Restored default Tokyo Night palette.");
       })
     );
     containerEl.createEl("h3", { text: "Color Palette Roles" });
     const roles = Object.keys(DEFAULT_COLORS);
     for (const role of roles) {
-      const setting = new import_obsidian.Setting(containerEl).setName(role.charAt(0).toUpperCase() + role.slice(1)).setDesc(COLOR_ROLE_DESCRIPTIONS[role] || role);
+      const setting = new import_obsidian2.Setting(containerEl).setName(role.charAt(0).toUpperCase() + role.slice(1)).setDesc(COLOR_ROLE_DESCRIPTIONS[role] || role);
       const currentColor = this.plugin.settings.palette[role] || DEFAULT_COLORS[role];
       if (currentColor.startsWith("#")) {
         setting.addColorPicker((picker) => {
           picker.setValue(currentColor).onChange(async (val) => {
             this.plugin.settings.palette[role] = val;
             await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
           });
         });
       }
@@ -3774,6 +3890,7 @@ var ColorMathSettingTab = class extends import_obsidian.PluginSettingTab {
           if (val.trim()) {
             this.plugin.settings.palette[role] = val.trim();
             await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
           }
         });
       });

@@ -13,12 +13,14 @@ import {
 import { ColorPalette, ColorRole, ColorMathOptions, DEFAULT_COLORS, setPalette } from "./config";
 import { convertMathBlock, convertText } from "./converters/block";
 import { createColorMathLivePlugin } from "./editor/live_preview";
+import { MathJaxInterceptor } from "./editor/mathjax_interceptor";
 import { scanMarkdown } from "./parsers/markdown_scanner";
 import { uncolorFragment, uncolorText } from "./undo";
 import { extractThemePalette, isVaultLightMode } from "./utils/theme_colors";
 
 interface ColorMathSettings {
   palette: ColorPalette;
+  liveRendering: boolean;
   livePreviewHighlighting: boolean;
   showRibbonIcon: boolean;
   autoSyncTheme: boolean;
@@ -30,6 +32,7 @@ interface ColorMathSettings {
 
 const DEFAULT_SETTINGS: ColorMathSettings = {
   palette: { ...DEFAULT_COLORS },
+  liveRendering: true,
   livePreviewHighlighting: false,
   showRibbonIcon: true,
   autoSyncTheme: false,
@@ -56,21 +59,26 @@ const COLOR_ROLE_DESCRIPTIONS: Record<ColorRole, string> = {
 export default class ColorMathPlugin extends Plugin {
   settings: ColorMathSettings = DEFAULT_SETTINGS;
   ribbonIconEl: HTMLElement | null = null;
+  interceptor: MathJaxInterceptor | null = null;
 
   async onload() {
     await this.loadSettings();
     setPalette(this.settings.palette);
 
-    // Register CodeMirror 6 Live Preview syntax highlighting extension
+    // 1. Install MathJax rendering interceptor for automatic Live Preview & Reading View coloring
+    this.interceptor = new MathJaxInterceptor(
+      () => this.settings.palette,
+      () => this.getMathOptions(),
+      () => this.settings.liveRendering
+    );
+    await this.interceptor.install();
+
+    // 2. Register CodeMirror 6 Live Preview syntax highlighting extension
     this.registerEditorExtension([
       createColorMathLivePlugin(
         () => this.settings.palette,
         () => this.settings.livePreviewHighlighting,
-        () => ({
-          enableTaxonomy: this.settings.enableTaxonomy,
-          rainbowDelimiters: this.settings.rainbowDelimiters,
-          variableDataFlow: this.settings.variableDataFlow,
-        })
+        () => this.getMathOptions()
       ),
     ]);
 
@@ -84,10 +92,10 @@ export default class ColorMathPlugin extends Plugin {
       })
     );
 
-    // 1. Colorize current note
+    // 1. Bake colors into note (Permanent)
     this.addCommand({
       id: "color-math-colorize-note",
-      name: "Colorize current note",
+      name: "Bake colors into note (Permanent)",
       checkCallback: (checking: boolean) => {
         const view = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (view) {
@@ -100,10 +108,10 @@ export default class ColorMathPlugin extends Plugin {
       },
     });
 
-    // 2. Undo current note
+    // 2. Clean baked colors from note
     this.addCommand({
       id: "color-math-undo-note",
-      name: "Undo current note",
+      name: "Clean baked colors from note",
       checkCallback: (checking: boolean) => {
         const view = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (view) {
@@ -116,37 +124,37 @@ export default class ColorMathPlugin extends Plugin {
       },
     });
 
-    // 3. Colorize current math block
+    // 3. Bake colors into current math block
     this.addCommand({
       id: "color-math-colorize-current-block",
-      name: "Colorize current math block",
+      name: "Bake colors into current math block",
       editorCallback: (editor: Editor) => {
         this.colorizeCurrentMathBlock(editor);
       },
     });
 
-    // 4. Undo current math block
+    // 4. Clean baked colors from current math block
     this.addCommand({
       id: "color-math-undo-current-block",
-      name: "Undo current math block",
+      name: "Clean baked colors from current math block",
       editorCallback: (editor: Editor) => {
         this.uncolorCurrentMathBlock(editor);
       },
     });
 
-    // 5. Colorize selection
+    // 5. Bake colors into selection
     this.addCommand({
       id: "color-math-colorize-selection",
-      name: "Colorize selection",
+      name: "Bake colors into selection",
       editorCallback: (editor: Editor) => {
         this.colorizeSelection(editor);
       },
     });
 
-    // 6. Undo selection
+    // 6. Clean baked colors from selection
     this.addCommand({
       id: "color-math-undo-selection",
-      name: "Undo selection",
+      name: "Clean baked colors from selection",
       editorCallback: (editor: Editor) => {
         this.uncolorSelection(editor);
       },
@@ -154,6 +162,25 @@ export default class ColorMathPlugin extends Plugin {
 
     // Settings tab
     this.addSettingTab(new ColorMathSettingTab(this.app, this));
+
+    // Initial workspace math rerender
+    this.rerenderMath();
+  }
+
+  onunload() {
+    this.interceptor?.uninstall();
+  }
+
+  rerenderMath() {
+    this.app.workspace.iterateAllLeaves((leaf) => {
+      if (leaf.view instanceof MarkdownView) {
+        (leaf.view as any).previewMode?.rerender(true);
+        const cm = (leaf.view.editor as any)?.cm;
+        if (cm) {
+          cm.dispatch({});
+        }
+      }
+    });
   }
 
   refreshRibbonIcon() {
@@ -180,14 +207,14 @@ export default class ColorMathPlugin extends Plugin {
 
     menu.addItem((item) =>
       item
-        .setTitle("Colorize current note")
+        .setTitle("Bake colors into note (Permanent)")
         .setIcon("file-text")
         .onClick(() => this.colorizeActiveNote())
     );
 
     menu.addItem((item) =>
       item
-        .setTitle("Undo current note")
+        .setTitle("Clean baked colors from note")
         .setIcon("undo")
         .onClick(() => this.uncolorActiveNote())
     );
@@ -196,7 +223,7 @@ export default class ColorMathPlugin extends Plugin {
 
     menu.addItem((item) =>
       item
-        .setTitle("Colorize current math block")
+        .setTitle("Bake colors into current math block")
         .setIcon("box")
         .onClick(() => {
           const view = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -210,7 +237,7 @@ export default class ColorMathPlugin extends Plugin {
 
     menu.addItem((item) =>
       item
-        .setTitle("Undo current math block")
+        .setTitle("Clean baked colors from current math block")
         .setIcon("rotate-ccw")
         .onClick(() => {
           const view = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -226,7 +253,7 @@ export default class ColorMathPlugin extends Plugin {
 
     menu.addItem((item) =>
       item
-        .setTitle("Colorize selection")
+        .setTitle("Bake colors into selection")
         .setIcon("highlighter")
         .onClick(() => {
           const view = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -240,7 +267,7 @@ export default class ColorMathPlugin extends Plugin {
 
     menu.addItem((item) =>
       item
-        .setTitle("Undo selection")
+        .setTitle("Clean baked colors from selection")
         .setIcon("rotate-ccw")
         .onClick(() => {
           const view = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -478,6 +505,19 @@ class ColorMathSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("Live rendered math coloring")
+      .setDesc("Automatically colorize rendered MathJax equations in Reading View and Live Preview without modifying your raw Markdown notes.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.liveRendering)
+          .onChange(async (val) => {
+            this.plugin.settings.liveRendering = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    new Setting(containerEl)
       .setName("Real-time editor syntax highlighting")
       .setDesc("Highlight equations inside the editor in real-time as you type.")
       .addToggle((toggle) =>
@@ -500,6 +540,7 @@ class ColorMathSettingTab extends PluginSettingTab {
           .onChange(async (val) => {
             this.plugin.settings.rainbowDelimiters = val;
             await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
           })
       );
 
@@ -512,6 +553,7 @@ class ColorMathSettingTab extends PluginSettingTab {
           .onChange(async (val) => {
             this.plugin.settings.enableTaxonomy = val;
             await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
           })
       );
 
@@ -524,6 +566,7 @@ class ColorMathSettingTab extends PluginSettingTab {
           .onChange(async (val) => {
             this.plugin.settings.variableDataFlow = val;
             await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
           })
       );
 
@@ -541,6 +584,7 @@ class ColorMathSettingTab extends PluginSettingTab {
               this.plugin.settings.autoLightDark ? isVaultLightMode() : false
             );
             await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
             this.display();
             new Notice("Color Math: Synced colors with active Obsidian theme!");
           })
@@ -558,6 +602,7 @@ class ColorMathSettingTab extends PluginSettingTab {
               this.plugin.settings.palette = extractThemePalette(
                 this.plugin.settings.autoLightDark ? isVaultLightMode() : false
               );
+              this.plugin.rerenderMath();
             }
             await this.plugin.saveSettings();
             this.display();
@@ -577,6 +622,7 @@ class ColorMathSettingTab extends PluginSettingTab {
               this.plugin.settings.palette.relation = light ? "#1e293b" : "white";
               this.plugin.settings.palette.dot = light ? "#334155" : "white";
               this.plugin.settings.palette.spacing = light ? "#334155" : "white";
+              this.plugin.rerenderMath();
             }
             await this.plugin.saveSettings();
             this.display();
@@ -590,6 +636,7 @@ class ColorMathSettingTab extends PluginSettingTab {
         button.setButtonText("Restore Defaults").onClick(async () => {
           this.plugin.settings.palette = { ...DEFAULT_COLORS };
           await this.plugin.saveSettings();
+          this.plugin.rerenderMath();
           this.display();
           new Notice("Color Math: Restored default Tokyo Night palette.");
         })
@@ -610,6 +657,7 @@ class ColorMathSettingTab extends PluginSettingTab {
           picker.setValue(currentColor).onChange(async (val) => {
             this.plugin.settings.palette[role] = val;
             await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
           });
         });
       }
@@ -622,6 +670,7 @@ class ColorMathSettingTab extends PluginSettingTab {
             if (val.trim()) {
               this.plugin.settings.palette[role] = val.trim();
               await this.plugin.saveSettings();
+              this.plugin.rerenderMath();
             }
           });
       });
