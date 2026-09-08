@@ -12,7 +12,7 @@ Obsidian Color Math dynamically transforms plain monochrome equations into rich,
 > **100% Local, Pure TypeScript & Zero Dependencies:** Color Math runs completely offline on Desktop and Mobile (iOS & Android). It makes zero network requests, collects no telemetry, and requires no external tools or AI services.
 
 > [!NOTE]
-> **Looking for the Python CLI & Library?** Check out [python-color-math](https://github.com/36ty-blip/python-color-math) (`pip install color-math`) to colorize equations in batch scripts, terminal pipelines, Jupyter notebooks, or Quarto documents without needing Obsidian open!
+> **Looking for the Python CLI & Library?** Check out [python-color-math](https://github.com/36ty-blip/python-color-math) (`pip install python-color-math`) to colorize equations in batch scripts, terminal pipelines, Jupyter notebooks, or Quarto documents without needing Obsidian open!
 
 ---
 
