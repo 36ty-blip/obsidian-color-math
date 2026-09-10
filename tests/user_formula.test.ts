@@ -117,5 +117,24 @@ describe("User Formula Test", () => {
     const coloredSqrt = convertText(unbracedSqrt, DEFAULT_COLORS, optsUser);
     expect(coloredSqrt).not.toContain("\\sqrt \\textcolor");
     expect(coloredSqrt).toMatch(/\\sqrt\{\\textcolor\{#[0-9a-fA-F]+\}\{V\}\}/);
+
+    // Test that all other font styles and accents wrap cleanly from the outside
+    const fontStyles = [
+      "$\\mathbf F$",
+      "$\\mathbb R$",
+      "$\\mathfrak g$",
+      "$\\boldsymbol x$",
+      "$\\mathsf T$",
+      "$\\vec v$",
+      "$\\hat p$",
+      "$\\bar z$",
+      "$\\tilde y$"
+    ];
+    for (const fs of fontStyles) {
+      const out = convertText(fs, DEFAULT_COLORS, optsUser);
+      // Ensure \textcolor is on the OUTSIDE of the macro, never between macro and letter
+      expect(out).not.toMatch(/\\[a-zA-Z]+\s*\\textcolor/);
+      expect(out).toMatch(/\\textcolor\{#[0-9a-fA-F]+\}\{\\[a-zA-Z]+/);
+    }
   });
 });

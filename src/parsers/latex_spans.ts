@@ -9,6 +9,8 @@ export const STYLE_MACROS = new Set([
   "mathsf",
   "mathtt",
   "boldsymbol",
+  "mathfrak",
+  "pmb",
   "operatorname",
   "text",
   "textbf",

@@ -6,6 +6,8 @@ import {
   MATH_CONSTANTS,
   MATH_FUNCTIONS,
   MATH_PARAMETERS,
+  MATH_ACCENTS,
+  FONT_STYLE_MACROS,
 } from "../config";
 import { readOperand, OPAQUE_MACROS } from "./latex_spans";
 import { readBraced, readColorCommand } from "../utils/latex_helpers";
@@ -114,7 +116,7 @@ export function collectTaxonomySpans(
           }
         }
 
-        if (name === "\\dot" || name === "\\ddot" || name === "\\dddot") {
+        if (MATH_ACCENTS.has(name)) {
           let targetStart = cmdEnd;
           while (targetStart < body.length && /\s/.test(body[targetStart])) {
             targetStart++;
@@ -128,10 +130,15 @@ export function collectTaxonomySpans(
               const letMatch = body.slice(targetStart).match(/^[a-zA-Z](')*/);
               if (letMatch) targetEnd = targetStart + letMatch[0].length;
             }
+            const isDot =
+              name === "\\dot" ||
+              name === "\\ddot" ||
+              name === "\\dddot" ||
+              name === "\\ddddot";
             spans.push({
               start: index,
               end: targetEnd,
-              color: palette.derivative,
+              color: isDot ? palette.derivative : (palette.parameter || palette.main),
               priority: 22,
             });
             index = targetEnd;
@@ -172,7 +179,7 @@ export function collectTaxonomySpans(
           continue;
         }
 
-        if (name === "\\mathcal" || name === "\\mathbf" || name === "\\mathbb") {
+        if (FONT_STYLE_MACROS.has(name)) {
           let targetStart = cmdEnd;
           while (targetStart < body.length && /\s/.test(body[targetStart])) {
             targetStart++;

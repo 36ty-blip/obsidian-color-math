@@ -173,6 +173,18 @@ export const MATH_ACCENTS = new Set([
   "\\mathring",
 ]);
 
+export const FONT_STYLE_MACROS = new Set([
+  "\\mathbf",
+  "\\mathcal",
+  "\\mathbb",
+  "\\mathfrak",
+  "\\mathsf",
+  "\\mathtt",
+  "\\mathit",
+  "\\boldsymbol",
+  "\\pmb",
+]);
+
 export const MATH_PARAMETERS = new Set([
   "\\alpha",
   "\\beta",

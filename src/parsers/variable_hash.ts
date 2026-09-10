@@ -4,6 +4,7 @@ import {
   VARIABLE_HASH_PALETTE,
   hashStringToColor,
   MATH_ACCENTS,
+  FONT_STYLE_MACROS,
 } from "../config";
 import { readOperand, OPAQUE_MACROS } from "./latex_spans";
 import { readBraced, readColorCommand } from "../utils/latex_helpers";
@@ -125,7 +126,7 @@ export function collectVariableSpans(
           }
         }
 
-        if (cmdName === "\\mathbf" || cmdName === "\\mathcal" || cmdName === "\\mathbb") {
+        if (FONT_STYLE_MACROS.has(cmdName)) {
           let targetStart = cmdEnd;
           while (targetStart < body.length && /\s/.test(body[targetStart])) {
             targetStart++;

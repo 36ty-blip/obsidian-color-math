@@ -163,6 +163,17 @@ var MATH_ACCENTS = /* @__PURE__ */ new Set([
   "\\grave",
   "\\mathring"
 ]);
+var FONT_STYLE_MACROS = /* @__PURE__ */ new Set([
+  "\\mathbf",
+  "\\mathcal",
+  "\\mathbb",
+  "\\mathfrak",
+  "\\mathsf",
+  "\\mathtt",
+  "\\mathit",
+  "\\boldsymbol",
+  "\\pmb"
+]);
 var MATH_PARAMETERS = /* @__PURE__ */ new Set([
   "\\alpha",
   "\\beta",
@@ -709,6 +720,8 @@ var STYLE_MACROS = /* @__PURE__ */ new Set([
   "mathsf",
   "mathtt",
   "boldsymbol",
+  "mathfrak",
+  "pmb",
   "operatorname",
   "text",
   "textbf",
@@ -3253,7 +3266,7 @@ function collectTaxonomySpans(body, palette = COLORS, unitSpans, diffSpans, dimS
             continue;
           }
         }
-        if (name === "\\dot" || name === "\\ddot" || name === "\\dddot") {
+        if (MATH_ACCENTS.has(name)) {
           let targetStart = cmdEnd;
           while (targetStart < body.length && /\s/.test(body[targetStart])) {
             targetStart++;
@@ -3269,10 +3282,11 @@ function collectTaxonomySpans(body, palette = COLORS, unitSpans, diffSpans, dimS
               if (letMatch)
                 targetEnd = targetStart + letMatch[0].length;
             }
+            const isDot = name === "\\dot" || name === "\\ddot" || name === "\\dddot" || name === "\\ddddot";
             spans.push({
               start: index,
               end: targetEnd,
-              color: palette.derivative,
+              color: isDot ? palette.derivative : palette.parameter || palette.main,
               priority: 22
             });
             index = targetEnd;
@@ -3309,7 +3323,7 @@ function collectTaxonomySpans(body, palette = COLORS, unitSpans, diffSpans, dimS
           index = cmdEnd;
           continue;
         }
-        if (name === "\\mathcal" || name === "\\mathbf" || name === "\\mathbb") {
+        if (FONT_STYLE_MACROS.has(name)) {
           let targetStart = cmdEnd;
           while (targetStart < body.length && /\s/.test(body[targetStart])) {
             targetStart++;
@@ -3436,7 +3450,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
             }
           }
         }
-        if (cmdName === "\\mathbf" || cmdName === "\\mathcal" || cmdName === "\\mathbb") {
+        if (FONT_STYLE_MACROS.has(cmdName)) {
           let targetStart = cmdEnd;
           while (targetStart < body.length && /\s/.test(body[targetStart])) {
             targetStart++;
