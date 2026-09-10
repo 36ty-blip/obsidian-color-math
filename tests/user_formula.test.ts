@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { colorLatexBody } from "../src/converters/generic";
 import { convertText } from "../src/converters/block";
 import { DEFAULT_COLORS } from "../src/config";
+import { validateLatexWithKaTeX } from "./validator";
 
 describe("User Formula Test", () => {
   it("colors user formula with arrow, parameter lambda, mu, and relation", () => {
@@ -141,5 +142,39 @@ describe("User Formula Test", () => {
     expect(ravOut).toContain("\\mathcal R");
     expect(ravOut).not.toContain("\\mathcal RAV");
     expect(ravOut).not.toContain("\\mathcal{RAV}");
+  });
+
+  it("validates all converted formulas using KaTeX math engine", () => {
+    const opts = {
+      enableTaxonomy: true,
+      variableDataFlow: true,
+      rainbowDelimiters: true,
+      colorUnits: true,
+      colorDifferentials: true,
+      colorBraKet: true,
+      colorDimensionless: true,
+    };
+
+    const formulas = [
+      "# $$\\boxed{\\mathcal R=\\frac{I_{ph}}{P_{opt}}=\\eta\\frac{q}{h\\nu}=\\eta\\frac{q\\lambda}{hc}\\quad(\\text{A/W})}$$",
+      "$\\mathcal R=\\boxed{0.315\\,\\text{A/W}}$",
+      "$$\\rho=2\\pi s\\frac VI$$",
+      "$$\\boxed{E_n=\\frac{n^2h^2}{8mL^2},\\qquad \\psi_n=\\sqrt{\\frac2L}\\sin\\!\\left(\\frac{n\\pi x}{L}\\right)}$$",
+      "# $$\\boxed{\\lambda=\\frac hp=\\frac{h}{mv}=\\frac{h}{\\sqrt{2mK}}=\\frac{h}{\\sqrt{2mqV}}}$$",
+      "$$\\boxed{\\lambda=\\frac{12.27}{\\sqrt V}\\ \\text{Å}}$$",
+      "$$\\frac2L$$",
+      "$$\\frac VI$$",
+      "$$\\sqrt V$$",
+      "$\\mathcal RAV$"
+    ];
+
+    for (const f of formulas) {
+      const converted = convertText(f, DEFAULT_COLORS, opts);
+      const validation = validateLatexWithKaTeX(converted);
+      if (!validation.valid) {
+        console.error(`KaTeX Validation Failed for: ${f}\nConverted: ${converted}\nError: ${validation.error}`);
+      }
+      expect(validation.valid, `KaTeX error for "${converted}": ${validation.error}`).toBe(true);
+    }
   });
 });

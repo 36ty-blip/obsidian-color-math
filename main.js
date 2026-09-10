@@ -3868,10 +3868,18 @@ var MathJaxInterceptor = class {
   getPalette;
   getOptions;
   isEnabled;
+  lastNoticeTime = 0;
   constructor(getPalette, getOptions, isEnabled = () => true) {
     this.getPalette = getPalette;
     this.getOptions = getOptions;
     this.isEnabled = isEnabled;
+  }
+  notifyUserError(errorMsg) {
+    const now = Date.now();
+    if (now - this.lastNoticeTime > 4e3) {
+      this.lastNoticeTime = now;
+      new import_obsidian.Notice(`Color Math: LaTeX syntax issue \u2014 ${errorMsg}`, 5e3);
+    }
   }
   async install() {
     try {
@@ -3895,17 +3903,71 @@ var MathJaxInterceptor = class {
       }
     };
     const self = this;
-    const isMathJaxError = (el) => {
+    const getMathJaxError = (el) => {
       if (!el || typeof el !== "object")
-        return false;
+        return null;
       const dom = el;
-      if (typeof dom.getAttribute === "function" && dom.getAttribute("data-mjx-error")) {
-        return true;
+      if (typeof dom.getAttribute === "function") {
+        const errAttr = dom.getAttribute("data-mjx-error");
+        if (errAttr)
+          return errAttr;
       }
       if (typeof dom.querySelector === "function") {
-        return Boolean(dom.querySelector(".merror, [data-mjx-error], mjx-merror"));
+        const errNode = dom.querySelector(".merror, [data-mjx-error], mjx-merror");
+        if (errNode) {
+          return errNode.getAttribute("data-mjx-error") || errNode.getAttribute("title") || errNode.textContent?.trim() || "LaTeX syntax error";
+        }
       }
-      return false;
+      return null;
+    };
+    const handleResult = (result, origFn, context, originalLatex, transformedLatex, options) => {
+      const errorMsg = getMathJaxError(result);
+      if (errorMsg) {
+        console.warn("Color Math: MathJax rendered error for colored LaTeX:", {
+          error: errorMsg,
+          original: originalLatex,
+          transformed: transformedLatex
+        });
+        self.notifyUserError(errorMsg);
+        try {
+          const fallback = origFn.call(context, originalLatex, options);
+          if (fallback && typeof fallback.setAttribute === "function") {
+            fallback.setAttribute(
+              "title",
+              `Color Math: Rendered uncolored formula because colored syntax had error: ${errorMsg}`
+            );
+          }
+          return fallback;
+        } catch {
+          return result;
+        }
+      }
+      return result;
+    };
+    const handleAsyncResult = async (resultPromise, origFn, context, originalLatex, transformedLatex, options) => {
+      const result = await resultPromise;
+      const errorMsg = getMathJaxError(result);
+      if (errorMsg) {
+        console.warn("Color Math: MathJax rendered error for colored LaTeX (async):", {
+          error: errorMsg,
+          original: originalLatex,
+          transformed: transformedLatex
+        });
+        self.notifyUserError(errorMsg);
+        try {
+          const fallback = await origFn.call(context, originalLatex, options);
+          if (fallback && typeof fallback.setAttribute === "function") {
+            fallback.setAttribute(
+              "title",
+              `Color Math: Rendered uncolored formula because colored syntax had error: ${errorMsg}`
+            );
+          }
+          return fallback;
+        } catch {
+          return result;
+        }
+      }
+      return result;
     };
     if (typeof mathJax.tex2chtml === "function") {
       const orig = mathJax.tex2chtml;
@@ -3914,15 +3976,8 @@ var MathJaxInterceptor = class {
           return orig.call(this, latex, options);
         try {
           const transformed = transform(latex);
-          const result = orig.call(this, transformed, options);
-          if (isMathJaxError(result)) {
-            console.warn("Color Math: MathJax rendered error for colored LaTeX, falling back to original:", {
-              original: latex,
-              transformed
-            });
-            return orig.call(this, latex, options);
-          }
-          return result;
+          const res = orig.call(this, transformed, options);
+          return handleResult(res, orig, this, latex, transformed, options);
         } catch (err) {
           console.warn("Color Math: Exception during tex2chtml, falling back to original LaTeX:", err);
           return orig.call(this, latex, options);
@@ -3939,15 +3994,14 @@ var MathJaxInterceptor = class {
           return orig.call(this, latex, options);
         try {
           const transformed = transform(latex);
-          const result = await orig.call(this, transformed, options);
-          if (isMathJaxError(result)) {
-            console.warn("Color Math: MathJax rendered error for colored LaTeX, falling back to original:", {
-              original: latex,
-              transformed
-            });
-            return await orig.call(this, latex, options);
-          }
-          return result;
+          return await handleAsyncResult(
+            orig.call(this, transformed, options),
+            orig,
+            this,
+            latex,
+            transformed,
+            options
+          );
         } catch (err) {
           console.warn("Color Math: Exception during tex2chtmlPromise, falling back to original LaTeX:", err);
           return await orig.call(this, latex, options);
@@ -3964,15 +4018,8 @@ var MathJaxInterceptor = class {
           return orig.call(this, latex, options);
         try {
           const transformed = transform(latex);
-          const result = orig.call(this, transformed, options);
-          if (isMathJaxError(result)) {
-            console.warn("Color Math: MathJax rendered error for colored LaTeX, falling back to original:", {
-              original: latex,
-              transformed
-            });
-            return orig.call(this, latex, options);
-          }
-          return result;
+          const res = orig.call(this, transformed, options);
+          return handleResult(res, orig, this, latex, transformed, options);
         } catch (err) {
           console.warn("Color Math: Exception during tex2svg, falling back to original LaTeX:", err);
           return orig.call(this, latex, options);
@@ -3989,15 +4036,14 @@ var MathJaxInterceptor = class {
           return orig.call(this, latex, options);
         try {
           const transformed = transform(latex);
-          const result = await orig.call(this, transformed, options);
-          if (isMathJaxError(result)) {
-            console.warn("Color Math: MathJax rendered error for colored LaTeX, falling back to original:", {
-              original: latex,
-              transformed
-            });
-            return await orig.call(this, latex, options);
-          }
-          return result;
+          return await handleAsyncResult(
+            orig.call(this, transformed, options),
+            orig,
+            this,
+            latex,
+            transformed,
+            options
+          );
         } catch (err) {
           console.warn("Color Math: Exception during tex2svgPromise, falling back to original LaTeX:", err);
           return await orig.call(this, latex, options);

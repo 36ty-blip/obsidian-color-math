@@ -23,8 +23,10 @@
   "author": "36ty-blip",
   "license": "MIT",
   "devDependencies": {
+    "@types/katex": "^0.16.8",
     "@types/node": "^20.14.0",
     "esbuild": "0.20.2",
+    "katex": "^0.18.7",
     "obsidian": "latest",
     "typescript": "^5.4.5",
     "vitest": "^1.6.0"
