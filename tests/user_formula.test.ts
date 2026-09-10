@@ -136,5 +136,10 @@ describe("User Formula Test", () => {
       expect(out).not.toMatch(/\\[a-zA-Z]+\s*\\textcolor/);
       expect(out).toMatch(/\\textcolor\{#[0-9a-fA-F]+\}\{\\[a-zA-Z]+/);
     }
+
+    const ravOut = convertText("$\\mathcal RAV$", DEFAULT_COLORS, optsUser);
+    expect(ravOut).toContain("\\mathcal R");
+    expect(ravOut).not.toContain("\\mathcal RAV");
+    expect(ravOut).not.toContain("\\mathcal{RAV}");
   });
 });
