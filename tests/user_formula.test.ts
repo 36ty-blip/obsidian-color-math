@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { colorLatexBody } from "../src/converters/generic";
 import { convertText } from "../src/converters/block";
 import { DEFAULT_COLORS } from "../src/config";
+import { collectAlignmentSpans } from "../src/parsers/alignment";
 import { validateLatexWithKaTeX } from "./validator";
 
 describe("User Formula Test", () => {
@@ -227,5 +228,68 @@ describe("User Formula Test", () => {
       expect(val.valid, `KaTeX error for "${out}": ${val.error}`).toBe(true);
     }
   });
+
+  it("identifies single-character constants (e, i) accurately while preserving indices and variables", () => {
+    const opts = {
+      enableTaxonomy: true,
+      variableDataFlow: true,
+      rainbowDelimiters: true,
+      colorSingleConstants: true,
+    };
+
+    // 1. Euler's number in exponential e^x and e^{-t}
+    const eulerEq = "$$y = e^x + e^{-t}$$";
+    const coloredEuler = convertText(eulerEq, DEFAULT_COLORS, opts);
+    expect(coloredEuler).toContain(`\\textcolor{${DEFAULT_COLORS.orange}}{e}`);
+
+    // 2. Euler's identity: e^{i\pi} + 1 = 0 (both e and i colored as constants!)
+    const identity = "$$e^{i\\pi} + 1 = 0$$";
+    const coloredIdentity = convertText(identity, DEFAULT_COLORS, opts);
+    expect(coloredIdentity).toContain(`\\textcolor{${DEFAULT_COLORS.orange}}{e}`);
+    expect(coloredIdentity).toContain(`\\textcolor{${DEFAULT_COLORS.orange}}{i}`);
+    expect(coloredIdentity).toContain(`\\textcolor{${DEFAULT_COLORS.orange}}{\\pi}`);
+
+    // 3. Imaginary units: 2i, i^2 = -1, z = x + iy
+    const complexEq = "$$z = x + iy, \\qquad i^2 = -1, \\qquad 2i + 3j$$";
+    const coloredComplex = convertText(complexEq, DEFAULT_COLORS, opts);
+    expect(coloredComplex).toContain(`\\textcolor{${DEFAULT_COLORS.orange}}{i}`);
+    expect(coloredComplex).toContain(`\\textcolor{${DEFAULT_COLORS.orange}}{j}`);
+
+    // 4. Indices must NOT be classified as constants
+    const indexEq = "$$\\sum_{i=1}^n x_i + A_{ij} x_j + e_1 + e_2$$";
+    const coloredIndex = convertText(indexEq, DEFAULT_COLORS, opts);
+    // e_1 should not be \textcolor{orange}{e}_1
+    expect(coloredIndex).not.toContain(`\\textcolor{${DEFAULT_COLORS.orange}}{e}_{1}`);
+    expect(coloredIndex).not.toContain(`\\textcolor{${DEFAULT_COLORS.orange}}{e}_{2}`);
+
+    // 5. KaTeX validation on all expressions
+    const formulas = [
+      "$$y = e^x + e^{-t}$$",
+      "$$e^{i\\pi} + 1 = 0$$",
+      "$$z = x + iy$$",
+      "$$i^2 = -1$$",
+      "$$i\\hbar \\frac{\\partial \\psi}{\\partial t} = \\hat{H}\\psi$$"
+    ];
+    for (const f of formulas) {
+      const out = convertText(f, DEFAULT_COLORS, opts);
+      const val = validateLatexWithKaTeX(out);
+      expect(val.valid, `KaTeX error for "${out}": ${val.error}`).toBe(true);
+    }
+  });
+
+  it("identifies matrix and alignment delimiters (&, \\) for editor highlighting", () => {
+    const matrixBody = "a & b \\\\\n c & d";
+    const spans = collectAlignmentSpans(matrixBody, DEFAULT_COLORS);
+
+    // Should find two '&' and one '\\'
+    const ampersands = spans.filter((s) => matrixBody.slice(s.start, s.end) === "&");
+    const rowBreaks = spans.filter((s) => matrixBody.slice(s.start, s.end) === "\\\\");
+
+    expect(ampersands.length).toBe(2);
+    expect(rowBreaks.length).toBe(1);
+    expect(ampersands[0].color).toBe(DEFAULT_COLORS.arrow);
+    expect(rowBreaks[0].color).toBe(DEFAULT_COLORS.arrow);
+  });
 });
+
 

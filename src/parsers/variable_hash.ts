@@ -13,6 +13,7 @@ import { ColorSpan } from "../utils/spans";
 import { findDifferentialSpans, DifferentialSpan } from "./differentials";
 import { findDimensionlessSpans, DimensionlessSpan } from "./dimensionless";
 import { findUnitSpans, UnitSpan } from "./units";
+import { isEulerConstant, isImaginaryUnit } from "./constants";
 
 function skipComment(text: string, start: number): number {
   let index = start + 1;
@@ -177,6 +178,18 @@ export function collectVariableSpans(
     const bareMatch = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
     if (bareMatch && BARE_FUNCTIONS.has(bareMatch[1].toLowerCase())) {
       index += bareMatch[1].length;
+      continue;
+    }
+
+    // Single-character constants 'e' and 'i'/'j'
+    if (isEulerConstant(body, index) || isImaginaryUnit(body, index)) {
+      spans.push({
+        start: index,
+        end: index + 1,
+        color: "#e0af68",
+        priority: 22,
+      });
+      index++;
       continue;
     }
 

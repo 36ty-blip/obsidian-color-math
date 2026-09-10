@@ -9,6 +9,8 @@ import {
   ViewUpdate,
 } from "@codemirror/view";
 import { ColorPalette, ColorMathOptions } from "../config";
+import { collectAlignmentSpans } from "../parsers/alignment";
+import { collectSingleConstantSpans } from "../parsers/constants";
 import { collectBraKetDelimiterSpans } from "../parsers/braket";
 import { collectDelimiterSpans } from "../parsers/delimiters";
 import { collectDifferentialSpans, findDifferentialSpans } from "../parsers/differentials";
@@ -91,6 +93,14 @@ export function createColorMathLivePlugin(
 
           if (options?.colorBraKet !== false) {
             allSpans.push(...collectBraKetDelimiterSpans(body, palette));
+          }
+
+          if (options?.colorSingleConstants !== false) {
+            allSpans.push(...collectSingleConstantSpans(body, palette));
+          }
+
+          if (options?.colorAlignment !== false) {
+            allSpans.push(...collectAlignmentSpans(body, palette));
           }
 
           if (options?.rainbowDelimiters) {

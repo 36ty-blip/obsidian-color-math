@@ -144,7 +144,12 @@ var MATH_CONSTANTS = /* @__PURE__ */ new Set([
   "\\Re",
   "\\Im",
   "\\top",
-  "\\bot"
+  "\\bot",
+  "\\imath",
+  "\\jmath",
+  "\\mathrm{e}",
+  "\\mathrm{i}",
+  "\\mathrm{j}"
 ]);
 var MATH_ACCENTS = /* @__PURE__ */ new Set([
   "\\dot",
@@ -2495,6 +2500,106 @@ function convertDerivativeLine(source, palette = COLORS) {
   return block.render(applyColorSpans(block.body, spans));
 }
 
+// src/parsers/constants.ts
+function isPartOfCommand(body, index) {
+  let b = index;
+  while (b >= 0 && /[a-zA-Z]/.test(body[b])) {
+    b--;
+  }
+  return b >= 0 && body[b] === "\\";
+}
+function isEulerConstant(body, index) {
+  if (body[index] !== "e")
+    return false;
+  if (isPartOfCommand(body, index))
+    return false;
+  if (index > 0 && /[a-zA-Z]/.test(body[index - 1]))
+    return false;
+  if (index + 1 < body.length && /[a-zA-Z]/.test(body[index + 1]))
+    return false;
+  let next = index + 1;
+  while (next < body.length && /\s/.test(body[next]))
+    next++;
+  if (next < body.length && body[next] === "_")
+    return false;
+  if (next < body.length && body[next] === "^")
+    return true;
+  return false;
+}
+function isImaginaryUnit(body, index) {
+  const ch = body[index];
+  if (ch !== "i" && ch !== "j")
+    return false;
+  if (isPartOfCommand(body, index))
+    return false;
+  if (index > 0 && /[a-zA-Z]/.test(body[index - 1])) {
+    if (index > 1 && /[a-zA-Z]/.test(body[index - 2]))
+      return false;
+  }
+  if (index > 0 && body[index - 1] === "\\")
+    return false;
+  let next = index + 1;
+  if (next < body.length && /[a-zA-Z]/.test(body[next])) {
+    if (next + 1 < body.length && /[a-zA-Z]/.test(body[next + 1]))
+      return false;
+  }
+  while (next < body.length && /\s/.test(body[next]))
+    next++;
+  if (next < body.length && body[next] === "_")
+    return false;
+  if (index > 0 && /[0-9]/.test(body[index - 1]))
+    return true;
+  if (body.slice(next).startsWith("^2") || body.slice(next).startsWith("^{2}"))
+    return true;
+  if (body.slice(next).match(/^\\(?:pi|theta|omega|hbar|phi|psi)/))
+    return true;
+  if (next < body.length && /[xyz\\]/.test(body[next])) {
+    let p = index - 1;
+    while (p >= 0 && /\s/.test(body[p]))
+      p--;
+    if (p >= 0 && (body[p] === "+" || body[p] === "-" || body[p] === "=" || body[p] === "{" || body[p] === "(")) {
+      return true;
+    }
+  }
+  let back = index - 1;
+  let depth = 0;
+  while (back >= 0) {
+    if (body[back] === "}")
+      depth++;
+    else if (body[back] === "{") {
+      depth--;
+      if (depth < 0) {
+        let b2 = back - 1;
+        while (b2 >= 0 && /\s/.test(body[b2]))
+          b2--;
+        if (b2 >= 0 && body[b2] === "^")
+          return true;
+        if (b2 >= 0 && body[b2] === "_")
+          return false;
+        break;
+      }
+    } else if (depth === 0 && (body[back] === "=" || body[back] === "+" || body[back] === "-")) {
+      break;
+    }
+    back--;
+  }
+  return false;
+}
+function collectSingleConstantSpans(body, palette = COLORS) {
+  const spans = [];
+  for (let i = 0; i < body.length; i++) {
+    if (isEulerConstant(body, i) || isImaginaryUnit(body, i)) {
+      spans.push({
+        start: i,
+        end: i + 1,
+        color: palette.orange,
+        priority: 22
+      });
+    }
+  }
+  return spans;
+}
+
 // src/parsers/braket.ts
 function collectBraKetDelimiterSpans(body, palette = COLORS, delimColor = palette.orange || "#e0af68") {
   const spans = [];
@@ -3609,6 +3714,16 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
       index += bareMatch[1].length;
       continue;
     }
+    if (isEulerConstant(body, index) || isImaginaryUnit(body, index)) {
+      spans.push({
+        start: index,
+        end: index + 1,
+        color: "#e0af68",
+        priority: 22
+      });
+      index++;
+      continue;
+    }
     const varMatch = body.slice(index).match(/^[a-zA-Z](')*/);
     if (varMatch) {
       const fullVar = varMatch[0];
@@ -3683,6 +3798,9 @@ function colorLatexBody(body, palette = COLORS, options) {
   }
   if (options?.colorBraKet !== false) {
     spans.push(...collectBraKetDelimiterSpans(normalized, palette));
+  }
+  if (options?.colorSingleConstants !== false) {
+    spans.push(...collectSingleConstantSpans(normalized, palette));
   }
   if (options?.rainbowDelimiters) {
     spans.push(...collectDelimiterSpans(normalized, { forLatexWrap: true }));
@@ -3878,6 +3996,46 @@ function convertText(text, palette = COLORS, options) {
 // src/editor/live_preview.ts
 var import_state = require("@codemirror/state");
 var import_view = require("@codemirror/view");
+
+// src/parsers/alignment.ts
+function collectAlignmentSpans(body, palette = COLORS) {
+  const spans = [];
+  let index = 0;
+  while (index < body.length) {
+    if (body[index] === "%") {
+      let lineEnd = index + 1;
+      while (lineEnd < body.length && body[lineEnd] !== "\r" && body[lineEnd] !== "\n") {
+        lineEnd++;
+      }
+      index = lineEnd;
+      continue;
+    }
+    if (body[index] === "&") {
+      spans.push({
+        start: index,
+        end: index + 1,
+        color: palette.arrow || "#f7768e",
+        priority: 25
+      });
+      index++;
+      continue;
+    }
+    if (body.startsWith("\\\\", index)) {
+      spans.push({
+        start: index,
+        end: index + 2,
+        color: palette.arrow || "#f7768e",
+        priority: 25
+      });
+      index += 2;
+      continue;
+    }
+    index++;
+  }
+  return spans;
+}
+
+// src/editor/live_preview.ts
 function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
   return import_view.ViewPlugin.fromClass(
     class {
@@ -3930,6 +4088,12 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
           }
           if (options?.colorBraKet !== false) {
             allSpans.push(...collectBraKetDelimiterSpans(body, palette));
+          }
+          if (options?.colorSingleConstants !== false) {
+            allSpans.push(...collectSingleConstantSpans(body, palette));
+          }
+          if (options?.colorAlignment !== false) {
+            allSpans.push(...collectAlignmentSpans(body, palette));
           }
           if (options?.rainbowDelimiters) {
             allSpans.push(...collectDelimiterSpans(body, { forLatexWrap: false }));

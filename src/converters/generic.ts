@@ -1,6 +1,7 @@
 // src/converters/generic.ts
 
 import { COLORS, ColorPalette, ColorMathOptions } from "../config";
+import { collectSingleConstantSpans } from "../parsers/constants";
 import { collectBraKetDelimiterSpans } from "../parsers/braket";
 import { collectDelimiterSpans } from "../parsers/delimiters";
 import { collectDifferentialSpans, findDifferentialSpans } from "../parsers/differentials";
@@ -78,6 +79,10 @@ export function colorLatexBody(
 
   if (options?.colorBraKet !== false) {
     spans.push(...collectBraKetDelimiterSpans(normalized, palette));
+  }
+
+  if (options?.colorSingleConstants !== false) {
+    spans.push(...collectSingleConstantSpans(normalized, palette));
   }
 
   if (options?.rainbowDelimiters) {

@@ -153,6 +153,11 @@ export const MATH_CONSTANTS = new Set([
   "\\Im",
   "\\top",
   "\\bot",
+  "\\imath",
+  "\\jmath",
+  "\\mathrm{e}",
+  "\\mathrm{i}",
+  "\\mathrm{j}",
 ]);
 
 export const MATH_ACCENTS = new Set([
@@ -319,5 +324,7 @@ export interface ColorMathOptions {
   colorDifferentials?: boolean;
   colorBraKet?: boolean;
   colorDimensionless?: boolean;
+  colorAlignment?: boolean;
+  colorSingleConstants?: boolean;
 }
 
