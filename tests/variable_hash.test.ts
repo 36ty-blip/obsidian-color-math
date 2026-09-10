@@ -1,7 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { collectVariableSpans } from "../src/parsers/variable_hash";
 import { colorLatexBody } from "../src/converters/generic";
-import { hashStringToColor, VARIABLE_HASH_PALETTE } from "../src/config";
+import {
+  hashStringToColor,
+  VARIABLE_HASH_PALETTE,
+  FULL_BARE_FUNCTIONS,
+  EXTENDED_BARE_FUNCTIONS,
+  STANDARD_BARE_FUNCTIONS,
+} from "../src/config";
 
 describe("Variable Data-Flow Hashing", () => {
   it("deterministically hashes same variable to same color", () => {
@@ -133,4 +139,25 @@ describe("Variable Data-Flow Hashing", () => {
     expect(resultOn).not.toContain(`\\textcolor{${colorC}}{c}`);
     expect(resultOn).not.toContain(`\\textcolor{${colorS}}{s}`);
   });
+
+  it("supports FULL_BARE_FUNCTIONS and 16 newly added extended functions", () => {
+    const newFuncs = ["jac", "hes", "wr", "vol", "rms", "fft", "dft", "ord", "val", "num", "den", "sn", "cn", "dn", "avg", "len"];
+    for (const f of newFuncs) {
+      expect(EXTENDED_BARE_FUNCTIONS.has(f)).toBe(true);
+      expect(FULL_BARE_FUNCTIONS.has(f)).toBe(true);
+    }
+    expect(FULL_BARE_FUNCTIONS.size).toBe(STANDARD_BARE_FUNCTIONS.size + EXTENDED_BARE_FUNCTIONS.size);
+
+    const input = "jac(f) + wr(y)";
+    const resOn = colorLatexBody(input, undefined, {
+      variableDataFlow: true,
+      enableTaxonomy: true,
+      extendedFunctions: true,
+    });
+    expect(resOn).toContain("jac");
+    expect(resOn).toContain("wr");
+    const colorW = hashStringToColor("w");
+    expect(resOn).not.toContain(`\\textcolor{${colorW}}{w}`);
+  });
 });
+

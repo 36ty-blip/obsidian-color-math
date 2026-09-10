@@ -295,7 +295,23 @@ var MATH_FUNCTIONS = /* @__PURE__ */ new Set([
   "\\tor",
   "\\ext",
   "\\pic",
-  "\\cl"
+  "\\cl",
+  "\\jac",
+  "\\hes",
+  "\\wr",
+  "\\vol",
+  "\\rms",
+  "\\fft",
+  "\\dft",
+  "\\ord",
+  "\\val",
+  "\\num",
+  "\\den",
+  "\\sn",
+  "\\cn",
+  "\\dn",
+  "\\avg",
+  "\\len"
 ]);
 var STANDARD_BARE_FUNCTIONS = /* @__PURE__ */ new Set([
   "sin",
@@ -382,18 +398,34 @@ var EXTENDED_BARE_FUNCTIONS = /* @__PURE__ */ new Set([
   "tor",
   "ext",
   "pic",
-  "cl"
+  "cl",
+  "jac",
+  "hes",
+  "wr",
+  "vol",
+  "rms",
+  "fft",
+  "dft",
+  "ord",
+  "val",
+  "num",
+  "den",
+  "sn",
+  "cn",
+  "dn",
+  "avg",
+  "len"
 ]);
-var ALL_BARE_FUNCTIONS = /* @__PURE__ */ new Set([
+var FULL_BARE_FUNCTIONS = /* @__PURE__ */ new Set([
   ...STANDARD_BARE_FUNCTIONS,
   ...EXTENDED_BARE_FUNCTIONS
 ]);
-var BARE_FUNCTIONS = ALL_BARE_FUNCTIONS;
+var BARE_FUNCTIONS = FULL_BARE_FUNCTIONS;
 function getBareFunctions(options) {
   if (options && options.extendedFunctions === false) {
     return STANDARD_BARE_FUNCTIONS;
   }
-  return ALL_BARE_FUNCTIONS;
+  return FULL_BARE_FUNCTIONS;
 }
 var RAINBOW_DELIMITER_COLORS = [
   "#e0af68",

@@ -308,6 +308,22 @@ export const MATH_FUNCTIONS = new Set([
   "\\ext",
   "\\pic",
   "\\cl",
+  "\\jac",
+  "\\hes",
+  "\\wr",
+  "\\vol",
+  "\\rms",
+  "\\fft",
+  "\\dft",
+  "\\ord",
+  "\\val",
+  "\\num",
+  "\\den",
+  "\\sn",
+  "\\cn",
+  "\\dn",
+  "\\avg",
+  "\\len",
 ]);
 
 export const STANDARD_BARE_FUNCTIONS = new Set([
@@ -397,20 +413,38 @@ export const EXTENDED_BARE_FUNCTIONS = new Set([
   "ext",
   "pic",
   "cl",
+  "jac",
+  "hes",
+  "wr",
+  "vol",
+  "rms",
+  "fft",
+  "dft",
+  "ord",
+  "val",
+  "num",
+  "den",
+  "sn",
+  "cn",
+  "dn",
+  "avg",
+  "len",
 ]);
 
-export const ALL_BARE_FUNCTIONS = new Set([
+export const FULL_BARE_FUNCTIONS = new Set([
   ...STANDARD_BARE_FUNCTIONS,
   ...EXTENDED_BARE_FUNCTIONS,
 ]);
 
-export const BARE_FUNCTIONS = ALL_BARE_FUNCTIONS;
+export const ALL_BARE_FUNCTIONS = FULL_BARE_FUNCTIONS;
+
+export const BARE_FUNCTIONS = FULL_BARE_FUNCTIONS;
 
 export function getBareFunctions(options?: ColorMathOptions): Set<string> {
   if (options && options.extendedFunctions === false) {
     return STANDARD_BARE_FUNCTIONS;
   }
-  return ALL_BARE_FUNCTIONS;
+  return FULL_BARE_FUNCTIONS;
 }
 
 export const RAINBOW_DELIMITER_COLORS: string[] = [
