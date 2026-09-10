@@ -15,6 +15,27 @@ import { findDimensionlessSpans, DimensionlessSpan } from "./dimensionless";
 import { findUnitSpans, UnitSpan } from "./units";
 import { isEulerConstant, isImaginaryUnit } from "./constants";
 
+const VARIABLE_OPAQUE_MACROS = new Set([
+  "text",
+  "textbf",
+  "textit",
+  "textrm",
+  "texttt",
+  "textsf",
+  "mathrm",
+  "operatorname",
+  "verb",
+  "color",
+  "textcolor",
+  "colorbox",
+  "fcolorbox",
+  "tag",
+  "label",
+  "ref",
+  "eqref",
+  "cite",
+]);
+
 function skipComment(text: string, start: number): number {
   let index = start + 1;
   while (index < text.length && text[index] !== "\r" && text[index] !== "\n") {
@@ -85,6 +106,43 @@ export function collectVariableSpans(
       if (match) {
         const cmdName = match[0];
         const cmdEnd = index + cmdName.length;
+
+        // Skip environment arguments: \begin{bmatrix}, \end{bmatrix}, \begin{cases}
+        if (cmdName === "\\begin" || cmdName === "\\end") {
+          let afterCmd = cmdEnd;
+          while (afterCmd < body.length && /\s/.test(body[afterCmd])) {
+            afterCmd++;
+          }
+          if (afterCmd < body.length && body[afterCmd] === "{") {
+            const braced = readBraced(body, afterCmd);
+            if (braced !== null) {
+              index = braced[1];
+              continue;
+            }
+          }
+          index = cmdEnd;
+          continue;
+        }
+
+        // Skip custom operator name: \operatorname{rank}, \operatorname*{argmin}
+        if (cmdName === "\\operatorname") {
+          let afterCmd = cmdEnd;
+          if (afterCmd < body.length && body[afterCmd] === "*") {
+            afterCmd++;
+          }
+          while (afterCmd < body.length && /\s/.test(body[afterCmd])) {
+            afterCmd++;
+          }
+          if (afterCmd < body.length && body[afterCmd] === "{") {
+            const braced = readBraced(body, afterCmd);
+            if (braced !== null) {
+              index = braced[1];
+              continue;
+            }
+          }
+          index = cmdEnd;
+          continue;
+        }
 
         // Check if math accent command like \dot, \ddot, \vec, \hat, \bar
         if (MATH_ACCENTS.has(cmdName)) {
@@ -162,11 +220,17 @@ export function collectVariableSpans(
           }
         }
 
-        if (OPAQUE_MACROS.has(cmdName.slice(1))) {
-          const braced = readBraced(body, cmdEnd);
-          if (braced !== null) {
-            index = braced[1];
-            continue;
+        if (VARIABLE_OPAQUE_MACROS.has(cmdName.slice(1))) {
+          let afterCmd = cmdEnd;
+          while (afterCmd < body.length && /\s/.test(body[afterCmd])) {
+            afterCmd++;
+          }
+          if (afterCmd < body.length && body[afterCmd] === "{") {
+            const braced = readBraced(body, afterCmd);
+            if (braced !== null) {
+              index = braced[1];
+              continue;
+            }
           }
         }
         index = cmdEnd;
@@ -174,11 +238,47 @@ export function collectVariableSpans(
       }
     }
 
-    // Check bare math functions (sin, cos, tan, ln, exp, etc.) so they are NOT shredded into single-letter variables
-    const bareMatch = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
-    if (bareMatch && BARE_FUNCTIONS.has(bareMatch[1].toLowerCase())) {
-      index += bareMatch[1].length;
-      continue;
+    // Check bare math functions or function calls before '('
+    const wordMatch = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
+    if (wordMatch) {
+      const word = wordMatch[1];
+      const lowerWord = word.toLowerCase();
+
+      // 1. Bare functions without parentheses: e.g. sin x, ln x, rank A, det M
+      if (BARE_FUNCTIONS.has(lowerWord)) {
+        index += word.length;
+        continue;
+      }
+
+      // 2. Check if followed by parentheses: e.g. rank(A), nullity(A), f(x), ax(y + z)
+      const afterWord = body.slice(index + word.length).trimStart();
+      const hasArgs = afterWord.startsWith("(") || afterWord.startsWith("\\left(");
+      if (hasArgs) {
+        if (word.length >= 4) {
+          // Multi-letter function call: skip entire word (e.g. rank, nullity, poly)
+          index += word.length;
+          continue;
+        } else if (word.length === 1) {
+          // Single-letter function call: skip function name (e.g. f(x), g(x))
+          index += 1;
+          continue;
+        } else {
+          // 2 or 3 letters not in BARE_FUNCTIONS (e.g. ax in ax(y + z), xy in xy(a + b))
+          // Treat as distinct single-letter variables multiplied together!
+          for (let i = 0; i < word.length; i++) {
+            const letter = word[i];
+            const color = hashStringToColor(letter, palette);
+            spans.push({
+              start: index + i,
+              end: index + i + 1,
+              color,
+              priority: 15,
+            });
+          }
+          index += word.length;
+          continue;
+        }
+      }
     }
 
     // Single-character constants 'e' and 'i'/'j'
@@ -200,19 +300,13 @@ export function collectVariableSpans(
       const baseLetter = fullVar.replace(/'/g, "");
       const varEnd = index + fullVar.length;
 
-      // Check if this letter is followed by '(' — if so, it is a function call like f(x)
-      const afterVar = body.slice(varEnd).trimStart();
-      const isFunction = afterVar.startsWith("(") || afterVar.startsWith("\\left(");
-
-      if (!isFunction) {
-        const color = hashStringToColor(baseLetter, palette);
-        spans.push({
-          start: index,
-          end: varEnd,
-          color,
-          priority: 15,
-        });
-      }
+      const color = hashStringToColor(baseLetter, palette);
+      spans.push({
+        start: index,
+        end: varEnd,
+        color,
+        priority: 15,
+      });
 
       index = varEnd;
       continue;

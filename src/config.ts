@@ -260,6 +260,13 @@ export const MATH_FUNCTIONS = new Set([
   "\\Pr",
   "\\sup",
   "\\inf",
+  "\\rank",
+  "\\nullity",
+  "\\tr",
+  "\\trace",
+  "\\span",
+  "\\diag",
+  "\\sgn",
 ]);
 
 export const BARE_FUNCTIONS = new Set([
@@ -284,6 +291,25 @@ export const BARE_FUNCTIONS = new Set([
   "ln",
   "log",
   "exp",
+  "det",
+  "gcd",
+  "max",
+  "min",
+  "dim",
+  "ker",
+  "hom",
+  "deg",
+  "arg",
+  "Pr",
+  "sup",
+  "inf",
+  "rank",
+  "nullity",
+  "tr",
+  "trace",
+  "span",
+  "diag",
+  "sgn",
 ]);
 
 export const RAINBOW_DELIMITER_COLORS: string[] = [

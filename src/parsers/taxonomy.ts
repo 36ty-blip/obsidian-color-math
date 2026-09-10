@@ -123,11 +123,60 @@ export function collectTaxonomySpans(
         const name = match[0];
         const cmdEnd = index + name.length;
 
+        // Skip environment arguments: \begin{bmatrix}, \end{cases}
+        if (name === "\\begin" || name === "\\end") {
+          let afterCmd = cmdEnd;
+          while (afterCmd < body.length && /\s/.test(body[afterCmd])) {
+            afterCmd++;
+          }
+          if (afterCmd < body.length && body[afterCmd] === "{") {
+            const braced = readBraced(body, afterCmd);
+            if (braced !== null) {
+              index = braced[1];
+              continue;
+            }
+          }
+          index = cmdEnd;
+          continue;
+        }
+
+        // Color custom operators as functions: \operatorname{rank}, \operatorname*{argmin}
+        if (name === "\\operatorname") {
+          let afterCmd = cmdEnd;
+          if (afterCmd < body.length && body[afterCmd] === "*") {
+            afterCmd++;
+          }
+          while (afterCmd < body.length && /\s/.test(body[afterCmd])) {
+            afterCmd++;
+          }
+          if (afterCmd < body.length && body[afterCmd] === "{") {
+            const braced = readBraced(body, afterCmd);
+            if (braced !== null) {
+              spans.push({
+                start: index,
+                end: braced[1],
+                color: palette.main,
+                priority: 22,
+              });
+              index = braced[1];
+              continue;
+            }
+          }
+          index = cmdEnd;
+          continue;
+        }
+
         if (OPAQUE_MACROS.has(name.slice(1))) {
-          const braced = readBraced(body, cmdEnd);
-          if (braced !== null) {
-            index = braced[1];
-            continue;
+          let afterCmd = cmdEnd;
+          while (afterCmd < body.length && /\s/.test(body[afterCmd])) {
+            afterCmd++;
+          }
+          if (afterCmd < body.length && body[afterCmd] === "{") {
+            const braced = readBraced(body, afterCmd);
+            if (braced !== null) {
+              index = braced[1];
+              continue;
+            }
           }
         }
 

@@ -247,7 +247,14 @@ var MATH_FUNCTIONS = /* @__PURE__ */ new Set([
   "\\arg",
   "\\Pr",
   "\\sup",
-  "\\inf"
+  "\\inf",
+  "\\rank",
+  "\\nullity",
+  "\\tr",
+  "\\trace",
+  "\\span",
+  "\\diag",
+  "\\sgn"
 ]);
 var BARE_FUNCTIONS = /* @__PURE__ */ new Set([
   "sin",
@@ -270,7 +277,26 @@ var BARE_FUNCTIONS = /* @__PURE__ */ new Set([
   "csch",
   "ln",
   "log",
-  "exp"
+  "exp",
+  "det",
+  "gcd",
+  "max",
+  "min",
+  "dim",
+  "ker",
+  "hom",
+  "deg",
+  "arg",
+  "Pr",
+  "sup",
+  "inf",
+  "rank",
+  "nullity",
+  "tr",
+  "trace",
+  "span",
+  "diag",
+  "sgn"
 ]);
 var RAINBOW_DELIMITER_COLORS = [
   "#e0af68",
@@ -3224,6 +3250,71 @@ function collectSemanticSpansInternal(text, start, end, depth, spans, errors) {
             continue;
           }
         }
+        if (name === "\\begin" || name === "\\end") {
+          let afterCmd = commandEnd;
+          while (afterCmd < end && /\s/.test(text[afterCmd])) {
+            afterCmd++;
+          }
+          if (afterCmd < end && text[afterCmd] === "{") {
+            const group = readBraced(text, afterCmd);
+            if (group !== null && group[1] <= end) {
+              index = group[1];
+              continue;
+            }
+          }
+          index = commandEnd;
+          continue;
+        }
+        if (name === "\\operatorname") {
+          let afterCmd = commandEnd;
+          if (afterCmd < end && text[afterCmd] === "*") {
+            afterCmd++;
+          }
+          while (afterCmd < end && /\s/.test(text[afterCmd])) {
+            afterCmd++;
+          }
+          if (afterCmd < end && text[afterCmd] === "{") {
+            const group = readBraced(text, afterCmd);
+            if (group !== null && group[1] <= end) {
+              const opEnd = group[1];
+              const args = readFunctionArguments(text, opEnd, end);
+              if (args !== null) {
+                const [argumentStart, argumentEnd, callEnd] = args;
+                spans.push({
+                  kind: "function",
+                  value: text.slice(index, opEnd),
+                  start: index,
+                  end: opEnd,
+                  depth
+                });
+                collectSemanticSpansInternal(
+                  text,
+                  argumentStart,
+                  argumentEnd,
+                  depth + 1,
+                  spans,
+                  errors
+                );
+                index = callEnd;
+                continue;
+              }
+              const innerText = text.slice(afterCmd + 1, opEnd - 1).trim();
+              if (BARE_FUNCTIONS.has(innerText.toLowerCase())) {
+                spans.push({
+                  kind: "function",
+                  value: text.slice(index, opEnd),
+                  start: index,
+                  end: opEnd,
+                  depth
+                });
+                index = opEnd;
+                continue;
+              }
+              index = opEnd;
+              continue;
+            }
+          }
+        }
         if (MATH_FUNCTIONS.has(name)) {
           const args = readFunctionArguments(text, commandEnd, end);
           if (args !== null) {
@@ -3264,27 +3355,43 @@ function collectSemanticSpansInternal(text, start, end, depth, spans, errors) {
     const nameMatch = text.slice(index, end).match(/^[A-Za-z][A-Za-z0-9]*(?:')*/);
     if (nameMatch) {
       const name = nameMatch[0];
+      const baseName = name.replace(/'/g, "");
       const nameEnd = index + name.length;
       const args = readFunctionArguments(text, nameEnd, end);
       if (args !== null) {
-        const [argumentStart, argumentEnd, callEnd] = args;
-        spans.push({
-          kind: "function",
-          value: name,
-          start: index,
-          end: nameEnd,
-          depth
-        });
-        collectSemanticSpansInternal(
-          text,
-          argumentStart,
-          argumentEnd,
-          depth + 1,
-          spans,
-          errors
-        );
-        index = callEnd;
-        continue;
+        const isMultiVar = baseName.length >= 2 && !BARE_FUNCTIONS.has(baseName.toLowerCase()) && baseName.length < 4;
+        if (!isMultiVar) {
+          const [argumentStart, argumentEnd, callEnd] = args;
+          spans.push({
+            kind: "function",
+            value: name,
+            start: index,
+            end: nameEnd,
+            depth
+          });
+          collectSemanticSpansInternal(
+            text,
+            argumentStart,
+            argumentEnd,
+            depth + 1,
+            spans,
+            errors
+          );
+          index = callEnd;
+          continue;
+        } else {
+          const [argumentStart, argumentEnd, callEnd] = args;
+          collectSemanticSpansInternal(
+            text,
+            argumentStart,
+            argumentEnd,
+            depth,
+            spans,
+            errors
+          );
+          index = callEnd;
+          continue;
+        }
       }
       if (nameEnd < end && text[nameEnd] === "(") {
         errors.push(`unclosed function call after '${name}'`);
@@ -3473,11 +3580,56 @@ function collectTaxonomySpans(body, palette = COLORS, unitSpans, diffSpans, dimS
       if (match2) {
         const name = match2[0];
         const cmdEnd = index + name.length;
+        if (name === "\\begin" || name === "\\end") {
+          let afterCmd = cmdEnd;
+          while (afterCmd < body.length && /\s/.test(body[afterCmd])) {
+            afterCmd++;
+          }
+          if (afterCmd < body.length && body[afterCmd] === "{") {
+            const braced = readBraced(body, afterCmd);
+            if (braced !== null) {
+              index = braced[1];
+              continue;
+            }
+          }
+          index = cmdEnd;
+          continue;
+        }
+        if (name === "\\operatorname") {
+          let afterCmd = cmdEnd;
+          if (afterCmd < body.length && body[afterCmd] === "*") {
+            afterCmd++;
+          }
+          while (afterCmd < body.length && /\s/.test(body[afterCmd])) {
+            afterCmd++;
+          }
+          if (afterCmd < body.length && body[afterCmd] === "{") {
+            const braced = readBraced(body, afterCmd);
+            if (braced !== null) {
+              spans.push({
+                start: index,
+                end: braced[1],
+                color: palette.main,
+                priority: 22
+              });
+              index = braced[1];
+              continue;
+            }
+          }
+          index = cmdEnd;
+          continue;
+        }
         if (OPAQUE_MACROS.has(name.slice(1))) {
-          const braced = readBraced(body, cmdEnd);
-          if (braced !== null) {
-            index = braced[1];
-            continue;
+          let afterCmd = cmdEnd;
+          while (afterCmd < body.length && /\s/.test(body[afterCmd])) {
+            afterCmd++;
+          }
+          if (afterCmd < body.length && body[afterCmd] === "{") {
+            const braced = readBraced(body, afterCmd);
+            if (braced !== null) {
+              index = braced[1];
+              continue;
+            }
           }
         }
         if (MATH_ACCENTS.has(name)) {
@@ -3573,6 +3725,26 @@ function collectTaxonomySpans(body, palette = COLORS, unitSpans, diffSpans, dimS
 }
 
 // src/parsers/variable_hash.ts
+var VARIABLE_OPAQUE_MACROS = /* @__PURE__ */ new Set([
+  "text",
+  "textbf",
+  "textit",
+  "textrm",
+  "texttt",
+  "textsf",
+  "mathrm",
+  "operatorname",
+  "verb",
+  "color",
+  "textcolor",
+  "colorbox",
+  "fcolorbox",
+  "tag",
+  "label",
+  "ref",
+  "eqref",
+  "cite"
+]);
 function skipComment5(text, start) {
   let index = start + 1;
   while (index < text.length && text[index] !== "\r" && text[index] !== "\n") {
@@ -3624,6 +3796,39 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
       if (match) {
         const cmdName = match[0];
         const cmdEnd = index + cmdName.length;
+        if (cmdName === "\\begin" || cmdName === "\\end") {
+          let afterCmd = cmdEnd;
+          while (afterCmd < body.length && /\s/.test(body[afterCmd])) {
+            afterCmd++;
+          }
+          if (afterCmd < body.length && body[afterCmd] === "{") {
+            const braced = readBraced(body, afterCmd);
+            if (braced !== null) {
+              index = braced[1];
+              continue;
+            }
+          }
+          index = cmdEnd;
+          continue;
+        }
+        if (cmdName === "\\operatorname") {
+          let afterCmd = cmdEnd;
+          if (afterCmd < body.length && body[afterCmd] === "*") {
+            afterCmd++;
+          }
+          while (afterCmd < body.length && /\s/.test(body[afterCmd])) {
+            afterCmd++;
+          }
+          if (afterCmd < body.length && body[afterCmd] === "{") {
+            const braced = readBraced(body, afterCmd);
+            if (braced !== null) {
+              index = braced[1];
+              continue;
+            }
+          }
+          index = cmdEnd;
+          continue;
+        }
         if (MATH_ACCENTS.has(cmdName)) {
           let targetStart = cmdEnd;
           while (targetStart < body.length && /\s/.test(body[targetStart])) {
@@ -3698,21 +3903,55 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
             continue;
           }
         }
-        if (OPAQUE_MACROS.has(cmdName.slice(1))) {
-          const braced = readBraced(body, cmdEnd);
-          if (braced !== null) {
-            index = braced[1];
-            continue;
+        if (VARIABLE_OPAQUE_MACROS.has(cmdName.slice(1))) {
+          let afterCmd = cmdEnd;
+          while (afterCmd < body.length && /\s/.test(body[afterCmd])) {
+            afterCmd++;
+          }
+          if (afterCmd < body.length && body[afterCmd] === "{") {
+            const braced = readBraced(body, afterCmd);
+            if (braced !== null) {
+              index = braced[1];
+              continue;
+            }
           }
         }
         index = cmdEnd;
         continue;
       }
     }
-    const bareMatch = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
-    if (bareMatch && BARE_FUNCTIONS.has(bareMatch[1].toLowerCase())) {
-      index += bareMatch[1].length;
-      continue;
+    const wordMatch = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
+    if (wordMatch) {
+      const word = wordMatch[1];
+      const lowerWord = word.toLowerCase();
+      if (BARE_FUNCTIONS.has(lowerWord)) {
+        index += word.length;
+        continue;
+      }
+      const afterWord = body.slice(index + word.length).trimStart();
+      const hasArgs = afterWord.startsWith("(") || afterWord.startsWith("\\left(");
+      if (hasArgs) {
+        if (word.length >= 4) {
+          index += word.length;
+          continue;
+        } else if (word.length === 1) {
+          index += 1;
+          continue;
+        } else {
+          for (let i = 0; i < word.length; i++) {
+            const letter = word[i];
+            const color = hashStringToColor(letter, palette);
+            spans.push({
+              start: index + i,
+              end: index + i + 1,
+              color,
+              priority: 15
+            });
+          }
+          index += word.length;
+          continue;
+        }
+      }
     }
     if (isEulerConstant(body, index) || isImaginaryUnit(body, index)) {
       spans.push({
@@ -3729,17 +3968,13 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
       const fullVar = varMatch[0];
       const baseLetter = fullVar.replace(/'/g, "");
       const varEnd = index + fullVar.length;
-      const afterVar = body.slice(varEnd).trimStart();
-      const isFunction = afterVar.startsWith("(") || afterVar.startsWith("\\left(");
-      if (!isFunction) {
-        const color = hashStringToColor(baseLetter, palette);
-        spans.push({
-          start: index,
-          end: varEnd,
-          color,
-          priority: 15
-        });
-      }
+      const color = hashStringToColor(baseLetter, palette);
+      spans.push({
+        start: index,
+        end: varEnd,
+        color,
+        priority: 15
+      });
       index = varEnd;
       continue;
     }

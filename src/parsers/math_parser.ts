@@ -273,6 +273,75 @@ function collectSemanticSpansInternal(
             continue;
           }
         }
+        // Skip environment arguments: \begin{bmatrix}, \end{cases}
+        if (name === "\\begin" || name === "\\end") {
+          let afterCmd = commandEnd;
+          while (afterCmd < end && /\s/.test(text[afterCmd])) {
+            afterCmd++;
+          }
+          if (afterCmd < end && text[afterCmd] === "{") {
+            const group = readBraced(text, afterCmd);
+            if (group !== null && group[1] <= end) {
+              index = group[1];
+              continue;
+            }
+          }
+          index = commandEnd;
+          continue;
+        }
+
+        // Custom operators: \operatorname{rank}(A)
+        if (name === "\\operatorname") {
+          let afterCmd = commandEnd;
+          if (afterCmd < end && text[afterCmd] === "*") {
+            afterCmd++;
+          }
+          while (afterCmd < end && /\s/.test(text[afterCmd])) {
+            afterCmd++;
+          }
+          if (afterCmd < end && text[afterCmd] === "{") {
+            const group = readBraced(text, afterCmd);
+            if (group !== null && group[1] <= end) {
+              const opEnd = group[1];
+              const args = readFunctionArguments(text, opEnd, end);
+              if (args !== null) {
+                const [argumentStart, argumentEnd, callEnd] = args;
+                spans.push({
+                  kind: "function",
+                  value: text.slice(index, opEnd),
+                  start: index,
+                  end: opEnd,
+                  depth,
+                });
+                collectSemanticSpansInternal(
+                  text,
+                  argumentStart,
+                  argumentEnd,
+                  depth + 1,
+                  spans,
+                  errors
+                );
+                index = callEnd;
+                continue;
+              }
+              const innerText = text.slice(afterCmd + 1, opEnd - 1).trim();
+              if (BARE_FUNCTIONS.has(innerText.toLowerCase())) {
+                spans.push({
+                  kind: "function",
+                  value: text.slice(index, opEnd),
+                  start: index,
+                  end: opEnd,
+                  depth,
+                });
+                index = opEnd;
+                continue;
+              }
+              index = opEnd;
+              continue;
+            }
+          }
+        }
+
         if (MATH_FUNCTIONS.has(name)) {
           const args = readFunctionArguments(text, commandEnd, end);
           if (args !== null) {
@@ -314,27 +383,45 @@ function collectSemanticSpansInternal(
     const nameMatch = text.slice(index, end).match(/^[A-Za-z][A-Za-z0-9]*(?:')*/);
     if (nameMatch) {
       const name = nameMatch[0];
+      const baseName = name.replace(/'/g, "");
       const nameEnd = index + name.length;
       const args = readFunctionArguments(text, nameEnd, end);
       if (args !== null) {
-        const [argumentStart, argumentEnd, callEnd] = args;
-        spans.push({
-          kind: "function",
-          value: name,
-          start: index,
-          end: nameEnd,
-          depth,
-        });
-        collectSemanticSpansInternal(
-          text,
-          argumentStart,
-          argumentEnd,
-          depth + 1,
-          spans,
-          errors
-        );
-        index = callEnd;
-        continue;
+        const isMultiVar = baseName.length >= 2 && !BARE_FUNCTIONS.has(baseName.toLowerCase()) && baseName.length < 4;
+        if (!isMultiVar) {
+          const [argumentStart, argumentEnd, callEnd] = args;
+          spans.push({
+            kind: "function",
+            value: name,
+            start: index,
+            end: nameEnd,
+            depth,
+          });
+          collectSemanticSpansInternal(
+            text,
+            argumentStart,
+            argumentEnd,
+            depth + 1,
+            spans,
+            errors
+          );
+          index = callEnd;
+          continue;
+        } else {
+          // Multi-variable product like ax(y + z): not a function call!
+          // Process inner argument without wrapping 'ax' as a function
+          const [argumentStart, argumentEnd, callEnd] = args;
+          collectSemanticSpansInternal(
+            text,
+            argumentStart,
+            argumentEnd,
+            depth,
+            spans,
+            errors
+          );
+          index = callEnd;
+          continue;
+        }
       }
 
       if (nameEnd < end && text[nameEnd] === "(") {

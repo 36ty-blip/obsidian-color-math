@@ -39,4 +39,48 @@ describe("Variable Data-Flow Hashing", () => {
     expect(result).toContain(`\\textcolor{${colorY}}{y}`);
     expect(result).toContain(`\\textcolor{${colorZ}}{z}`);
   });
+
+  it("skips environment arguments in \\begin{bmatrix} and \\begin{cases}", () => {
+    const input = "\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}";
+    const result = colorLatexBody(input, undefined, { variableDataFlow: true });
+    expect(result).toContain("\\begin{bmatrix}");
+    expect(result).toContain("\\end{bmatrix}");
+    expect(result).not.toContain("\\begin{\\textcolor");
+    expect(result).not.toContain("\\end{\\textcolor");
+  });
+
+  it("does not shred multi-letter function calls like rank(A) and nullity(A)", () => {
+    const input = "rank(A) + nullity(A) = n";
+    const result = colorLatexBody(input, undefined, { variableDataFlow: true, enableTaxonomy: true });
+    expect(result).toContain("rank");
+    expect(result).toContain("nullity");
+    // Ensure 'rank' is not shredded into r, a, n, k
+    expect(result).not.toContain("\\textcolor{#bb9af7}{r}");
+    expect(result).not.toContain("\\textcolor{#2ac3de}{n}k");
+    const colorA = hashStringToColor("A");
+    const colorN = hashStringToColor("n");
+    expect(result).toContain(`\\textcolor{${colorA}}{A}`);
+    expect(result).toContain(`\\textcolor{${colorN}}{n}`);
+  });
+
+  it("treats 2-letter products like ax(y + z) as variable multiplication", () => {
+    const input = "ax(y + z)";
+    const result = colorLatexBody(input, undefined, { variableDataFlow: true });
+    const colorA = hashStringToColor("a");
+    const colorX = hashStringToColor("x");
+    const colorY = hashStringToColor("y");
+    const colorZ = hashStringToColor("z");
+    expect(result).toContain(`\\textcolor{${colorA}}{a}`);
+    expect(result).toContain(`\\textcolor{${colorX}}{x}`);
+    expect(result).toContain(`\\textcolor{${colorY}}{y}`);
+    expect(result).toContain(`\\textcolor{${colorZ}}{z}`);
+  });
+
+  it("does not shred \\operatorname{rank}(A) arguments into variables", () => {
+    const input = "\\operatorname{rank}(A)";
+    const result = colorLatexBody(input, undefined, { variableDataFlow: true, enableTaxonomy: true });
+    expect(result).not.toContain("\\textcolor{#bb9af7}{r}");
+    const colorA = hashStringToColor("A");
+    expect(result).toContain(`\\textcolor{${colorA}}{A}`);
+  });
 });
