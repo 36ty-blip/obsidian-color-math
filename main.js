@@ -4268,6 +4268,9 @@ function tryConverters(text, converters, palette) {
   }
   return null;
 }
+function hasSemanticOptions(options) {
+  return !!(options && (options.enableTaxonomy || options.variableDataFlow || options.rainbowDelimiters || options.colorUnits || options.colorDifferentials || options.colorBraKet || options.colorDimensionless));
+}
 function convertMathBlock(block, palette = COLORS, options) {
   const match = block.match(/^(\s*#+\s*)?\$\$([\s\S]*)\$\$([\s]*)$/);
   if (!match) {
@@ -4276,6 +4279,9 @@ function convertMathBlock(block, palette = COLORS, options) {
   const prefix = match[1] || "";
   const body = match[2];
   const suffix = match[3];
+  if (hasSemanticOptions(options)) {
+    return `${prefix}$$${colorLatexBody(body, palette, options)}$$${suffix}`;
+  }
   const lineMatch = tryConverters(block, LINE_CONVERTERS, palette);
   if (lineMatch !== null) {
     return lineMatch;

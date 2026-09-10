@@ -26,4 +26,25 @@ $$
     const result = convertText(input);
     console.log("Converted result:\n", result);
   });
+
+  it("aligns permanent bake with dynamic view for matrix blocks", () => {
+    const matrixBlock = `$$
+A=
+\\begin{bmatrix}
+sin(x) & adj(A) & 3\\\\
+4 & 5 & 6\\\\
+7 & 8 & 9
+\\end{bmatrix}
+$$`;
+    const options = { variableDataFlow: true, enableTaxonomy: true };
+    const baked = convertText(matrixBlock, undefined, options);
+    // Ensure A is hashed to cyan (#7dcfff)
+    expect(baked).toContain("\\textcolor{#7dcfff}{A}");
+    // Ensure sin and adj are recognized as functions
+    expect(baked).toContain("\\textcolor{#7aa2f7}{sin}");
+    expect(baked).toContain("\\textcolor{#7aa2f7}{adj}");
+    // Ensure \begin{bmatrix} is clean (not wrapped in outer color)
+    expect(baked).toContain("\\begin{bmatrix}");
+    expect(baked).not.toContain("\\textcolor{#bb9af7}{\\begin{bmatrix}");
+  });
 });

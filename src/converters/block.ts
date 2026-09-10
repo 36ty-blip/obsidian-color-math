@@ -34,6 +34,19 @@ function tryConverters(
   return null;
 }
 
+function hasSemanticOptions(options?: ColorMathOptions): boolean {
+  return !!(
+    options &&
+    (options.enableTaxonomy ||
+      options.variableDataFlow ||
+      options.rainbowDelimiters ||
+      options.colorUnits ||
+      options.colorDifferentials ||
+      options.colorBraKet ||
+      options.colorDimensionless)
+  );
+}
+
 export function convertMathBlock(
   block: string,
   palette: ColorPalette = COLORS,
@@ -47,6 +60,10 @@ export function convertMathBlock(
   const prefix = match[1] || "";
   const body = match[2];
   const suffix = match[3];
+
+  if (hasSemanticOptions(options)) {
+    return `${prefix}$$${colorLatexBody(body, palette, options)}$$${suffix}`;
+  }
 
   const lineMatch = tryConverters(block, LINE_CONVERTERS, palette);
   if (lineMatch !== null) {
@@ -67,6 +84,9 @@ export function convertLine(
   palette: ColorPalette = COLORS,
   options?: ColorMathOptions
 ): string {
+  if (hasSemanticOptions(options)) {
+    return colorGenericMathLine(line, palette, options);
+  }
   const converted = tryConverters(line, LINE_CONVERTERS, palette);
   if (converted !== null) {
     return converted;
