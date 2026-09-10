@@ -83,4 +83,18 @@ describe("Variable Data-Flow Hashing", () => {
     const colorA = hashStringToColor("A");
     expect(result).toContain(`\\textcolor{${colorA}}{A}`);
   });
+
+  it("recognizes 3-letter functions like adj(A) and var(X)", () => {
+    const input = "adj(A) + var(X)";
+    const result = colorLatexBody(input, undefined, { variableDataFlow: true, enableTaxonomy: true });
+    expect(result).toContain("adj");
+    expect(result).toContain("var");
+    // Ensure 'a', 'd', 'j' are not shredded into individual variables
+    const colorA = hashStringToColor("a");
+    expect(result).not.toContain(`\\textcolor{${colorA}}{a}d`);
+    const colorCapA = hashStringToColor("A");
+    const colorCapX = hashStringToColor("X");
+    expect(result).toContain(`\\textcolor{${colorCapA}}{A}`);
+    expect(result).toContain(`\\textcolor{${colorCapX}}{X}`);
+  });
 });
