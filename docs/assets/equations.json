@@ -1,0 +1,44 @@
+[
+  {
+    "id": "calculus_chain_rule",
+    "title": "Chain Rule & Derivative Stages",
+    "category": "CALCULUS & DIFFERENTIALS",
+    "raw": "\\frac{d}{dx}f(g(y)) = f'(g(y)) \\cdot g'(y)y'",
+    "colorized": "\\frac{d}{dx}\\textcolor{#7aa2f7}{f(g(y))} \\textcolor{white}{=} \\textcolor{#bb9af7}{f'(g(y))} \\textcolor{white}{\\cdot} \\textcolor{#9ece6a}{g'(y)}\\textcolor{#9ece6a}{y'}"
+  },
+  {
+    "id": "matrix_optimization",
+    "title": "Gradient of Least Squares",
+    "category": "MATRIX CALCULUS & OPTIMIZATION",
+    "raw": "\\nabla_{\\mathbf{x}} \\|\\mathbf{A}\\mathbf{x} - \\mathbf{b}\\|_{2}^{2} = 2\\mathbf{A}^{T}(\\mathbf{A}\\mathbf{x} - \\mathbf{b})",
+    "colorized": "\\textcolor{#bb9af7}{\\nabla_{\\mathbf{x}}} \\textcolor{#7aa2f7}{\\|\\mathbf{A}\\mathbf{x} - \\mathbf{b}\\|_{2}^{2}} \\textcolor{white}{=} \\textcolor{#e0af68}{2}\\textcolor{#bb9af7}{\\mathbf{A}^{T}}\\textcolor{#9ece6a}{(\\mathbf{A}\\mathbf{x} - \\mathbf{b})}"
+  },
+  {
+    "id": "quantum_braket",
+    "title": "Dirac State Vectors & Expectation Value",
+    "category": "QUANTUM MECHANICS & BRA-KET",
+    "raw": "\\langle\\psi|\\hat{H}|\\psi\\rangle = \\sum_{n=1}^{\\infty} E_{n} |\\langle n|\\psi\\rangle|^{2}",
+    "colorized": "\\textcolor{#e0af68}{\\langle}\\psi\\textcolor{#e0af68}{|}\\hat{H}\\textcolor{#e0af68}{|}\\psi\\textcolor{#e0af68}{\\rangle} = \\sum_{n=1}^{\\infty} E_{n} |\\textcolor{#e0af68}{\\langle} n\\textcolor{#e0af68}{|}\\psi\\textcolor{#e0af68}{\\rangle}|^{2}"
+  },
+  {
+    "id": "schrodinger_equation",
+    "title": "Time-Dependent Schrödinger Equation",
+    "category": "QUANTUM PHYSICS & OPERATORS",
+    "raw": "i\\hbar \\frac{\\partial}{\\partial t}\\Psi(\\mathbf{r}, t) = \\left[ -\\frac{\\hbar^2}{2m}\\nabla^2 + V(\\mathbf{r}) \\right] \\Psi(\\mathbf{r}, t)",
+    "colorized": "\\textcolor{#bb9af7}{i}\\textcolor{#9ece6a}{\\hbar} \\textcolor{#e0af68}{\\frac{\\partial}{\\partial t}}\\textcolor{#e0af68}{\\Psi}\\textcolor{#e0af68}{(\\mathbf{r}, t)} \\textcolor{white}{=} \\textcolor{#bb9af7}{\\left[ -\\frac{\\hbar^2}{2m}\\nabla^2 + V(\\mathbf{r}) \\right]} \\textcolor{#9ece6a}{\\Psi}\\textcolor{#9ece6a}{(\\mathbf{r}, t)}"
+  },
+  {
+    "id": "physics_units",
+    "title": "Laser Transition & Metric Units",
+    "category": "PHYSICS & PHYSICAL UNITS",
+    "raw": "{}^{4}F_{3/2} \\rightarrow {}^{4}I_{11/2}, \\quad \\lambda = 1.064\\, \\mu\\text{m}",
+    "colorized": "\\textcolor{#bb9af7}{{}^{4}}\\textcolor{#9ece6a}{F_{3/2}} \\rightarrow \\textcolor{#e0af68}{{}^{4}}\\textcolor{#e0af68}{I_{11/2}}, \\quad \\textcolor{#e0af68}{\\lambda} \\textcolor{white}{=} \\textcolor{#e0af68}{1.064}\\, \\textcolor{#bb9af7}{\\mu}\\text{m}"
+  },
+  {
+    "id": "fluid_dimensionless",
+    "title": "Convective Heat Transfer (Dittus-Boelter)",
+    "category": "ENGINEERING & DIMENSIONLESS NUMBERS",
+    "raw": "\\text{Nu} = 0.023 \\cdot \\text{Re}^{0.8} \\cdot \\text{Pr}^{0.4}",
+    "colorized": "\\textcolor{#e0af68}{\\text{Nu}} \\textcolor{white}{=} 0.023 \\textcolor{white}{\\cdot} \\textcolor{#e0af68}{\\text{Re}}^{0.8} \\textcolor{white}{\\cdot} \\textcolor{#e0af68}{\\text{Pr}}^{0.4}"
+  }
+]
