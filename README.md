@@ -94,7 +94,14 @@ Open the Command Palette (`Ctrl+P` or `Cmd+P`) and search for:
 
 ---
 
-## 📄 License
+## 💬 Feedback & Community
+
+Feedback, questions, and feature requests are very welcome!
+
+- **Share your thoughts or suggest features**: Join the conversation on [GitHub Discussions](https://github.com/36ty-blip/obsidian-color-math/discussions).
+- **Report bugs or rendering issues**: Open a [GitHub Issue](https://github.com/36ty-blip/obsidian-color-math/issues).
+
+---
 
 ## 🛠️ Development & Testing
 
@@ -110,6 +117,3 @@ npm run dev       # Watch mode with inline sourcemaps
 ## 📄 License
 
 Released under the [MIT License](https://github.com/36ty-blip/obsidian-color-math/blob/main/LICENSE).
-
-
-
