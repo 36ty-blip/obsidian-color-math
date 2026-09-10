@@ -10,7 +10,7 @@ export interface UnitSpan {
 }
 
 const SI_UNITS =
-  "m|s|g|Hz|N|Pa|J|W|C|V|F|T|H|mol|L|l|K|bar|atm|torr|eV|cal|rad|deg|\\\\Omega|dB|bps|B|Ω";
+  "m|s|g|Hz|N|Pa|J|W|C|V|A|F|T|H|mol|L|l|K|bar|atm|torr|eV|cal|rad|deg|\\\\Omega|dB|bps|B|Ω|Å|\\\\AA";
 const PREFIXES = "k|M|G|T|c|m|n|p|f|d|da|\\\\mu|µ";
 
 // SI units that are ALWAYS micro units when attached to \mu (even without preceding number)
@@ -40,7 +40,7 @@ export function findUnitSpans(body: string): UnitSpan[] {
   // 1. Micro units with \text or bare
   // 1a. \mu\text{...} or \mu\mathrm{...}
   const microTextRegex =
-    /\\mu\s*(?:\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%Ωμ/^0-9\s.\\-]+?)\s*\})(?:\^\{?-?\d+\}?)?/g;
+    /\\mu\s*(?:\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%ΩμÅ/^0-9\s.\\-]+?)\s*\})(?:\^\{?-?\d+\}?)?/g;
   let match: RegExpExecArray | null;
   while ((match = microTextRegex.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, match[0]);
@@ -73,7 +73,8 @@ export function findUnitSpans(body: string): UnitSpan[] {
       `\\\\mu\\s*(?:${SAFE_MICRO_UNITS}|${AMBIGUOUS_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?` +
       `|` +
       // Sub-case C: Bare SI units (with optional prefix, compound '/', and exponents)
-      `(?:(?:${PREFIXES})?(?:${SI_UNITS}))(?:\\/(?:(?:${PREFIXES})?(?:${SI_UNITS})))*(?:\\^\\{?-?\\d+\\}?)?(?![A-Za-z0-9_({])` +
+      // Guard (?!m[LK]) prevents bare 'mL' or 'mK' from matching algebraic denominators like 8mL^2 or \sqrt{2mK}
+      `(?:(?:(?!m[LK])(?:${PREFIXES}))?(?:${SI_UNITS}))(?:\\/(?:(?:${PREFIXES})?(?:${SI_UNITS})))*(?:\\^\\{?-?\\d+\\}?)?(?![A-Za-z0-9_({])` +
       `)`,
     "g"
   );
@@ -89,7 +90,7 @@ export function findUnitSpans(body: string): UnitSpan[] {
 
   // 4. Standalone Text / mathrm units with \text{...} or \mathrm{...}
   const textUnitRegex =
-    /\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%Ωμ/^0-9\s.\\-]+?)\s*\}(?:\^\{?-?\d+\}?)?/g;
+    /\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%ΩμÅ/^0-9\s.\\-]+?)\s*\}(?:\^\{?-?\d+\}?)?/g;
   while ((match = textUnitRegex.exec(body)) !== null) {
     const inner = match[1].trim();
     const isUnit = new RegExp(

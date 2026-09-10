@@ -10,7 +10,7 @@ import { collectScannerSpans } from "../parsers/scanner";
 import { collectTaxonomySpans } from "../parsers/taxonomy";
 import { collectUnitSpans, findUnitSpans } from "../parsers/units";
 import { collectVariableSpans } from "../parsers/variable_hash";
-import { containsColorWrapper } from "../utils/latex_helpers";
+import { containsColorWrapper, normalizeLatexBraces } from "../utils/latex_helpers";
 import { ColorSpan, applyColorSpans } from "../utils/spans";
 
 const FUNCTION_COLOR_NAMES: ("main" | "derivative" | "chain")[] = [
@@ -53,44 +53,46 @@ export function colorLatexBody(
     return body;
   }
 
-  const unitSpans = findUnitSpans(body);
-  const diffSpans = findDifferentialSpans(body);
-  const dimSpans = findDimensionlessSpans(body);
+  const normalized = normalizeLatexBraces(body);
+
+  const unitSpans = findUnitSpans(normalized);
+  const diffSpans = findDifferentialSpans(normalized);
+  const dimSpans = findDimensionlessSpans(normalized);
 
   const spans: ColorSpan[] = [
-    ...collectFunctionSpans(body, palette),
-    ...collectScannerSpans(body, palette),
+    ...collectFunctionSpans(normalized, palette),
+    ...collectScannerSpans(normalized, palette),
   ];
 
   if (options?.colorUnits !== false) {
-    spans.push(...collectUnitSpans(body, palette, unitSpans));
+    spans.push(...collectUnitSpans(normalized, palette, unitSpans));
   }
 
   if (options?.colorDifferentials !== false) {
-    spans.push(...collectDifferentialSpans(body, palette, diffSpans));
+    spans.push(...collectDifferentialSpans(normalized, palette, diffSpans));
   }
 
   if (options?.colorDimensionless !== false) {
-    spans.push(...collectDimensionlessSpans(body, palette, dimSpans));
+    spans.push(...collectDimensionlessSpans(normalized, palette, dimSpans));
   }
 
   if (options?.colorBraKet !== false) {
-    spans.push(...collectBraKetDelimiterSpans(body, palette));
+    spans.push(...collectBraKetDelimiterSpans(normalized, palette));
   }
 
   if (options?.rainbowDelimiters) {
-    spans.push(...collectDelimiterSpans(body, { forLatexWrap: true }));
+    spans.push(...collectDelimiterSpans(normalized, { forLatexWrap: true }));
   }
 
   if (options?.enableTaxonomy) {
-    spans.push(...collectTaxonomySpans(body, palette, unitSpans, diffSpans, dimSpans));
+    spans.push(...collectTaxonomySpans(normalized, palette, unitSpans, diffSpans, dimSpans));
   }
 
   if (options?.variableDataFlow) {
-    spans.push(...collectVariableSpans(body, undefined, unitSpans, diffSpans, dimSpans));
+    spans.push(...collectVariableSpans(normalized, undefined, unitSpans, diffSpans, dimSpans));
   }
 
-  return applyColorSpans(body, spans);
+  return applyColorSpans(normalized, spans);
 }
 
 export function colorGenericMathLine(

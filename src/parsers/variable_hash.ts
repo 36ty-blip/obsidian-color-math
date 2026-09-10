@@ -125,6 +125,40 @@ export function collectVariableSpans(
           }
         }
 
+        if (cmdName === "\\mathbf" || cmdName === "\\mathcal" || cmdName === "\\mathbb") {
+          let targetStart = cmdEnd;
+          while (targetStart < body.length && /\s/.test(body[targetStart])) {
+            targetStart++;
+          }
+          if (targetStart < body.length) {
+            let targetEnd = targetStart + 1;
+            let baseLetter = "R";
+            if (body[targetStart] === "{") {
+              const braced = readBraced(body, targetStart);
+              if (braced) {
+                targetEnd = braced[1];
+                const bm = braced[0].match(/[a-zA-Z]/);
+                if (bm) baseLetter = bm[0];
+              }
+            } else {
+              const letMatch = body.slice(targetStart).match(/^[a-zA-Z](')*/);
+              if (letMatch) {
+                targetEnd = targetStart + letMatch[0].length;
+                baseLetter = letMatch[0].replace(/'/g, "");
+              }
+            }
+            const color = hashStringToColor(baseLetter, palette);
+            spans.push({
+              start: index,
+              end: targetEnd,
+              color,
+              priority: 15,
+            });
+            index = targetEnd;
+            continue;
+          }
+        }
+
         if (OPAQUE_MACROS.has(cmdName.slice(1))) {
           const braced = readBraced(body, cmdEnd);
           if (braced !== null) {

@@ -111,7 +111,9 @@ var SPACING_COMMANDS = /* @__PURE__ */ new Set([
   "\\:",
   "\\;",
   "\\quad",
-  "\\qquad"
+  "\\qquad",
+  "\\ ",
+  "\\!"
 ]);
 var MULTIPLICATION_SYMBOLS = /* @__PURE__ */ new Set([
   "\\cdot",
@@ -1854,6 +1856,154 @@ function containsColorWrapper(text) {
   }
   return false;
 }
+function skipIgnorableWhitespace(text, start) {
+  let index = start;
+  while (index < text.length) {
+    if (/\s/.test(text[index])) {
+      index++;
+      continue;
+    }
+    if (text[index] === "%") {
+      index = readCommentEnd(text, index);
+      continue;
+    }
+    break;
+  }
+  return index;
+}
+function readSingleMacroArg(text, start) {
+  const index = skipIgnorableWhitespace(text, start);
+  if (index >= text.length)
+    return null;
+  if (text[index] === "{") {
+    const braced = readBraced(text, index);
+    if (braced) {
+      return {
+        raw: braced[0],
+        inner: braced[0].slice(1, -1),
+        end: braced[1],
+        braced: true
+      };
+    }
+    return null;
+  }
+  if (text[index] === "\\") {
+    const cmd = matchCommand(text, index);
+    if (cmd) {
+      return {
+        raw: cmd,
+        inner: cmd,
+        end: index + cmd.length,
+        braced: false
+      };
+    }
+  }
+  return {
+    raw: text[index],
+    inner: text[index],
+    end: index + 1,
+    braced: false
+  };
+}
+var TWO_ARG_COMMANDS = /* @__PURE__ */ new Set([
+  "\\frac",
+  "\\dfrac",
+  "\\tfrac",
+  "\\cfrac",
+  "\\binom",
+  "\\dbinom",
+  "\\tbinom",
+  "\\overset",
+  "\\underset",
+  "\\stackrel"
+]);
+var OPAQUE_TEXT_COMMANDS = /* @__PURE__ */ new Set([
+  "\\text",
+  "\\mathrm",
+  "\\textbf",
+  "\\textit",
+  "\\texttt",
+  "\\textrm"
+]);
+function normalizeLatexBraces(source) {
+  let result = "";
+  let index = 0;
+  while (index < source.length) {
+    if (source[index] === "%") {
+      const end = readCommentEnd(source, index);
+      result += source.slice(index, end);
+      index = end;
+      continue;
+    }
+    if (source[index] === "^" || source[index] === "_") {
+      const marker = source[index];
+      const arg = readSingleMacroArg(source, index + 1);
+      if (arg) {
+        const normInner = arg.braced ? normalizeLatexBraces(arg.inner) : normalizeLatexBraces(arg.raw);
+        result += `${marker}{${normInner}}`;
+        index = arg.end;
+        continue;
+      } else {
+        result += marker;
+        index++;
+        continue;
+      }
+    }
+    if (source[index] === "\\") {
+      const verb = readVerbEnd(source, index);
+      if (verb !== null) {
+        const [vEnd] = verb;
+        result += source.slice(index, vEnd);
+        index = vEnd;
+        continue;
+      }
+      const cmd = matchCommand(source, index);
+      if (cmd) {
+        if (OPAQUE_TEXT_COMMANDS.has(cmd)) {
+          const braced = readBraced(source, index + cmd.length);
+          if (braced) {
+            result += `${cmd}${braced[0]}`;
+            index = braced[1];
+            continue;
+          }
+        }
+        if (TWO_ARG_COMMANDS.has(cmd)) {
+          const arg1 = readSingleMacroArg(source, index + cmd.length);
+          if (arg1) {
+            const arg2 = readSingleMacroArg(source, arg1.end);
+            if (arg2) {
+              const norm1 = arg1.braced ? normalizeLatexBraces(arg1.inner) : normalizeLatexBraces(arg1.raw);
+              const norm2 = arg2.braced ? normalizeLatexBraces(arg2.inner) : normalizeLatexBraces(arg2.raw);
+              result += `${cmd}{${norm1}}{${norm2}}`;
+              index = arg2.end;
+              continue;
+            }
+          }
+        } else if (cmd === "\\sqrt") {
+          let cur = skipIgnorableWhitespace(source, index + cmd.length);
+          let optional = "";
+          if (cur < source.length && source[cur] === "[") {
+            const optClose = source.indexOf("]", cur);
+            if (optClose !== -1) {
+              optional = source.slice(cur, optClose + 1);
+              cur = optClose + 1;
+            }
+          }
+          const arg = readSingleMacroArg(source, cur);
+          if (arg) {
+            const norm = arg.braced ? normalizeLatexBraces(arg.inner) : normalizeLatexBraces(arg.raw);
+            result += `${cmd}${optional}{${norm}}`;
+            index = arg.end;
+            continue;
+          }
+        }
+      }
+    }
+    result += source[index];
+    index++;
+  }
+  return result;
+}
 
 // src/utils/spans.ts
 function crosses(left, right) {
@@ -2963,7 +3113,7 @@ function findSemanticSpans(source) {
 }
 
 // src/parsers/units.ts
-var SI_UNITS = "m|s|g|Hz|N|Pa|J|W|C|V|F|T|H|mol|L|l|K|bar|atm|torr|eV|cal|rad|deg|\\\\Omega|dB|bps|B|\u03A9";
+var SI_UNITS = "m|s|g|Hz|N|Pa|J|W|C|V|A|F|T|H|mol|L|l|K|bar|atm|torr|eV|cal|rad|deg|\\\\Omega|dB|bps|B|\u03A9|\xC5|\\\\AA";
 var PREFIXES = "k|M|G|T|c|m|n|p|f|d|da|\\\\mu|\xB5";
 var SAFE_MICRO_UNITS = "m|s|g|mol|Hz|Pa|bar|rad|\\\\Omega|L|l";
 var AMBIGUOUS_MICRO_UNITS = "N|A|V|F|H|W|J|C";
@@ -2976,7 +3126,7 @@ function findUnitSpans(body) {
       spans.push({ start, end, text });
     }
   }
-  const microTextRegex = /\\mu\s*(?:\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%Ωμ/^0-9\s.\\-]+?)\s*\})(?:\^\{?-?\d+\}?)?/g;
+  const microTextRegex = /\\mu\s*(?:\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%ΩμÅ/^0-9\s.\\-]+?)\s*\})(?:\^\{?-?\d+\}?)?/g;
   let match;
   while ((match = microTextRegex.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, match[0]);
@@ -2993,7 +3143,7 @@ function findUnitSpans(body) {
     addSpan(match.index, match.index + match[0].length, match[0]);
   }
   const numberUnitRegex = new RegExp(
-    `(?:^|[^A-Za-z0-9_])(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:\\s*(?:\\\\times|\\\\cdot|\xB7|\\*)\\s*10\\^\\{?[+-]?\\d+\\}?|\\s*[eE][+-]?\\d+)?(?:\\s*|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)*(\\\\(?:text|mathrm)\\s*\\{[^}]+\\}(?:\\^\\{?-?\\d+\\}?)?|\\\\mu\\s*(?:${SAFE_MICRO_UNITS}|${AMBIGUOUS_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?|(?:(?:${PREFIXES})?(?:${SI_UNITS}))(?:\\/(?:(?:${PREFIXES})?(?:${SI_UNITS})))*(?:\\^\\{?-?\\d+\\}?)?(?![A-Za-z0-9_({]))`,
+    `(?:^|[^A-Za-z0-9_])(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:\\s*(?:\\\\times|\\\\cdot|\xB7|\\*)\\s*10\\^\\{?[+-]?\\d+\\}?|\\s*[eE][+-]?\\d+)?(?:\\s*|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)*(\\\\(?:text|mathrm)\\s*\\{[^}]+\\}(?:\\^\\{?-?\\d+\\}?)?|\\\\mu\\s*(?:${SAFE_MICRO_UNITS}|${AMBIGUOUS_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?|(?:(?:(?!m[LK])(?:${PREFIXES}))?(?:${SI_UNITS}))(?:\\/(?:(?:${PREFIXES})?(?:${SI_UNITS})))*(?:\\^\\{?-?\\d+\\}?)?(?![A-Za-z0-9_({]))`,
     "g"
   );
   while ((match = numberUnitRegex.exec(body)) !== null) {
@@ -3004,7 +3154,7 @@ function findUnitSpans(body) {
     const unitEnd = unitStart + unitPart.length;
     addSpan(unitStart, unitEnd, unitPart);
   }
-  const textUnitRegex = /\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%Ωμ/^0-9\s.\\-]+?)\s*\}(?:\^\{?-?\d+\}?)?/g;
+  const textUnitRegex = /\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%ΩμÅ/^0-9\s.\\-]+?)\s*\}(?:\^\{?-?\d+\}?)?/g;
   while ((match = textUnitRegex.exec(body)) !== null) {
     const inner = match[1].trim();
     const isUnit = new RegExp(
@@ -3159,6 +3309,32 @@ function collectTaxonomySpans(body, palette = COLORS, unitSpans, diffSpans, dimS
           index = cmdEnd;
           continue;
         }
+        if (name === "\\mathcal" || name === "\\mathbf" || name === "\\mathbb") {
+          let targetStart = cmdEnd;
+          while (targetStart < body.length && /\s/.test(body[targetStart])) {
+            targetStart++;
+          }
+          if (targetStart < body.length) {
+            let targetEnd = targetStart + 1;
+            if (body[targetStart] === "{") {
+              const braced = readBraced(body, targetStart);
+              if (braced)
+                targetEnd = braced[1];
+            } else {
+              const letMatch = body.slice(targetStart).match(/^[a-zA-Z](')*/);
+              if (letMatch)
+                targetEnd = targetStart + letMatch[0].length;
+            }
+            spans.push({
+              start: index,
+              end: targetEnd,
+              color: palette.main,
+              priority: 20
+            });
+            index = targetEnd;
+            continue;
+          }
+        }
         index = cmdEnd;
         continue;
       }
@@ -3260,6 +3436,40 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
             }
           }
         }
+        if (cmdName === "\\mathbf" || cmdName === "\\mathcal" || cmdName === "\\mathbb") {
+          let targetStart = cmdEnd;
+          while (targetStart < body.length && /\s/.test(body[targetStart])) {
+            targetStart++;
+          }
+          if (targetStart < body.length) {
+            let targetEnd = targetStart + 1;
+            let baseLetter = "R";
+            if (body[targetStart] === "{") {
+              const braced = readBraced(body, targetStart);
+              if (braced) {
+                targetEnd = braced[1];
+                const bm = braced[0].match(/[a-zA-Z]/);
+                if (bm)
+                  baseLetter = bm[0];
+              }
+            } else {
+              const letMatch = body.slice(targetStart).match(/^[a-zA-Z](')*/);
+              if (letMatch) {
+                targetEnd = targetStart + letMatch[0].length;
+                baseLetter = letMatch[0].replace(/'/g, "");
+              }
+            }
+            const color = hashStringToColor(baseLetter, palette);
+            spans.push({
+              start: index,
+              end: targetEnd,
+              color,
+              priority: 15
+            });
+            index = targetEnd;
+            continue;
+          }
+        }
         if (OPAQUE_MACROS.has(cmdName.slice(1))) {
           const braced = readBraced(body, cmdEnd);
           if (braced !== null) {
@@ -3326,35 +3536,36 @@ function colorLatexBody(body, palette = COLORS, options) {
   if (containsColorWrapper(body)) {
     return body;
   }
-  const unitSpans = findUnitSpans(body);
-  const diffSpans = findDifferentialSpans(body);
-  const dimSpans = findDimensionlessSpans(body);
+  const normalized = normalizeLatexBraces(body);
+  const unitSpans = findUnitSpans(normalized);
+  const diffSpans = findDifferentialSpans(normalized);
+  const dimSpans = findDimensionlessSpans(normalized);
   const spans = [
-    ...collectFunctionSpans(body, palette),
-    ...collectScannerSpans(body, palette)
+    ...collectFunctionSpans(normalized, palette),
+    ...collectScannerSpans(normalized, palette)
   ];
   if (options?.colorUnits !== false) {
-    spans.push(...collectUnitSpans(body, palette, unitSpans));
+    spans.push(...collectUnitSpans(normalized, palette, unitSpans));
   }
   if (options?.colorDifferentials !== false) {
-    spans.push(...collectDifferentialSpans(body, palette, diffSpans));
+    spans.push(...collectDifferentialSpans(normalized, palette, diffSpans));
   }
   if (options?.colorDimensionless !== false) {
-    spans.push(...collectDimensionlessSpans(body, palette, dimSpans));
+    spans.push(...collectDimensionlessSpans(normalized, palette, dimSpans));
   }
   if (options?.colorBraKet !== false) {
-    spans.push(...collectBraKetDelimiterSpans(body, palette));
+    spans.push(...collectBraKetDelimiterSpans(normalized, palette));
   }
   if (options?.rainbowDelimiters) {
-    spans.push(...collectDelimiterSpans(body, { forLatexWrap: true }));
+    spans.push(...collectDelimiterSpans(normalized, { forLatexWrap: true }));
   }
   if (options?.enableTaxonomy) {
-    spans.push(...collectTaxonomySpans(body, palette, unitSpans, diffSpans, dimSpans));
+    spans.push(...collectTaxonomySpans(normalized, palette, unitSpans, diffSpans, dimSpans));
   }
   if (options?.variableDataFlow) {
-    spans.push(...collectVariableSpans(body, void 0, unitSpans, diffSpans, dimSpans));
+    spans.push(...collectVariableSpans(normalized, void 0, unitSpans, diffSpans, dimSpans));
   }
-  return applyColorSpans(body, spans);
+  return applyColorSpans(normalized, spans);
 }
 
 // src/converters/matrix.ts
@@ -3391,6 +3602,11 @@ function structuralSource(body) {
 }
 function isMatrixExpression(body) {
   const structural = structuralSource(body);
+  if (/\\(?:rightarrow|leftarrow|Rightarrow|Leftarrow|to|longrightarrow|longleftarrow|leftrightarrow|Leftrightarrow|mapsto)/.test(
+    structural
+  )) {
+    return false;
+  }
   const operands = findOperandSpans(structural);
   return MATRIX_COMMAND_RE.test(structural) || MATRIX_ENV_RE.test(structural) || operands.some(
     (operand) => operand.kind === "matrix" || operand.kind === "symbol" && operandText(structural, operand).includes("_")
@@ -3664,10 +3880,39 @@ var MathJaxInterceptor = class {
         return latex;
       }
     };
+    const self = this;
+    const isMathJaxError = (el) => {
+      if (!el || typeof el !== "object")
+        return false;
+      const dom = el;
+      if (typeof dom.getAttribute === "function" && dom.getAttribute("data-mjx-error")) {
+        return true;
+      }
+      if (typeof dom.querySelector === "function") {
+        return Boolean(dom.querySelector(".merror, [data-mjx-error], mjx-merror"));
+      }
+      return false;
+    };
     if (typeof mathJax.tex2chtml === "function") {
       const orig = mathJax.tex2chtml;
       mathJax.tex2chtml = function(latex, options) {
-        return orig.call(this, transform(latex), options);
+        if (!self.isEnabled())
+          return orig.call(this, latex, options);
+        try {
+          const transformed = transform(latex);
+          const result = orig.call(this, transformed, options);
+          if (isMathJaxError(result)) {
+            console.warn("Color Math: MathJax rendered error for colored LaTeX, falling back to original:", {
+              original: latex,
+              transformed
+            });
+            return orig.call(this, latex, options);
+          }
+          return result;
+        } catch (err) {
+          console.warn("Color Math: Exception during tex2chtml, falling back to original LaTeX:", err);
+          return orig.call(this, latex, options);
+        }
       };
       this.unpatchFns.push(() => {
         mathJax.tex2chtml = orig;
@@ -3675,8 +3920,24 @@ var MathJaxInterceptor = class {
     }
     if (typeof mathJax.tex2chtmlPromise === "function") {
       const orig = mathJax.tex2chtmlPromise;
-      mathJax.tex2chtmlPromise = function(latex, options) {
-        return orig.call(this, transform(latex), options);
+      mathJax.tex2chtmlPromise = async function(latex, options) {
+        if (!self.isEnabled())
+          return orig.call(this, latex, options);
+        try {
+          const transformed = transform(latex);
+          const result = await orig.call(this, transformed, options);
+          if (isMathJaxError(result)) {
+            console.warn("Color Math: MathJax rendered error for colored LaTeX, falling back to original:", {
+              original: latex,
+              transformed
+            });
+            return await orig.call(this, latex, options);
+          }
+          return result;
+        } catch (err) {
+          console.warn("Color Math: Exception during tex2chtmlPromise, falling back to original LaTeX:", err);
+          return await orig.call(this, latex, options);
+        }
       };
       this.unpatchFns.push(() => {
         mathJax.tex2chtmlPromise = orig;
@@ -3685,7 +3946,23 @@ var MathJaxInterceptor = class {
     if (typeof mathJax.tex2svg === "function") {
       const orig = mathJax.tex2svg;
       mathJax.tex2svg = function(latex, options) {
-        return orig.call(this, transform(latex), options);
+        if (!self.isEnabled())
+          return orig.call(this, latex, options);
+        try {
+          const transformed = transform(latex);
+          const result = orig.call(this, transformed, options);
+          if (isMathJaxError(result)) {
+            console.warn("Color Math: MathJax rendered error for colored LaTeX, falling back to original:", {
+              original: latex,
+              transformed
+            });
+            return orig.call(this, latex, options);
+          }
+          return result;
+        } catch (err) {
+          console.warn("Color Math: Exception during tex2svg, falling back to original LaTeX:", err);
+          return orig.call(this, latex, options);
+        }
       };
       this.unpatchFns.push(() => {
         mathJax.tex2svg = orig;
@@ -3693,8 +3970,24 @@ var MathJaxInterceptor = class {
     }
     if (typeof mathJax.tex2svgPromise === "function") {
       const orig = mathJax.tex2svgPromise;
-      mathJax.tex2svgPromise = function(latex, options) {
-        return orig.call(this, transform(latex), options);
+      mathJax.tex2svgPromise = async function(latex, options) {
+        if (!self.isEnabled())
+          return orig.call(this, latex, options);
+        try {
+          const transformed = transform(latex);
+          const result = await orig.call(this, transformed, options);
+          if (isMathJaxError(result)) {
+            console.warn("Color Math: MathJax rendered error for colored LaTeX, falling back to original:", {
+              original: latex,
+              transformed
+            });
+            return await orig.call(this, latex, options);
+          }
+          return result;
+        } catch (err) {
+          console.warn("Color Math: Exception during tex2svgPromise, falling back to original LaTeX:", err);
+          return await orig.call(this, latex, options);
+        }
       };
       this.unpatchFns.push(() => {
         mathJax.tex2svgPromise = orig;

@@ -116,6 +116,8 @@ export const SPACING_COMMANDS = new Set([
   "\\;",
   "\\quad",
   "\\qquad",
+  "\\ ",
+  "\\!",
 ]);
 
 export const MULTIPLICATION_SYMBOLS = new Set([

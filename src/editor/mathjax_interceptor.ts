@@ -50,11 +50,39 @@ export class MathJaxInterceptor {
       }
     };
 
+    const self = this;
+    const isMathJaxError = (el: unknown): boolean => {
+      if (!el || typeof el !== "object") return false;
+      const dom = el as Element;
+      if (typeof dom.getAttribute === "function" && dom.getAttribute("data-mjx-error")) {
+        return true;
+      }
+      if (typeof dom.querySelector === "function") {
+        return Boolean(dom.querySelector(".merror, [data-mjx-error], mjx-merror"));
+      }
+      return false;
+    };
+
     // 1. Hook tex2chtml
     if (typeof mathJax.tex2chtml === "function") {
       const orig = mathJax.tex2chtml;
       mathJax.tex2chtml = function (this: unknown, latex: string, options?: unknown) {
-        return orig.call(this, transform(latex), options);
+        if (!self.isEnabled()) return orig.call(this, latex, options);
+        try {
+          const transformed = transform(latex);
+          const result = orig.call(this, transformed, options);
+          if (isMathJaxError(result)) {
+            console.warn("Color Math: MathJax rendered error for colored LaTeX, falling back to original:", {
+              original: latex,
+              transformed,
+            });
+            return orig.call(this, latex, options);
+          }
+          return result;
+        } catch (err) {
+          console.warn("Color Math: Exception during tex2chtml, falling back to original LaTeX:", err);
+          return orig.call(this, latex, options);
+        }
       };
       this.unpatchFns.push(() => {
         mathJax.tex2chtml = orig;
@@ -64,8 +92,23 @@ export class MathJaxInterceptor {
     // 2. Hook tex2chtmlPromise
     if (typeof mathJax.tex2chtmlPromise === "function") {
       const orig = mathJax.tex2chtmlPromise;
-      mathJax.tex2chtmlPromise = function (this: unknown, latex: string, options?: unknown) {
-        return orig.call(this, transform(latex), options);
+      mathJax.tex2chtmlPromise = async function (this: unknown, latex: string, options?: unknown) {
+        if (!self.isEnabled()) return orig.call(this, latex, options);
+        try {
+          const transformed = transform(latex);
+          const result = await orig.call(this, transformed, options);
+          if (isMathJaxError(result)) {
+            console.warn("Color Math: MathJax rendered error for colored LaTeX, falling back to original:", {
+              original: latex,
+              transformed,
+            });
+            return await orig.call(this, latex, options);
+          }
+          return result;
+        } catch (err) {
+          console.warn("Color Math: Exception during tex2chtmlPromise, falling back to original LaTeX:", err);
+          return await orig.call(this, latex, options);
+        }
       };
       this.unpatchFns.push(() => {
         mathJax.tex2chtmlPromise = orig;
@@ -76,7 +119,22 @@ export class MathJaxInterceptor {
     if (typeof mathJax.tex2svg === "function") {
       const orig = mathJax.tex2svg;
       mathJax.tex2svg = function (this: unknown, latex: string, options?: unknown) {
-        return orig.call(this, transform(latex), options);
+        if (!self.isEnabled()) return orig.call(this, latex, options);
+        try {
+          const transformed = transform(latex);
+          const result = orig.call(this, transformed, options);
+          if (isMathJaxError(result)) {
+            console.warn("Color Math: MathJax rendered error for colored LaTeX, falling back to original:", {
+              original: latex,
+              transformed,
+            });
+            return orig.call(this, latex, options);
+          }
+          return result;
+        } catch (err) {
+          console.warn("Color Math: Exception during tex2svg, falling back to original LaTeX:", err);
+          return orig.call(this, latex, options);
+        }
       };
       this.unpatchFns.push(() => {
         mathJax.tex2svg = orig;
@@ -86,8 +144,23 @@ export class MathJaxInterceptor {
     // 4. Hook tex2svgPromise
     if (typeof mathJax.tex2svgPromise === "function") {
       const orig = mathJax.tex2svgPromise;
-      mathJax.tex2svgPromise = function (this: unknown, latex: string, options?: unknown) {
-        return orig.call(this, transform(latex), options);
+      mathJax.tex2svgPromise = async function (this: unknown, latex: string, options?: unknown) {
+        if (!self.isEnabled()) return orig.call(this, latex, options);
+        try {
+          const transformed = transform(latex);
+          const result = await orig.call(this, transformed, options);
+          if (isMathJaxError(result)) {
+            console.warn("Color Math: MathJax rendered error for colored LaTeX, falling back to original:", {
+              original: latex,
+              transformed,
+            });
+            return await orig.call(this, latex, options);
+          }
+          return result;
+        } catch (err) {
+          console.warn("Color Math: Exception during tex2svgPromise, falling back to original LaTeX:", err);
+          return await orig.call(this, latex, options);
+        }
       };
       this.unpatchFns.push(() => {
         mathJax.tex2svgPromise = orig;

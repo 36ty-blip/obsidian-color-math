@@ -62,4 +62,60 @@ describe("User Formula Test", () => {
     expect(result).toContain("{\\dot N}");
     expect(result).not.toContain("\\dot \\textcolor");
   });
+
+  it("handles physics and metric unit formulas accurately without false positives", () => {
+    const opts = { enableTaxonomy: true };
+
+    // 1. Responsivity with A/W unit and \mathcal R
+    const eq1 = "# $$\\boxed{\\mathcal R=\\frac{I_{ph}}{P_{opt}}=\\eta\\frac{q}{h\\nu}=\\eta\\frac{q\\lambda}{hc}\\quad(\\text{A/W})}$$";
+    const res1 = convertText(eq1, DEFAULT_COLORS, opts);
+    expect(res1).toContain(`\\textcolor{${DEFAULT_COLORS.unit}}{\\text{A/W}}`);
+    expect(res1).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{\\mathcal R}`);
+
+    // 2. Inline boxed responsivity with value
+    const eq2 = "$\\mathcal R=\\boxed{0.315\\,\\text{A/W}}$";
+    const res2 = convertText(eq2, DEFAULT_COLORS, opts);
+    expect(res2).toContain(`\\textcolor{${DEFAULT_COLORS.unit}}{\\text{A/W}}`);
+    expect(res2).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{\\mathcal R}`);
+
+    // 3. Four-point probe resistivity
+    const eq3 = "$$\\rho=2\\pi s\\frac VI$$";
+    const res3 = convertText(eq3, DEFAULT_COLORS, opts);
+    expect(res3).toContain(`\\textcolor{${DEFAULT_COLORS.parameter}}{\\rho}`);
+    expect(res3).toContain(`\\textcolor{${DEFAULT_COLORS.orange}}{\\pi}`);
+
+    // 4. Infinite potential well (8mL^2 should NOT match mL as milliliters)
+    const eq4 = "$$\\boxed{E_n=\\frac{n^2h^2}{8mL^2},\\qquad \\psi_n=\\sqrt{\\frac2L}\\sin\\!\\left(\\frac{n\\pi x}{L}\\right)}$$";
+    const res4 = convertText(eq4, DEFAULT_COLORS, opts);
+    expect(res4).not.toContain(`\\textcolor{${DEFAULT_COLORS.unit}}{mL}`);
+    expect(res4).toContain("8mL");
+    expect(res4).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{\\sin}`);
+
+    // 5. de Broglie wavelength (2mK should NOT match mK as milliKelvin)
+    const eq5 = "# $$\\boxed{\\lambda=\\frac hp=\\frac{h}{mv}=\\frac{h}{\\sqrt{2mK}}=\\frac{h}{\\sqrt{2mqV}}}$$";
+    const res5 = convertText(eq5, DEFAULT_COLORS, opts);
+    expect(res5).not.toContain(`\\textcolor{${DEFAULT_COLORS.unit}}{mK}`);
+    const eq6 = "$$\\boxed{\\lambda=\\frac{12.27}{\\sqrt V}\\ \\text{Å}}$$";
+    const equations = [eq1, eq2, eq3, eq4, eq5, eq6];
+    const optsUser = {
+      ...opts,
+      variableDataFlow: true,
+      rainbowDelimiters: true,
+    };
+    // Test unbraced fractions, roots, and subscripts are properly enclosed with braces
+    const unbracedFrac = "$$\\frac2L$$";
+    const coloredFrac = convertText(unbracedFrac, DEFAULT_COLORS, optsUser);
+    expect(coloredFrac).not.toContain("\\frac2\\textcolor");
+    expect(coloredFrac).toMatch(/\\frac\{2\}\{\\textcolor\{#[0-9a-fA-F]+\}\{L\}\}/);
+
+    const unbracedVI = "$$\\frac VI$$";
+    const coloredVI = convertText(unbracedVI, DEFAULT_COLORS, optsUser);
+    expect(coloredVI).not.toContain("\\frac \\textcolor");
+    expect(coloredVI).toMatch(/\\frac\{\\textcolor\{#[0-9a-fA-F]+\}\{V\}\}\{\\textcolor\{#[0-9a-fA-F]+\}\{I\}\}/);
+
+    const unbracedSqrt = "$$\\sqrt V$$";
+    const coloredSqrt = convertText(unbracedSqrt, DEFAULT_COLORS, optsUser);
+    expect(coloredSqrt).not.toContain("\\sqrt \\textcolor");
+    expect(coloredSqrt).toMatch(/\\sqrt\{\\textcolor\{#[0-9a-fA-F]+\}\{V\}\}/);
+  });
 });

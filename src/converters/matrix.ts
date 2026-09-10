@@ -49,6 +49,14 @@ function structuralSource(body: string): string {
 
 function isMatrixExpression(body: string): boolean {
   const structural = structuralSource(body);
+  // Equations containing arrows are state transitions or limits, not matrix algebra
+  if (
+    /\\(?:rightarrow|leftarrow|Rightarrow|Leftarrow|to|longrightarrow|longleftarrow|leftrightarrow|Leftrightarrow|mapsto)/.test(
+      structural
+    )
+  ) {
+    return false;
+  }
   const operands = findOperandSpans(structural);
   return (
     MATRIX_COMMAND_RE.test(structural) ||

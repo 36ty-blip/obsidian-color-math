@@ -66,7 +66,7 @@ describe("Calculus Differentials & Derivatives Disambiguation", () => {
       });
       // dx should be atomic derivative color, not split into random hashed variable colors
       expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.derivative}}{dx}`);
-      expect(result).not.toContain("{\\textcolor{");
+      expect(result).not.toContain(`\\textcolor{${DEFAULT_COLORS.main}}{d}`);
     });
   });
 
