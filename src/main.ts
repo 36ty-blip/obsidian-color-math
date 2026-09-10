@@ -13,7 +13,7 @@ import {
 import { ColorPalette, ColorRole, ColorMathOptions, DEFAULT_COLORS, setPalette } from "./config";
 import { convertMathBlock, convertText } from "./converters/block";
 import { createColorMathLivePlugin } from "./editor/live_preview";
-import { MathJaxInterceptor } from "./editor/mathjax_interceptor";
+import { MathJaxInterceptor, ErrorDisplayMode } from "./editor/mathjax_interceptor";
 import { scanMarkdown } from "./parsers/markdown_scanner";
 import { uncolorFragment, uncolorText } from "./undo";
 import { extractThemePalette, isVaultLightMode } from "./utils/theme_colors";
@@ -32,6 +32,7 @@ interface ColorMathSettings {
   colorDifferentials: boolean;
   colorBraKet: boolean;
   colorDimensionless: boolean;
+  errorDisplayMode: ErrorDisplayMode;
 }
 
 const DEFAULT_SETTINGS: ColorMathSettings = {
@@ -48,6 +49,7 @@ const DEFAULT_SETTINGS: ColorMathSettings = {
   colorDifferentials: true,
   colorBraKet: true,
   colorDimensionless: true,
+  errorDisplayMode: "inline",
 };
 
 const COLOR_ROLE_DESCRIPTIONS: Record<ColorRole, string> = {
@@ -78,7 +80,8 @@ export default class ColorMathPlugin extends Plugin {
     this.interceptor = new MathJaxInterceptor(
       () => this.settings.palette,
       () => this.getMathOptions(),
-      () => this.settings.liveRendering
+      () => this.settings.liveRendering,
+      () => this.settings.errorDisplayMode
     );
     await this.interceptor.install();
 
@@ -634,6 +637,25 @@ class ColorMathSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.colorDimensionless)
           .onChange(async (val) => {
             this.plugin.settings.colorDimensionless = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    new Setting(containerEl).setName("Error Handling & Diagnostics").setHeading();
+
+    new Setting(containerEl)
+      .setName("Syntax error display mode")
+      .setDesc("Choose how to display errors when an equation has broken syntax.")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("inline", "Inline error message (e.g. \\text{LaTeX Error: ...})")
+          .addOption("fallback", "Render original formula (Silent & clean with hover tooltip)")
+          .addOption("notice", "Obsidian notice popup & original formula")
+          .addOption("native", "Native MathJax error box (Default MathJax behavior)")
+          .setValue(this.plugin.settings.errorDisplayMode || "inline")
+          .onChange(async (val) => {
+            this.plugin.settings.errorDisplayMode = val as ErrorDisplayMode;
             await this.plugin.saveSettings();
             this.plugin.rerenderMath();
           })

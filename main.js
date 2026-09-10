@@ -3868,11 +3868,13 @@ var MathJaxInterceptor = class {
   getPalette;
   getOptions;
   isEnabled;
+  getErrorMode;
   lastNoticeTime = 0;
-  constructor(getPalette, getOptions, isEnabled = () => true) {
+  constructor(getPalette, getOptions, isEnabled = () => true, getErrorMode = () => "inline") {
     this.getPalette = getPalette;
     this.getOptions = getOptions;
     this.isEnabled = isEnabled;
+    this.getErrorMode = getErrorMode;
   }
   notifyUserError(errorMsg) {
     const now = Date.now();
@@ -3903,6 +3905,10 @@ var MathJaxInterceptor = class {
       }
     };
     const self = this;
+    const formatSafeErrorLatex = (msg) => {
+      const escaped = msg.replace(/\\/g, "/").replace(/[{}\^_%$&#~]/g, " ");
+      return `\\textcolor{#f7768e}{\\text{[Color Math: ${escaped}]}}`;
+    };
     const getMathJaxError = (el) => {
       if (!el || typeof el !== "object")
         return null;
@@ -3928,7 +3934,29 @@ var MathJaxInterceptor = class {
           original: originalLatex,
           transformed: transformedLatex
         });
-        self.notifyUserError(errorMsg);
+        const mode = self.getErrorMode();
+        if (mode === "native") {
+          return result;
+        }
+        if (mode === "notice") {
+          self.notifyUserError(errorMsg);
+        }
+        if (mode === "inline") {
+          try {
+            const inlineErrorLatex = formatSafeErrorLatex(errorMsg);
+            const inlineEl = origFn.call(context, inlineErrorLatex, options);
+            if (inlineEl && typeof inlineEl.setAttribute === "function") {
+              inlineEl.setAttribute(
+                "title",
+                `Color Math Error: ${errorMsg}
+Original: ${originalLatex}
+Transformed: ${transformedLatex}`
+              );
+            }
+            return inlineEl;
+          } catch {
+          }
+        }
         try {
           const fallback = origFn.call(context, originalLatex, options);
           if (fallback && typeof fallback.setAttribute === "function") {
@@ -3953,7 +3981,29 @@ var MathJaxInterceptor = class {
           original: originalLatex,
           transformed: transformedLatex
         });
-        self.notifyUserError(errorMsg);
+        const mode = self.getErrorMode();
+        if (mode === "native") {
+          return result;
+        }
+        if (mode === "notice") {
+          self.notifyUserError(errorMsg);
+        }
+        if (mode === "inline") {
+          try {
+            const inlineErrorLatex = formatSafeErrorLatex(errorMsg);
+            const inlineEl = await origFn.call(context, inlineErrorLatex, options);
+            if (inlineEl && typeof inlineEl.setAttribute === "function") {
+              inlineEl.setAttribute(
+                "title",
+                `Color Math Error: ${errorMsg}
+Original: ${originalLatex}
+Transformed: ${transformedLatex}`
+              );
+            }
+            return inlineEl;
+          } catch {
+          }
+        }
         try {
           const fallback = await origFn.call(context, originalLatex, options);
           if (fallback && typeof fallback.setAttribute === "function") {
@@ -4214,7 +4264,8 @@ var DEFAULT_SETTINGS = {
   colorUnits: true,
   colorDifferentials: true,
   colorBraKet: true,
-  colorDimensionless: true
+  colorDimensionless: true,
+  errorDisplayMode: "inline"
 };
 var COLOR_ROLE_DESCRIPTIONS = {
   main: "Primary expression / function color",
@@ -4240,7 +4291,8 @@ var ColorMathPlugin = class extends import_obsidian2.Plugin {
     this.interceptor = new MathJaxInterceptor(
       () => this.settings.palette,
       () => this.getMathOptions(),
-      () => this.settings.liveRendering
+      () => this.settings.liveRendering,
+      () => this.settings.errorDisplayMode
     );
     await this.interceptor.install();
     this.registerEditorExtension([
@@ -4645,6 +4697,14 @@ var ColorMathSettingTab = class extends import_obsidian2.PluginSettingTab {
     new import_obsidian2.Setting(containerEl).setName("Engineering dimensionless numbers").setDesc("Recognize contiguous dimensionless numbers (Re, Ma, Pr, Nu) as unified coefficients. Separate letters like 'R e' remain separate variables.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.colorDimensionless).onChange(async (val) => {
         this.plugin.settings.colorDimensionless = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Error Handling & Diagnostics").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("Syntax error display mode").setDesc("Choose how to display errors when an equation has broken syntax.").addDropdown(
+      (dropdown) => dropdown.addOption("inline", "Inline error message (e.g. \\text{LaTeX Error: ...})").addOption("fallback", "Render original formula (Silent & clean with hover tooltip)").addOption("notice", "Obsidian notice popup & original formula").addOption("native", "Native MathJax error box (Default MathJax behavior)").setValue(this.plugin.settings.errorDisplayMode || "inline").onChange(async (val) => {
+        this.plugin.settings.errorDisplayMode = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })

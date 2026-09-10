@@ -11,21 +11,26 @@ interface MathJaxObject {
   tex2svgPromise?: (latex: string, options?: unknown) => Promise<SVGElement>;
 }
 
+export type ErrorDisplayMode = "inline" | "fallback" | "notice" | "native";
+
 export class MathJaxInterceptor {
   private unpatchFns: (() => void)[] = [];
   private getPalette: () => ColorPalette;
   private getOptions: () => ColorMathOptions;
   private isEnabled: () => boolean;
+  private getErrorMode: () => ErrorDisplayMode;
   private lastNoticeTime: number = 0;
 
   constructor(
     getPalette: () => ColorPalette,
     getOptions: () => ColorMathOptions,
-    isEnabled: () => boolean = () => true
+    isEnabled: () => boolean = () => true,
+    getErrorMode: () => ErrorDisplayMode = () => "inline"
   ) {
     this.getPalette = getPalette;
     this.getOptions = getOptions;
     this.isEnabled = isEnabled;
+    this.getErrorMode = getErrorMode;
   }
 
   private notifyUserError(errorMsg: string): void {
@@ -60,6 +65,13 @@ export class MathJaxInterceptor {
     };
 
     const self = this;
+
+    const formatSafeErrorLatex = (msg: string): string => {
+      const escaped = msg
+        .replace(/\\/g, "/")
+        .replace(/[{}\^_%$&#~]/g, " ");
+      return `\\textcolor{#f7768e}{\\text{[Color Math: ${escaped}]}}`;
+    };
 
     const getMathJaxError = (el: unknown): string | null => {
       if (!el || typeof el !== "object") return null;
@@ -97,7 +109,31 @@ export class MathJaxInterceptor {
           original: originalLatex,
           transformed: transformedLatex,
         });
-        self.notifyUserError(errorMsg);
+
+        const mode = self.getErrorMode();
+        if (mode === "native") {
+          return result;
+        }
+
+        if (mode === "notice") {
+          self.notifyUserError(errorMsg);
+        }
+
+        if (mode === "inline") {
+          try {
+            const inlineErrorLatex = formatSafeErrorLatex(errorMsg);
+            const inlineEl = origFn.call(context, inlineErrorLatex, options);
+            if (inlineEl && typeof (inlineEl as Element).setAttribute === "function") {
+              (inlineEl as Element).setAttribute(
+                "title",
+                `Color Math Error: ${errorMsg}\nOriginal: ${originalLatex}\nTransformed: ${transformedLatex}`
+              );
+            }
+            return inlineEl;
+          } catch {
+            // fallback
+          }
+        }
 
         // Fallback to rendering the original clean LaTeX
         try {
@@ -132,7 +168,31 @@ export class MathJaxInterceptor {
           original: originalLatex,
           transformed: transformedLatex,
         });
-        self.notifyUserError(errorMsg);
+
+        const mode = self.getErrorMode();
+        if (mode === "native") {
+          return result;
+        }
+
+        if (mode === "notice") {
+          self.notifyUserError(errorMsg);
+        }
+
+        if (mode === "inline") {
+          try {
+            const inlineErrorLatex = formatSafeErrorLatex(errorMsg);
+            const inlineEl = await origFn.call(context, inlineErrorLatex, options);
+            if (inlineEl && typeof (inlineEl as Element).setAttribute === "function") {
+              (inlineEl as Element).setAttribute(
+                "title",
+                `Color Math Error: ${errorMsg}\nOriginal: ${originalLatex}\nTransformed: ${transformedLatex}`
+              );
+            }
+            return inlineEl;
+          } catch {
+            // fallback
+          }
+        }
 
         try {
           const fallback = await origFn.call(context, originalLatex, options);
