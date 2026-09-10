@@ -32,6 +32,7 @@ interface ColorMathSettings {
   colorDifferentials: boolean;
   colorBraKet: boolean;
   colorDimensionless: boolean;
+  extendedFunctions: boolean;
   errorDisplayMode: ErrorDisplayMode;
 }
 
@@ -49,6 +50,7 @@ const DEFAULT_SETTINGS: ColorMathSettings = {
   colorDifferentials: true,
   colorBraKet: true,
   colorDimensionless: true,
+  extendedFunctions: true,
   errorDisplayMode: "inline",
 };
 
@@ -321,6 +323,7 @@ export default class ColorMathPlugin extends Plugin {
       colorDifferentials: this.settings.colorDifferentials,
       colorBraKet: this.settings.colorBraKet,
       colorDimensionless: this.settings.colorDimensionless,
+      extendedFunctions: this.settings.extendedFunctions,
     };
   }
 
@@ -637,6 +640,19 @@ class ColorMathSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.colorDimensionless)
           .onChange(async (val) => {
             this.plugin.settings.colorDimensionless = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Extended 2–3 letter functions")
+      .setDesc("Recognize shorthand 2–3 letter math functions (adj, var, cov, im, sp, div, rot, sh, ch, etc.) before parentheses. Turn off if your formulas use 2–3 letter variable multiplications like ch(x) or sp(y).")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.extendedFunctions)
+          .onChange(async (val) => {
+            this.plugin.settings.extendedFunctions = val;
             await this.plugin.saveSettings();
             this.plugin.rerenderMath();
           })

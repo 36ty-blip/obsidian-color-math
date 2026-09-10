@@ -297,7 +297,7 @@ var MATH_FUNCTIONS = /* @__PURE__ */ new Set([
   "\\pic",
   "\\cl"
 ]);
-var BARE_FUNCTIONS = /* @__PURE__ */ new Set([
+var STANDARD_BARE_FUNCTIONS = /* @__PURE__ */ new Set([
   "sin",
   "cos",
   "tan",
@@ -337,7 +337,9 @@ var BARE_FUNCTIONS = /* @__PURE__ */ new Set([
   "trace",
   "span",
   "diag",
-  "sgn",
+  "sgn"
+]);
+var EXTENDED_BARE_FUNCTIONS = /* @__PURE__ */ new Set([
   "adj",
   "col",
   "row",
@@ -382,6 +384,17 @@ var BARE_FUNCTIONS = /* @__PURE__ */ new Set([
   "pic",
   "cl"
 ]);
+var ALL_BARE_FUNCTIONS = /* @__PURE__ */ new Set([
+  ...STANDARD_BARE_FUNCTIONS,
+  ...EXTENDED_BARE_FUNCTIONS
+]);
+var BARE_FUNCTIONS = ALL_BARE_FUNCTIONS;
+function getBareFunctions(options) {
+  if (options && options.extendedFunctions === false) {
+    return STANDARD_BARE_FUNCTIONS;
+  }
+  return ALL_BARE_FUNCTIONS;
+}
 var RAINBOW_DELIMITER_COLORS = [
   "#e0af68",
   // Tier 0: Gold
@@ -3311,7 +3324,7 @@ function readFunctionArguments(text, start, end) {
   }
   return [group[1], group[2], group[3]];
 }
-function collectSemanticSpansInternal(text, start, end, depth, spans, errors) {
+function collectSemanticSpansInternal(text, start, end, depth, spans, errors, bareFunctions = BARE_FUNCTIONS) {
   let index = start;
   while (index < end) {
     if (text[index] === "%") {
@@ -3377,13 +3390,14 @@ function collectSemanticSpansInternal(text, start, end, depth, spans, errors) {
                   argumentEnd,
                   depth + 1,
                   spans,
-                  errors
+                  errors,
+                  bareFunctions
                 );
                 index = callEnd;
                 continue;
               }
               const innerText = text.slice(afterCmd + 1, opEnd - 1).trim();
-              if (BARE_FUNCTIONS.has(innerText.toLowerCase())) {
+              if (bareFunctions.has(innerText.toLowerCase())) {
                 spans.push({
                   kind: "function",
                   value: text.slice(index, opEnd),
@@ -3416,7 +3430,8 @@ function collectSemanticSpansInternal(text, start, end, depth, spans, errors) {
               argumentEnd,
               depth + 1,
               spans,
-              errors
+              errors,
+              bareFunctions
             );
             index = callEnd;
             continue;
@@ -3443,7 +3458,7 @@ function collectSemanticSpansInternal(text, start, end, depth, spans, errors) {
       const nameEnd = index + name.length;
       const args = readFunctionArguments(text, nameEnd, end);
       if (args !== null) {
-        const isMultiVar = baseName.length >= 2 && !BARE_FUNCTIONS.has(baseName.toLowerCase()) && baseName.length < 4;
+        const isMultiVar = baseName.length >= 2 && !bareFunctions.has(baseName.toLowerCase()) && baseName.length < 4;
         if (!isMultiVar) {
           const [argumentStart, argumentEnd, callEnd] = args;
           spans.push({
@@ -3459,7 +3474,8 @@ function collectSemanticSpansInternal(text, start, end, depth, spans, errors) {
             argumentEnd,
             depth + 1,
             spans,
-            errors
+            errors,
+            bareFunctions
           );
           index = callEnd;
           continue;
@@ -3471,7 +3487,8 @@ function collectSemanticSpansInternal(text, start, end, depth, spans, errors) {
             argumentEnd,
             depth,
             spans,
-            errors
+            errors,
+            bareFunctions
           );
           index = callEnd;
           continue;
@@ -3479,7 +3496,7 @@ function collectSemanticSpansInternal(text, start, end, depth, spans, errors) {
       }
       if (nameEnd < end && text[nameEnd] === "(") {
         errors.push(`unclosed function call after '${name}'`);
-      } else if (BARE_FUNCTIONS.has(name.toLowerCase())) {
+      } else if (bareFunctions.has(name.toLowerCase())) {
         spans.push({
           kind: "function",
           value: name,
@@ -3511,10 +3528,10 @@ function collectSemanticSpansInternal(text, start, end, depth, spans, errors) {
     index++;
   }
 }
-function findSemanticSpans(source) {
+function findSemanticSpans(source, bareFunctions = BARE_FUNCTIONS) {
   const spans = [];
   const errors = [];
-  collectSemanticSpansInternal(source, 0, source.length, 0, spans, errors);
+  collectSemanticSpansInternal(source, 0, source.length, 0, spans, errors, bareFunctions);
   return [spans, errors.length > 0 ? errors[0] : null];
 }
 
@@ -3839,7 +3856,7 @@ function skipComment5(text, start) {
   }
   return Math.min(index + 1, text.length);
 }
-function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, diffSpans, dimSpans) {
+function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, diffSpans, dimSpans, bareFunctions = BARE_FUNCTIONS) {
   const units = unitSpans || findUnitSpans(body);
   const diffs = diffSpans || findDifferentialSpans(body);
   const dims = dimSpans || findDimensionlessSpans(body);
@@ -4008,7 +4025,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
     if (wordMatch) {
       const word = wordMatch[1];
       const lowerWord = word.toLowerCase();
-      if (BARE_FUNCTIONS.has(lowerWord)) {
+      if (bareFunctions.has(lowerWord)) {
         index += word.length;
         continue;
       }
@@ -4073,8 +4090,8 @@ var FUNCTION_COLOR_NAMES = [
   "derivative",
   "chain"
 ];
-function collectFunctionSpans(body, palette = COLORS) {
-  const [semantic] = findSemanticSpans(body);
+function collectFunctionSpans(body, palette = COLORS, bareFunctions) {
+  const [semantic] = findSemanticSpans(body, bareFunctions);
   const spans = [];
   for (const item of semantic) {
     let colorName;
@@ -4102,8 +4119,9 @@ function colorLatexBody(body, palette = COLORS, options) {
   const unitSpans = findUnitSpans(normalized);
   const diffSpans = findDifferentialSpans(normalized);
   const dimSpans = findDimensionlessSpans(normalized);
+  const bareFunctions = getBareFunctions(options);
   const spans = [
-    ...collectFunctionSpans(normalized, palette),
+    ...collectFunctionSpans(normalized, palette, bareFunctions),
     ...collectScannerSpans(normalized, palette)
   ];
   if (options?.colorUnits !== false) {
@@ -4128,7 +4146,7 @@ function colorLatexBody(body, palette = COLORS, options) {
     spans.push(...collectTaxonomySpans(normalized, palette, unitSpans, diffSpans, dimSpans));
   }
   if (options?.variableDataFlow) {
-    spans.push(...collectVariableSpans(normalized, void 0, unitSpans, diffSpans, dimSpans));
+    spans.push(...collectVariableSpans(normalized, void 0, unitSpans, diffSpans, dimSpans, bareFunctions));
   }
   return applyColorSpans(normalized, spans);
 }
@@ -4868,6 +4886,7 @@ var DEFAULT_SETTINGS = {
   colorDifferentials: true,
   colorBraKet: true,
   colorDimensionless: true,
+  extendedFunctions: true,
   errorDisplayMode: "inline"
 };
 var COLOR_ROLE_DESCRIPTIONS = {
@@ -5073,7 +5092,8 @@ var ColorMathPlugin = class extends import_obsidian2.Plugin {
       colorUnits: this.settings.colorUnits,
       colorDifferentials: this.settings.colorDifferentials,
       colorBraKet: this.settings.colorBraKet,
-      colorDimensionless: this.settings.colorDimensionless
+      colorDimensionless: this.settings.colorDimensionless,
+      extendedFunctions: this.settings.extendedFunctions
     };
   }
   colorizeCurrentMathBlock(editor) {
@@ -5300,6 +5320,13 @@ var ColorMathSettingTab = class extends import_obsidian2.PluginSettingTab {
     new import_obsidian2.Setting(containerEl).setName("Engineering dimensionless numbers").setDesc("Recognize contiguous dimensionless numbers (Re, Ma, Pr, Nu) as unified coefficients. Separate letters like 'R e' remain separate variables.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.colorDimensionless).onChange(async (val) => {
         this.plugin.settings.colorDimensionless = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Extended 2\u20133 letter functions").setDesc("Recognize shorthand 2\u20133 letter math functions (adj, var, cov, im, sp, div, rot, sh, ch, etc.) before parentheses. Turn off if your formulas use 2\u20133 letter variable multiplications like ch(x) or sp(y).").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.extendedFunctions).onChange(async (val) => {
+        this.plugin.settings.extendedFunctions = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })

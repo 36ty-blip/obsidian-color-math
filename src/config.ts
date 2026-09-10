@@ -310,7 +310,7 @@ export const MATH_FUNCTIONS = new Set([
   "\\cl",
 ]);
 
-export const BARE_FUNCTIONS = new Set([
+export const STANDARD_BARE_FUNCTIONS = new Set([
   "sin",
   "cos",
   "tan",
@@ -351,6 +351,9 @@ export const BARE_FUNCTIONS = new Set([
   "span",
   "diag",
   "sgn",
+]);
+
+export const EXTENDED_BARE_FUNCTIONS = new Set([
   "adj",
   "col",
   "row",
@@ -396,6 +399,20 @@ export const BARE_FUNCTIONS = new Set([
   "cl",
 ]);
 
+export const ALL_BARE_FUNCTIONS = new Set([
+  ...STANDARD_BARE_FUNCTIONS,
+  ...EXTENDED_BARE_FUNCTIONS,
+]);
+
+export const BARE_FUNCTIONS = ALL_BARE_FUNCTIONS;
+
+export function getBareFunctions(options?: ColorMathOptions): Set<string> {
+  if (options && options.extendedFunctions === false) {
+    return STANDARD_BARE_FUNCTIONS;
+  }
+  return ALL_BARE_FUNCTIONS;
+}
+
 export const RAINBOW_DELIMITER_COLORS: string[] = [
   "#e0af68", // Tier 0: Gold
   "#7aa2f7", // Tier 1: Cyan / Blue
@@ -436,5 +453,6 @@ export interface ColorMathOptions {
   colorDimensionless?: boolean;
   colorAlignment?: boolean;
   colorSingleConstants?: boolean;
+  extendedFunctions?: boolean;
 }
 

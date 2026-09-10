@@ -97,4 +97,40 @@ describe("Variable Data-Flow Hashing", () => {
     expect(result).toContain(`\\textcolor{${colorCapA}}{A}`);
     expect(result).toContain(`\\textcolor{${colorCapX}}{X}`);
   });
+
+  it("respects extendedFunctions: false switch to treat 2-3 letter names as variable multiplication", () => {
+    const input = "ch(x) + sp(v)";
+    // When extendedFunctions is false, 'ch' and 'sp' are treated as variable multiplication
+    const resultOff = colorLatexBody(input, undefined, {
+      variableDataFlow: true,
+      enableTaxonomy: true,
+      extendedFunctions: false,
+    });
+    const colorC = hashStringToColor("c");
+    const colorH = hashStringToColor("h");
+    const colorS = hashStringToColor("s");
+    const colorP = hashStringToColor("p");
+    expect(resultOff).toContain(`\\textcolor{${colorC}}{c}`);
+    expect(resultOff).toContain(`\\textcolor{${colorH}}{h}`);
+    expect(resultOff).toContain(`\\textcolor{${colorS}}{s}`);
+    expect(resultOff).toContain(`\\textcolor{${colorP}}{p}`);
+
+    // But standard math functions like sin(x) remain functions even when switch is false!
+    const sinResult = colorLatexBody("sin(x)", undefined, {
+      variableDataFlow: true,
+      enableTaxonomy: true,
+      extendedFunctions: false,
+    });
+    expect(sinResult).not.toContain(`\\textcolor{${colorS}}{s}`);
+    expect(sinResult).toContain("sin");
+
+    // When extendedFunctions is true (default), ch and sp are unified functions
+    const resultOn = colorLatexBody(input, undefined, {
+      variableDataFlow: true,
+      enableTaxonomy: true,
+      extendedFunctions: true,
+    });
+    expect(resultOn).not.toContain(`\\textcolor{${colorC}}{c}`);
+    expect(resultOn).not.toContain(`\\textcolor{${colorS}}{s}`);
+  });
 });

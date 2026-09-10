@@ -1,6 +1,6 @@
 // src/converters/generic.ts
 
-import { COLORS, ColorPalette, ColorMathOptions } from "../config";
+import { COLORS, ColorPalette, ColorMathOptions, getBareFunctions } from "../config";
 import { collectSingleConstantSpans } from "../parsers/constants";
 import { collectBraKetDelimiterSpans } from "../parsers/braket";
 import { collectDelimiterSpans } from "../parsers/delimiters";
@@ -22,9 +22,10 @@ const FUNCTION_COLOR_NAMES: ("main" | "derivative" | "chain")[] = [
 
 export function collectFunctionSpans(
   body: string,
-  palette: ColorPalette = COLORS
+  palette: ColorPalette = COLORS,
+  bareFunctions?: Set<string>
 ): ColorSpan[] {
-  const [semantic] = findSemanticSpans(body);
+  const [semantic] = findSemanticSpans(body, bareFunctions);
   const spans: ColorSpan[] = [];
   for (const item of semantic) {
     let colorName: keyof ColorPalette;
@@ -60,8 +61,10 @@ export function colorLatexBody(
   const diffSpans = findDifferentialSpans(normalized);
   const dimSpans = findDimensionlessSpans(normalized);
 
+  const bareFunctions = getBareFunctions(options);
+
   const spans: ColorSpan[] = [
-    ...collectFunctionSpans(normalized, palette),
+    ...collectFunctionSpans(normalized, palette, bareFunctions),
     ...collectScannerSpans(normalized, palette),
   ];
 
@@ -94,7 +97,7 @@ export function colorLatexBody(
   }
 
   if (options?.variableDataFlow) {
-    spans.push(...collectVariableSpans(normalized, undefined, unitSpans, diffSpans, dimSpans));
+    spans.push(...collectVariableSpans(normalized, undefined, unitSpans, diffSpans, dimSpans, bareFunctions));
   }
 
   return applyColorSpans(normalized, spans);

@@ -249,7 +249,8 @@ function collectSemanticSpansInternal(
   end: number,
   depth: number,
   spans: SemanticSpan[],
-  errors: string[]
+  errors: string[],
+  bareFunctions: Set<string> = BARE_FUNCTIONS
 ): void {
   let index = start;
   while (index < end) {
@@ -319,13 +320,14 @@ function collectSemanticSpansInternal(
                   argumentEnd,
                   depth + 1,
                   spans,
-                  errors
+                  errors,
+                  bareFunctions
                 );
                 index = callEnd;
                 continue;
               }
               const innerText = text.slice(afterCmd + 1, opEnd - 1).trim();
-              if (BARE_FUNCTIONS.has(innerText.toLowerCase())) {
+              if (bareFunctions.has(innerText.toLowerCase())) {
                 spans.push({
                   kind: "function",
                   value: text.slice(index, opEnd),
@@ -359,7 +361,8 @@ function collectSemanticSpansInternal(
               argumentEnd,
               depth + 1,
               spans,
-              errors
+              errors,
+              bareFunctions
             );
             index = callEnd;
             continue;
@@ -387,7 +390,7 @@ function collectSemanticSpansInternal(
       const nameEnd = index + name.length;
       const args = readFunctionArguments(text, nameEnd, end);
       if (args !== null) {
-        const isMultiVar = baseName.length >= 2 && !BARE_FUNCTIONS.has(baseName.toLowerCase()) && baseName.length < 4;
+        const isMultiVar = baseName.length >= 2 && !bareFunctions.has(baseName.toLowerCase()) && baseName.length < 4;
         if (!isMultiVar) {
           const [argumentStart, argumentEnd, callEnd] = args;
           spans.push({
@@ -403,7 +406,8 @@ function collectSemanticSpansInternal(
             argumentEnd,
             depth + 1,
             spans,
-            errors
+            errors,
+            bareFunctions
           );
           index = callEnd;
           continue;
@@ -417,7 +421,8 @@ function collectSemanticSpansInternal(
             argumentEnd,
             depth,
             spans,
-            errors
+            errors,
+            bareFunctions
           );
           index = callEnd;
           continue;
@@ -426,7 +431,7 @@ function collectSemanticSpansInternal(
 
       if (nameEnd < end && text[nameEnd] === "(") {
         errors.push(`unclosed function call after '${name}'`);
-      } else if (BARE_FUNCTIONS.has(name.toLowerCase())) {
+      } else if (bareFunctions.has(name.toLowerCase())) {
         spans.push({
           kind: "function",
           value: name,
@@ -461,10 +466,13 @@ function collectSemanticSpansInternal(
   }
 }
 
-export function findSemanticSpans(source: string): [SemanticSpan[], string | null] {
+export function findSemanticSpans(
+  source: string,
+  bareFunctions: Set<string> = BARE_FUNCTIONS
+): [SemanticSpan[], string | null] {
   const spans: SemanticSpan[] = [];
   const errors: string[] = [];
-  collectSemanticSpansInternal(source, 0, source.length, 0, spans, errors);
+  collectSemanticSpansInternal(source, 0, source.length, 0, spans, errors, bareFunctions);
   return [spans, errors.length > 0 ? errors[0] : null];
 }
 

@@ -56,7 +56,8 @@ export function collectVariableSpans(
   palette: string[] = VARIABLE_HASH_PALETTE,
   unitSpans?: UnitSpan[],
   diffSpans?: DifferentialSpan[],
-  dimSpans?: DimensionlessSpan[]
+  dimSpans?: DimensionlessSpan[],
+  bareFunctions: Set<string> = BARE_FUNCTIONS
 ): ColorSpan[] {
   const units = unitSpans || findUnitSpans(body);
   const diffs = diffSpans || findDifferentialSpans(body);
@@ -245,7 +246,7 @@ export function collectVariableSpans(
       const lowerWord = word.toLowerCase();
 
       // 1. Bare functions without parentheses: e.g. sin x, ln x, rank A, det M
-      if (BARE_FUNCTIONS.has(lowerWord)) {
+      if (bareFunctions.has(lowerWord)) {
         index += word.length;
         continue;
       }
