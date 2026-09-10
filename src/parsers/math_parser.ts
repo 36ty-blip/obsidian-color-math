@@ -1,5 +1,6 @@
 // src/parsers/math_parser.ts
 
+import { BARE_FUNCTIONS, MATH_FUNCTIONS } from "../config";
 import { readBraced } from "../utils/latex_helpers";
 import { readOperand, OPAQUE_MACROS } from "./latex_spans";
 import { scanMarkdown } from "./markdown_scanner";
@@ -272,6 +273,39 @@ function collectSemanticSpansInternal(
             continue;
           }
         }
+        if (MATH_FUNCTIONS.has(name)) {
+          const args = readFunctionArguments(text, commandEnd, end);
+          if (args !== null) {
+            const [argumentStart, argumentEnd, callEnd] = args;
+            spans.push({
+              kind: "function",
+              value: name,
+              start: index,
+              end: commandEnd,
+              depth,
+            });
+            collectSemanticSpansInternal(
+              text,
+              argumentStart,
+              argumentEnd,
+              depth + 1,
+              spans,
+              errors
+            );
+            index = callEnd;
+            continue;
+          } else {
+            spans.push({
+              kind: "function",
+              value: name,
+              start: index,
+              end: commandEnd,
+              depth,
+            });
+            index = commandEnd;
+            continue;
+          }
+        }
         index = commandEnd;
         continue;
       }
@@ -305,6 +339,16 @@ function collectSemanticSpansInternal(
 
       if (nameEnd < end && text[nameEnd] === "(") {
         errors.push(`unclosed function call after '${name}'`);
+      } else if (BARE_FUNCTIONS.has(name.toLowerCase())) {
+        spans.push({
+          kind: "function",
+          value: name,
+          start: index,
+          end: nameEnd,
+          depth,
+        });
+        index = nameEnd;
+        continue;
       }
       index = nameEnd;
       continue;

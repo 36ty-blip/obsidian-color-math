@@ -177,4 +177,55 @@ describe("User Formula Test", () => {
       expect(validation.valid, `KaTeX error for "${converted}": ${validation.error}`).toBe(true);
     }
   });
+
+  it("handles bare functions (sin x, cos x, ln x) and macro functions consistently without splitting letters", () => {
+    const opts = {
+      enableTaxonomy: true,
+      variableDataFlow: true,
+      rainbowDelimiters: true,
+    };
+
+    // 1. Bare sin x without parentheses
+    const bareSin = "$$y = \\sin x + \\cos x$$";
+    const coloredBareSin = convertText(bareSin, DEFAULT_COLORS, opts);
+    expect(coloredBareSin).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{\\sin}`);
+    expect(coloredBareSin).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{\\cos}`);
+
+    // 2. Bare sin x without backslash
+    const noBackslashSin = "$$y = sin x + cos x$$";
+    const coloredNoBackslash = convertText(noBackslashSin, DEFAULT_COLORS, opts);
+    // sin must be wrapped as a whole function, never split into s, i, n
+    expect(coloredNoBackslash).not.toMatch(/\\textcolor\{[^}]+\}\{s\}\\textcolor\{[^}]+\}\{i\}/);
+    expect(coloredNoBackslash).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{sin}`);
+    expect(coloredNoBackslash).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{cos}`);
+
+    // 3. Bare sin(x) with parentheses
+    const noBackslashParens = "$$y = sin(x) + ln(t)$$";
+    const coloredNoBackslashParens = convertText(noBackslashParens, DEFAULT_COLORS, opts);
+    expect(coloredNoBackslashParens).not.toMatch(/\\textcolor\{[^}]+\}\{s\}\\textcolor\{[^}]+\}\{i\}/);
+    expect(coloredNoBackslashParens).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{sin}`);
+    expect(coloredNoBackslashParens).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{ln}`);
+
+    // 4. Power/exponent: sin^2 x and \sin^2(x)
+    const sinSquared = "$$sin^2 x + \\cos^2(x) = 1$$";
+    const coloredSinSquared = convertText(sinSquared, DEFAULT_COLORS, opts);
+    expect(coloredSinSquared).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{sin}`);
+    expect(coloredSinSquared).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{\\cos}`);
+
+    // 5. KaTeX validation on bare functions
+    const testFormulas = [
+      "$$y = sin x$$",
+      "$$y = sin(x)$$",
+      "$$y = \\sin x$$",
+      "$$y = \\sin(x)$$",
+      "$$f(x) = cos(\\theta) + ln(x) + exp(-x)$$",
+      "$$sin^2 x + cos^2 x = 1$$"
+    ];
+    for (const tf of testFormulas) {
+      const out = convertText(tf, DEFAULT_COLORS, opts);
+      const val = validateLatexWithKaTeX(out);
+      expect(val.valid, `KaTeX error for "${out}": ${val.error}`).toBe(true);
+    }
+  });
 });
+

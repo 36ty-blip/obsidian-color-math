@@ -257,6 +257,30 @@ export const MATH_FUNCTIONS = new Set([
   "\\inf",
 ]);
 
+export const BARE_FUNCTIONS = new Set([
+  "sin",
+  "cos",
+  "tan",
+  "csc",
+  "sec",
+  "cot",
+  "arcsin",
+  "arccos",
+  "arctan",
+  "arccsc",
+  "arcsec",
+  "arccot",
+  "sinh",
+  "cosh",
+  "tanh",
+  "coth",
+  "sech",
+  "csch",
+  "ln",
+  "log",
+  "exp",
+]);
+
 export const RAINBOW_DELIMITER_COLORS: string[] = [
   "#e0af68", // Tier 0: Gold
   "#7aa2f7", // Tier 1: Cyan / Blue

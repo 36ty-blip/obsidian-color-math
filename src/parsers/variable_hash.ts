@@ -5,6 +5,7 @@ import {
   hashStringToColor,
   MATH_ACCENTS,
   FONT_STYLE_MACROS,
+  BARE_FUNCTIONS,
 } from "../config";
 import { readOperand, OPAQUE_MACROS } from "./latex_spans";
 import { readBraced, readColorCommand } from "../utils/latex_helpers";
@@ -170,6 +171,13 @@ export function collectVariableSpans(
         index = cmdEnd;
         continue;
       }
+    }
+
+    // Check bare math functions (sin, cos, tan, ln, exp, etc.) so they are NOT shredded into single-letter variables
+    const bareMatch = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
+    if (bareMatch && BARE_FUNCTIONS.has(bareMatch[1].toLowerCase())) {
+      index += bareMatch[1].length;
+      continue;
     }
 
     // Single letter variables (optionally with prime): e.g. x, y, z, t, x', y''

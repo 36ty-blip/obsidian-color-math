@@ -5,6 +5,7 @@ import {
   ColorPalette,
   MATH_CONSTANTS,
   MATH_FUNCTIONS,
+  BARE_FUNCTIONS,
   MATH_PARAMETERS,
   MATH_ACCENTS,
   FONT_STYLE_MACROS,
@@ -99,6 +100,20 @@ export function collectTaxonomySpans(
     const inDim = dims.find((d) => d.start <= index && index < d.end);
     if (inDim) {
       index = inDim.end;
+      continue;
+    }
+
+    // Bare math functions (sin, cos, tan, ln, exp, etc.)
+    const bareMatch = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
+    if (bareMatch && BARE_FUNCTIONS.has(bareMatch[1].toLowerCase())) {
+      const fnName = bareMatch[1];
+      spans.push({
+        start: index,
+        end: index + fnName.length,
+        color: palette.main,
+        priority: 22,
+      });
+      index += fnName.length;
       continue;
     }
 

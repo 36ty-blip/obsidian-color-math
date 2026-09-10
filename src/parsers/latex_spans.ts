@@ -1,5 +1,7 @@
 // src/parsers/latex_spans.ts
 
+import { BARE_FUNCTIONS } from "../config";
+
 export const STYLE_MACROS = new Set([
   "mathbf",
   "mathcal",
@@ -911,6 +913,41 @@ export function readOperand(
       kind: "number",
       start,
       end: consumePostfix(source, start + numberMatch[0].length, end),
+    };
+  }
+
+  const bareMatch = source.slice(start, end).match(/^([A-Za-z]+)(?![A-Za-z])/);
+  if (bareMatch && BARE_FUNCTIONS.has(bareMatch[1].toLowerCase())) {
+    const fnName = bareMatch[1];
+    let fnEnd = start + fnName.length;
+    while (fnEnd < end && (source[fnEnd] === "'" || source[fnEnd] === "’")) {
+      fnEnd++;
+    }
+    const groupStart = skipIgnorable(source, fnEnd, end);
+    let atomEnd = fnEnd;
+    if (groupStart < end && (source[groupStart] === "(" || source[groupStart] === "[")) {
+      const groupEnd = readGroupEnd(source, groupStart, end);
+      if (groupEnd !== null) {
+        atomEnd = groupEnd;
+      }
+    } else if (
+      source.startsWith("\\left", groupStart) &&
+      ["(", "[", "lparen", "lbrack"].includes(leftDelimiter(source, groupStart, end) ?? "")
+    ) {
+      const groupEnd = readLeftRightEnd(source, groupStart, end);
+      if (groupEnd !== null) {
+        atomEnd = groupEnd;
+      }
+    } else {
+      const nextOperand = readOperand(source, groupStart, end);
+      if (nextOperand !== null && nextOperand.kind !== "opaque") {
+        atomEnd = nextOperand.end;
+      }
+    }
+    return {
+      kind: "function",
+      start,
+      end: consumePostfix(source, atomEnd, end),
     };
   }
 

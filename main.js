@@ -244,6 +244,29 @@ var MATH_FUNCTIONS = /* @__PURE__ */ new Set([
   "\\sup",
   "\\inf"
 ]);
+var BARE_FUNCTIONS = /* @__PURE__ */ new Set([
+  "sin",
+  "cos",
+  "tan",
+  "csc",
+  "sec",
+  "cot",
+  "arcsin",
+  "arccos",
+  "arctan",
+  "arccsc",
+  "arcsec",
+  "arccot",
+  "sinh",
+  "cosh",
+  "tanh",
+  "coth",
+  "sech",
+  "csch",
+  "ln",
+  "log",
+  "exp"
+]);
 var RAINBOW_DELIMITER_COLORS = [
   "#e0af68",
   // Tier 0: Gold
@@ -1542,6 +1565,37 @@ function readOperand(source, start, end) {
       kind: "number",
       start,
       end: consumePostfix(source, start + numberMatch[0].length, end)
+    };
+  }
+  const bareMatch = source.slice(start, end).match(/^([A-Za-z]+)(?![A-Za-z])/);
+  if (bareMatch && BARE_FUNCTIONS.has(bareMatch[1].toLowerCase())) {
+    const fnName = bareMatch[1];
+    let fnEnd = start + fnName.length;
+    while (fnEnd < end && (source[fnEnd] === "'" || source[fnEnd] === "\u2019")) {
+      fnEnd++;
+    }
+    const groupStart = skipIgnorable(source, fnEnd, end);
+    let atomEnd = fnEnd;
+    if (groupStart < end && (source[groupStart] === "(" || source[groupStart] === "[")) {
+      const groupEnd = readGroupEnd(source, groupStart, end);
+      if (groupEnd !== null) {
+        atomEnd = groupEnd;
+      }
+    } else if (source.startsWith("\\left", groupStart) && ["(", "[", "lparen", "lbrack"].includes(leftDelimiter(source, groupStart, end) ?? "")) {
+      const groupEnd = readLeftRightEnd(source, groupStart, end);
+      if (groupEnd !== null) {
+        atomEnd = groupEnd;
+      }
+    } else {
+      const nextOperand = readOperand(source, groupStart, end);
+      if (nextOperand !== null && nextOperand.kind !== "opaque") {
+        atomEnd = nextOperand.end;
+      }
+    }
+    return {
+      kind: "function",
+      start,
+      end: consumePostfix(source, atomEnd, end)
     };
   }
   if (/[A-Za-z]/.test(source[start])) {
@@ -3065,6 +3119,39 @@ function collectSemanticSpansInternal(text, start, end, depth, spans, errors) {
             continue;
           }
         }
+        if (MATH_FUNCTIONS.has(name)) {
+          const args = readFunctionArguments(text, commandEnd, end);
+          if (args !== null) {
+            const [argumentStart, argumentEnd, callEnd] = args;
+            spans.push({
+              kind: "function",
+              value: name,
+              start: index,
+              end: commandEnd,
+              depth
+            });
+            collectSemanticSpansInternal(
+              text,
+              argumentStart,
+              argumentEnd,
+              depth + 1,
+              spans,
+              errors
+            );
+            index = callEnd;
+            continue;
+          } else {
+            spans.push({
+              kind: "function",
+              value: name,
+              start: index,
+              end: commandEnd,
+              depth
+            });
+            index = commandEnd;
+            continue;
+          }
+        }
         index = commandEnd;
         continue;
       }
@@ -3096,6 +3183,16 @@ function collectSemanticSpansInternal(text, start, end, depth, spans, errors) {
       }
       if (nameEnd < end && text[nameEnd] === "(") {
         errors.push(`unclosed function call after '${name}'`);
+      } else if (BARE_FUNCTIONS.has(name.toLowerCase())) {
+        spans.push({
+          kind: "function",
+          value: name,
+          start: index,
+          end: nameEnd,
+          depth
+        });
+        index = nameEnd;
+        continue;
       }
       index = nameEnd;
       continue;
@@ -3252,6 +3349,18 @@ function collectTaxonomySpans(body, palette = COLORS, unitSpans, diffSpans, dimS
     const inDim = dims.find((d) => d.start <= index && index < d.end);
     if (inDim) {
       index = inDim.end;
+      continue;
+    }
+    const bareMatch = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
+    if (bareMatch && BARE_FUNCTIONS.has(bareMatch[1].toLowerCase())) {
+      const fnName = bareMatch[1];
+      spans.push({
+        start: index,
+        end: index + fnName.length,
+        color: palette.main,
+        priority: 22
+      });
+      index += fnName.length;
       continue;
     }
     if (body[index] === "\\") {
@@ -3494,6 +3603,11 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
         index = cmdEnd;
         continue;
       }
+    }
+    const bareMatch = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
+    if (bareMatch && BARE_FUNCTIONS.has(bareMatch[1].toLowerCase())) {
+      index += bareMatch[1].length;
+      continue;
     }
     const varMatch = body.slice(index).match(/^[a-zA-Z](')*/);
     if (varMatch) {
