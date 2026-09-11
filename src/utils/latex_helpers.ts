@@ -1,8 +1,9 @@
-// src/utils/latex_helpers.ts
+const COMMAND_STICKY_RE = /\\(?:[A-Za-z]+|.)/y;
 
 export function matchCommand(text: string, index: number): string | null {
   if (index >= text.length || text[index] !== "\\") return null;
-  const match = text.slice(index).match(/^(\\[A-Za-z]+|\\.)/);
+  COMMAND_STICKY_RE.lastIndex = index;
+  const match = COMMAND_STICKY_RE.exec(text);
   return match ? match[0] : null;
 }
 
@@ -179,6 +180,9 @@ export function readColorCommand(text: string, start: number): [string, number] 
 }
 
 export function containsColorWrapper(text: string): boolean {
+  if (!text.includes("\\textcolor") && !text.includes("\\color")) {
+    return false;
+  }
   let index = 0;
   while (index < text.length) {
     if (text[index] === "%") {

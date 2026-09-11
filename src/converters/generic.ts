@@ -57,9 +57,13 @@ export function colorLatexBody(
 
   const normalized = normalizeLatexBraces(body);
 
-  const unitSpans = findUnitSpans(normalized);
-  const diffSpans = findDifferentialSpans(normalized);
-  const dimSpans = findDimensionlessSpans(normalized);
+  const needUnits = options?.colorUnits !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
+  const needDiffs = options?.colorDifferentials !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
+  const needDims = options?.colorDimensionless !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
+
+  const unitSpans = needUnits ? findUnitSpans(normalized) : [];
+  const diffSpans = needDiffs ? findDifferentialSpans(normalized) : [];
+  const dimSpans = needDims ? findDimensionlessSpans(normalized) : [];
 
   const bareFunctions = getBareFunctions(options);
 

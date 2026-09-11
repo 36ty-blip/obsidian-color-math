@@ -26,6 +26,22 @@ export const COMMON_DIMENSIONLESS_NUMBERS = [
   "Fo", // Fourier number
 ];
 
+const DIMENSIONLESS_LIST = COMMON_DIMENSIONLESS_NUMBERS.join("|");
+
+// 1. Text or mathrm wrapped: \text{Re}, \mathrm{Ma}, etc.
+const TEXT_REGEX = new RegExp(
+  `\\\\(?:text|mathrm)\\s*\\{\\s*(${DIMENSIONLESS_LIST})\\s*\\}`,
+  "g"
+);
+
+// 2. Contiguous bare symbols: Re, Ma, Pr, etc.
+// Must NOT be preceded by backslash (e.g. \Re) or any letter.
+// Must NOT be followed by any letter.
+const BARE_REGEX = new RegExp(
+  `(?:^|[^\\\\a-zA-Z])(${DIMENSIONLESS_LIST})(?![a-zA-Z])`,
+  "g"
+);
+
 /**
  * Scans a LaTeX math body to identify physical & engineering dimensionless numbers.
  * Enforces strict contiguity:
@@ -44,26 +60,16 @@ export function findDimensionlessSpans(body: string): DimensionlessSpan[] {
     }
   }
 
-  const list = COMMON_DIMENSIONLESS_NUMBERS.join("|");
-
-  // 1. Text or mathrm wrapped: \text{Re}, \mathrm{Ma}, etc.
-  const textRegex = new RegExp(
-    `\\\\(?:text|mathrm)\\s*\\{\\s*(${list})\\s*\\}`,
-    "g"
-  );
+  // 1. Text or mathrm wrapped
+  TEXT_REGEX.lastIndex = 0;
   let match: RegExpExecArray | null;
-  while ((match = textRegex.exec(body)) !== null) {
+  while ((match = TEXT_REGEX.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, match[0]);
   }
 
-  // 2. Contiguous bare symbols: Re, Ma, Pr, etc.
-  // Must NOT be preceded by backslash (e.g. \Re) or any letter.
-  // Must NOT be followed by any letter.
-  const bareRegex = new RegExp(
-    `(?:^|[^\\\\a-zA-Z])(${list})(?![a-zA-Z])`,
-    "g"
-  );
-  while ((match = bareRegex.exec(body)) !== null) {
+  // 2. Contiguous bare symbols
+  BARE_REGEX.lastIndex = 0;
+  while ((match = BARE_REGEX.exec(body)) !== null) {
     const symbol = match[1];
     const symStart = match.index + (match[0].length - symbol.length);
     const symEnd = symStart + symbol.length;

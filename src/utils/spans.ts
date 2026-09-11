@@ -53,8 +53,13 @@ export function selectColorSpans(source: string, spans: ColorSpan[]): ColorSpan[
 
 export function applyColorSpans(source: string, spans: ColorSpan[]): string {
   const selected = selectColorSpans(source, spans);
+  if (selected.length === 0) {
+    return source;
+  }
+
   const openings = new Map<number, ColorSpan[]>();
   const closings = new Map<number, ColorSpan[]>();
+  const events = new Set<number>();
 
   for (const span of selected) {
     if (!openings.has(span.start)) openings.set(span.start, []);
@@ -62,12 +67,22 @@ export function applyColorSpans(source: string, spans: ColorSpan[]): string {
 
     if (!closings.has(span.end)) closings.set(span.end, []);
     closings.get(span.end)!.push(span);
+
+    events.add(span.start);
+    events.add(span.end);
   }
 
+  const sortedEvents = Array.from(events).sort((a, b) => a - b);
   const pieces: string[] = [];
-  for (let index = 0; index <= source.length; index++) {
+  let lastIdx = 0;
+
+  for (const idx of sortedEvents) {
+    if (idx > lastIdx) {
+      pieces.push(source.slice(lastIdx, idx));
+    }
+
     // Close inner spans first, then open outer spans first.
-    const closeList = closings.get(index);
+    const closeList = closings.get(idx);
     if (closeList) {
       const sortedClosings = [...closeList].sort((a, b) => b.start - a.start);
       for (let i = 0; i < sortedClosings.length; i++) {
@@ -75,7 +90,7 @@ export function applyColorSpans(source: string, spans: ColorSpan[]): string {
       }
     }
 
-    const openList = openings.get(index);
+    const openList = openings.get(idx);
     if (openList) {
       const sortedOpenings = [...openList].sort((a, b) => b.end - a.end);
       for (const span of sortedOpenings) {
@@ -83,9 +98,11 @@ export function applyColorSpans(source: string, spans: ColorSpan[]): string {
       }
     }
 
-    if (index < source.length) {
-      pieces.push(source[index]);
-    }
+    lastIdx = idx;
+  }
+
+  if (lastIdx < source.length) {
+    pieces.push(source.slice(lastIdx));
   }
 
   return pieces.join("");

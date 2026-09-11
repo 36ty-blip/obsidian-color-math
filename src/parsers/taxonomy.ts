@@ -28,6 +28,9 @@ function skipComment(text: string, start: number): number {
   return Math.min(index + 1, text.length);
 }
 
+const INDEX_PATTERN =
+  /(\\(?:sum|prod|coprod|bigcup|bigcap|lim|inf|sup))_\{?\s*([A-Za-z])\s*(?:=|\to|\\to)/g;
+
 /**
  * Collects semantic spans for mathematical symbols:
  * - Constants (\pi, \hbar, \infty, etc.) -> orange
@@ -49,9 +52,9 @@ export function collectTaxonomySpans(
   let index = 0;
 
   // 1. Scan for bound index variables in sums, products, limits
-  const indexPattern = /(\\(?:sum|prod|coprod|bigcup|bigcap|lim|inf|sup))_\{?\s*([A-Za-z])\s*(?:=|\to|\\to)/g;
+  INDEX_PATTERN.lastIndex = 0;
   let match: RegExpExecArray | null;
-  while ((match = indexPattern.exec(body)) !== null) {
+  while ((match = INDEX_PATTERN.exec(body)) !== null) {
     const operatorStr = match[1];
     const varName = match[2];
     const varOffset = match[0].indexOf(varName, operatorStr.length);

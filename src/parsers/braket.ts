@@ -14,7 +14,27 @@ export interface BraKetSpan {
  * - Inner product / Expectation: \langle \phi | \psi \rangle, \langle \psi | \hat{H} | \psi \rangle
  * - Ket: | \psi \rangle, \vert \psi \rangle, \ket{\psi}
  * - Bra: \langle \phi |, \langle \phi \vert, \bra{\phi}
- * Ensures standard absolute values or inequalities (e.g. |x| < 5) are NOT misidentified as bra-kets.
+ */
+const BRAKET_REGEX =
+  /\\langle\s*([^<|>]+?)\s*\|\s*([^<|>]+?)(?:\s*\|\s*([^<|>]+?))?\s*\\rangle/g;
+
+const KET_MACRO_REGEX =
+  /(?:\||\\vert)\s*([^<|>]+?)\s*\\rangle|\\ket\s*\{([^}]+)\}/g;
+
+const BRA_MACRO_REGEX =
+  /\\langle\s*([^<|>]+?)\s*(?:\||\\vert)|\\bra\s*\{([^}]+)\}/g;
+
+const KET_DELIM_REGEX = /(?:\||\\vert)\s*([^<|>]+?)\s*\\rangle/g;
+
+const BRA_DELIM_REGEX = /\\langle\s*([^<|>]+?)\s*(?:\||\\vert)/g;
+
+const VERT_BAR_REGEX = /(?:\||\\vert)/;
+
+/**
+ * Scans a LaTeX math body to identify Dirac bra-ket spans:
+ * - <psi|A|phi> or \langle \psi | A | \phi \rangle
+ * - |psi> or \ket{\psi}
+ * - <phi| or \bra{\phi}
  */
 export function findBraKetSpans(body: string): BraKetSpan[] {
   const spans: BraKetSpan[] = [];
@@ -27,24 +47,21 @@ export function findBraKetSpans(body: string): BraKetSpan[] {
   }
 
   // 1. Bracket / Expectation value: \langle ... | ... \rangle
-  const braketRegex =
-    /\\langle\s*([^<|>]+?)\s*\|\s*([^<|>]+?)(?:\s*\|\s*([^<|>]+?))?\s*\\rangle/g;
+  BRAKET_REGEX.lastIndex = 0;
   let match: RegExpExecArray | null;
-  while ((match = braketRegex.exec(body)) !== null) {
+  while ((match = BRAKET_REGEX.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, "bracket");
   }
 
   // 2. Ket: | ... \rangle or \vert ... \rangle or \ket{...}
-  const ketRegex =
-    /(?:\||\\vert)\s*([^<|>]+?)\s*\\rangle|\\ket\s*\{([^}]+)\}/g;
-  while ((match = ketRegex.exec(body)) !== null) {
+  KET_MACRO_REGEX.lastIndex = 0;
+  while ((match = KET_MACRO_REGEX.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, "ket");
   }
 
   // 3. Bra: \langle ... | or \langle ... \vert or \bra{...}
-  const braRegex =
-    /\\langle\s*([^<|>]+?)\s*(?:\||\\vert)|\\bra\s*\{([^}]+)\}/g;
-  while ((match = braRegex.exec(body)) !== null) {
+  BRA_MACRO_REGEX.lastIndex = 0;
+  while ((match = BRA_MACRO_REGEX.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, "bra");
   }
 
@@ -63,10 +80,9 @@ export function collectBraKetDelimiterSpans(
   const spans: ColorSpan[] = [];
 
   // 1. \langle ... | ... \rangle
-  const braketRegex =
-    /\\langle\s*([^<|>]+?)\s*\|\s*([^<|>]+?)(?:\s*\|\s*([^<|>]+?))?\s*\\rangle/g;
+  BRAKET_REGEX.lastIndex = 0;
   let match: RegExpExecArray | null;
-  while ((match = braketRegex.exec(body)) !== null) {
+  while ((match = BRAKET_REGEX.exec(body)) !== null) {
     const full = match[0];
     const langleIdx = match.index;
     const langleEnd = langleIdx + "\\langle".length;
@@ -84,8 +100,8 @@ export function collectBraKetDelimiterSpans(
   }
 
   // 2. Ket: | ... \rangle or \vert ... \rangle
-  const ketRegex = /(?:\||\\vert)\s*([^<|>]+?)\s*\\rangle/g;
-  while ((match = ketRegex.exec(body)) !== null) {
+  KET_DELIM_REGEX.lastIndex = 0;
+  while ((match = KET_DELIM_REGEX.exec(body)) !== null) {
     const full = match[0];
     const barIdx = match.index;
     const barEnd = barIdx + (full.startsWith("\\vert") ? 5 : 1);
@@ -99,12 +115,12 @@ export function collectBraKetDelimiterSpans(
   }
 
   // 3. Bra: \langle ... | or \langle ... \vert
-  const braRegex = /\\langle\s*([^<|>]+?)\s*(?:\||\\vert)/g;
-  while ((match = braRegex.exec(body)) !== null) {
+  BRA_DELIM_REGEX.lastIndex = 0;
+  while ((match = BRA_DELIM_REGEX.exec(body)) !== null) {
     const full = match[0];
     const langleIdx = match.index;
     const langleEnd = langleIdx + 7;
-    const barIdx = match.index + full.search(/(?:\||\\vert)/);
+    const barIdx = match.index + full.search(VERT_BAR_REGEX);
     const barEnd = barIdx + (full.endsWith("\\vert") ? 5 : 1);
 
     if (!spans.some((s) => s.start === langleIdx)) {

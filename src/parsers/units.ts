@@ -18,6 +18,41 @@ const SAFE_MICRO_UNITS = "m|s|g|mol|Hz|Pa|bar|rad|\\\\Omega|L|l";
 // SI units that need a preceding number or \text{} when attached to \mu to avoid colliding with variables (e.g. F = \mu N)
 const AMBIGUOUS_MICRO_UNITS = "N|A|V|F|H|W|J|C";
 
+const MICRO_TEXT_REGEX =
+  /\\mu\s*(?:\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%ΩμÅ/^0-9\s.\\-]+?)\s*\})(?:\^\{?-?\d+\}?)?/g;
+
+const SAFE_MICRO_REGEX = new RegExp(
+  `\\\\mu\\s*(${SAFE_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?`,
+  "g"
+);
+
+const DEG_REGEX =
+  /\^\s*\\circ\s*(?:\\(?:text|mathrm)\s*\{[A-Za-z]+\}|[A-Za-z]+)/g;
+
+const NUMBER_UNIT_REGEX = new RegExp(
+  `(?:^|[^A-Za-z0-9_])(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:\\s*(?:\\\\times|\\\\cdot|·|\\*)\\s*10\\^\\{?[+-]?\\d+\\}?|\\s*[eE][+-]?\\d+)?(?:\\s*|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)*` +
+    `(` +
+    // Sub-case A: \text{...} or \mathrm{...}
+    `\\\\(?:text|mathrm)\\s*\\{[^}]+\\}(?:\\^\\{?-?\\d+\\}?)?` +
+    `|` +
+    // Sub-case B: \mu followed by ambiguous or safe unit (e.g. 5 \mu N, 1.064 \mu m)
+    `\\\\mu\\s*(?:${SAFE_MICRO_UNITS}|${AMBIGUOUS_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?` +
+    `|` +
+    // Sub-case C: Bare SI units (with optional prefix, compound '/', and exponents)
+    // Guard (?!m[LK]) prevents bare 'mL' or 'mK' from matching algebraic denominators like 8mL^2 or \sqrt{2mK}
+    `(?:(?:(?!m[LK])(?:${PREFIXES}))?(?:${SI_UNITS}))(?:\\/(?:(?:${PREFIXES})?(?:${SI_UNITS})))*(?:\\^\\{?-?\\d+\\}?)?(?![A-Za-z0-9_({])` +
+    `)`,
+  "g"
+);
+
+const TEXT_UNIT_REGEX =
+  /\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%ΩμÅ/^0-9\s.\\-]+?)\s*\}(?:\^\{?-?\\d+\}?)?/g;
+
+const IS_UNIT_REGEX = new RegExp(
+  `^(?:${PREFIXES})?(?:${SI_UNITS})(?:\\/(?:${PREFIXES})?(?:${SI_UNITS}))*(?:\\^\\{?-?\\d+\\}?)?$`,
+  "i"
+);
+
 /**
  * Scans a LaTeX math body to identify physical unit spans.
  * Handles:
@@ -39,47 +74,27 @@ export function findUnitSpans(body: string): UnitSpan[] {
 
   // 1. Micro units with \text or bare
   // 1a. \mu\text{...} or \mu\mathrm{...}
-  const microTextRegex =
-    /\\mu\s*(?:\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%ΩμÅ/^0-9\s.\\-]+?)\s*\})(?:\^\{?-?\d+\}?)?/g;
+  MICRO_TEXT_REGEX.lastIndex = 0;
   let match: RegExpExecArray | null;
-  while ((match = microTextRegex.exec(body)) !== null) {
+  while ((match = MICRO_TEXT_REGEX.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, match[0]);
   }
 
   // 1b. Bare \mu with safe micro units: \mu m, \mu s, \mu g, \mu\Omega, etc.
-  const safeMicroRegex = new RegExp(
-    `\\\\mu\\s*(${SAFE_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?`,
-    "g"
-  );
-  while ((match = safeMicroRegex.exec(body)) !== null) {
+  SAFE_MICRO_REGEX.lastIndex = 0;
+  while ((match = SAFE_MICRO_REGEX.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, match[0]);
   }
 
   // 2. Degree units: ^\circ C, ^\circ\text{C}, ^\circ F
-  const degRegex =
-    /\^\s*\\circ\s*(?:\\(?:text|mathrm)\s*\{[A-Za-z]+\}|[A-Za-z]+)/g;
-  while ((match = degRegex.exec(body)) !== null) {
+  DEG_REGEX.lastIndex = 0;
+  while ((match = DEG_REGEX.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, match[0]);
   }
 
   // 3. Units preceded by a number (Magnitude + Unit)
-  const numberUnitRegex = new RegExp(
-    `(?:^|[^A-Za-z0-9_])(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:\\s*(?:\\\\times|\\\\cdot|·|\\*)\\s*10\\^\\{?[+-]?\\d+\\}?|\\s*[eE][+-]?\\d+)?(?:\\s*|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)*` +
-      `(` +
-      // Sub-case A: \text{...} or \mathrm{...}
-      `\\\\(?:text|mathrm)\\s*\\{[^}]+\\}(?:\\^\\{?-?\\d+\\}?)?` +
-      `|` +
-      // Sub-case B: \mu followed by ambiguous or safe unit (e.g. 5 \mu N, 1.064 \mu m)
-      `\\\\mu\\s*(?:${SAFE_MICRO_UNITS}|${AMBIGUOUS_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?` +
-      `|` +
-      // Sub-case C: Bare SI units (with optional prefix, compound '/', and exponents)
-      // Guard (?!m[LK]) prevents bare 'mL' or 'mK' from matching algebraic denominators like 8mL^2 or \sqrt{2mK}
-      `(?:(?:(?!m[LK])(?:${PREFIXES}))?(?:${SI_UNITS}))(?:\\/(?:(?:${PREFIXES})?(?:${SI_UNITS})))*(?:\\^\\{?-?\\d+\\}?)?(?![A-Za-z0-9_({])` +
-      `)`,
-    "g"
-  );
-
-  while ((match = numberUnitRegex.exec(body)) !== null) {
+  NUMBER_UNIT_REGEX.lastIndex = 0;
+  while ((match = NUMBER_UNIT_REGEX.exec(body)) !== null) {
     const fullMatch = match[0];
     const unitPart = match[1];
     const unitOffset = fullMatch.lastIndexOf(unitPart);
@@ -89,16 +104,10 @@ export function findUnitSpans(body: string): UnitSpan[] {
   }
 
   // 4. Standalone Text / mathrm units with \text{...} or \mathrm{...}
-  const textUnitRegex =
-    /\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%ΩμÅ/^0-9\s.\\-]+?)\s*\}(?:\^\{?-?\d+\}?)?/g;
-  while ((match = textUnitRegex.exec(body)) !== null) {
+  TEXT_UNIT_REGEX.lastIndex = 0;
+  while ((match = TEXT_UNIT_REGEX.exec(body)) !== null) {
     const inner = match[1].trim();
-    const isUnit = new RegExp(
-      `^(?:${PREFIXES})?(?:${SI_UNITS})(?:\\/(?:${PREFIXES})?(?:${SI_UNITS}))*(?:\\^\\{?-?\\d+\\}?)?$`,
-      "i"
-    ).test(inner);
-
-    if (isUnit) {
+    if (IS_UNIT_REGEX.test(inner)) {
       addSpan(match.index, match.index + match[0].length, match[0]);
     }
   }

@@ -10,8 +10,17 @@ export interface DifferentialSpan {
   kind: "differential" | "derivative_fraction";
 }
 
+const DERIV_FRAC_REGEX =
+  /\\frac\s*\{\s*(?:d|\\partial|\\mathrm\{d\})(?:\^\{?\d+\}?)?\s*(?:[a-zA-Z\\]+)?\s*\}\s*\{\s*(?:d|\\partial|\\mathrm\{d\})\s*(?:[a-zA-Z]|\\\\[a-zA-Z]+)(?:\^\{?\d+\}?)?(?:\s*(?:d|\\partial|\\mathrm\{d\})\s*(?:[a-zA-Z]|\\\\[a-zA-Z]+))*\s*\}/g;
+
+const DIFF_REGEX =
+  /(?:^|[\s+\-=*({]|\[|\\,|\\:|\\;|\\quad|\\qquad|~)(\s*(?:d|\\partial|\\mathrm\{d\}|\\delta)\s*(?:\\[a-zA-Z]+|[a-zA-Z])(?![a-zA-Z0-9_({])(?:\^\{?\d+\}?)?)/g;
+
+const D_OPERATOR_REGEX = /(?:d|\\partial|\\mathrm\{d\}|\\delta)/;
+
 /**
- * Scans a LaTeX math body to identify differentials and derivative operators:
+ * Scans a LaTeX math body to identify differential spans and derivative fractions.
+ * Handles:
  * - Derivative fractions: \frac{d}{dx}, \frac{df}{dx}, \frac{\partial \psi}{\partial t}, \frac{d^2 y}{dx^2}
  * - Infinitesimal differentials: dx, dt, dy, dz, dr, d\theta, d\phi, \partial x, \partial t
  * Protects standalone $d$ (e.g. $W = Fd$, $d = vt$) from being treated as differentials.
@@ -27,21 +36,19 @@ export function findDifferentialSpans(body: string): DifferentialSpan[] {
   }
 
   // 1. Derivative fractions: \frac{d}{dx}, \frac{df}{dx}, \frac{\partial \psi}{\partial t}, \frac{d^2 y}{dx^2}
-  const derivFracRegex =
-    /\\frac\s*\{\s*(?:d|\\partial|\\mathrm\{d\})(?:\^\{?\d+\}?)?\s*(?:[a-zA-Z\\]+)?\s*\}\s*\{\s*(?:d|\\partial|\\mathrm\{d\})\s*(?:[a-zA-Z]|\\\\[a-zA-Z]+)(?:\^\{?\d+\}?)?(?:\s*(?:d|\\partial|\\mathrm\{d\})\s*(?:[a-zA-Z]|\\\\[a-zA-Z]+))*\s*\}/g;
+  DERIV_FRAC_REGEX.lastIndex = 0;
   let match: RegExpExecArray | null;
-  while ((match = derivFracRegex.exec(body)) !== null) {
+  while ((match = DERIV_FRAC_REGEX.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, match[0], "derivative_fraction");
   }
 
   // 2. Infinitesimal differentials: dx, dt, dy, dz, dr, d\theta, d\phi, \partial x, \partial t
-  const diffRegex =
-    /(?:^|[\s+\-=*({]|\[|\\,|\\:|\\;|\\quad|\\qquad|~)(\s*(?:d|\\partial|\\mathrm\{d\}|\\delta)\s*(?:\\[a-zA-Z]+|[a-zA-Z])(?![a-zA-Z0-9_({])(?:\^\{?\d+\}?)?)/g;
-  while ((match = diffRegex.exec(body)) !== null) {
+  DIFF_REGEX.lastIndex = 0;
+  while ((match = DIFF_REGEX.exec(body)) !== null) {
     const fullMatch = match[0];
     const diffGroup = match[1];
     const diffStart = match.index + (fullMatch.length - diffGroup.length);
-    const dOffset = diffGroup.search(/(?:d|\\partial|\\mathrm\{d\}|\\delta)/);
+    const dOffset = diffGroup.search(D_OPERATOR_REGEX);
     const actualStart = diffStart + dOffset;
     const diffText = diffGroup.slice(dOffset);
     const diffEnd = actualStart + diffText.length;

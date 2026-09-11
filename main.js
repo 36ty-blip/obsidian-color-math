@@ -1949,10 +1949,12 @@ function commandColor(command, palette = COLORS) {
 }
 
 // src/utils/latex_helpers.ts
+var COMMAND_STICKY_RE = /\\(?:[A-Za-z]+|.)/y;
 function matchCommand(text, index) {
   if (index >= text.length || text[index] !== "\\")
     return null;
-  const match = text.slice(index).match(/^(\\[A-Za-z]+|\\.)/);
+  COMMAND_STICKY_RE.lastIndex = index;
+  const match = COMMAND_STICKY_RE.exec(text);
   return match ? match[0] : null;
 }
 function readCommentEnd(text, start) {
@@ -2060,6 +2062,9 @@ function readColorCommand(text, start) {
   return [text.slice(start, end), end];
 }
 function containsColorWrapper(text) {
+  if (!text.includes("\\textcolor") && !text.includes("\\color")) {
+    return false;
+  }
   let index = 0;
   while (index < text.length) {
     if (text[index] === "%") {
@@ -2273,8 +2278,12 @@ function selectColorSpans(source, spans) {
 }
 function applyColorSpans(source, spans) {
   const selected = selectColorSpans(source, spans);
+  if (selected.length === 0) {
+    return source;
+  }
   const openings = /* @__PURE__ */ new Map();
   const closings = /* @__PURE__ */ new Map();
+  const events = /* @__PURE__ */ new Set();
   for (const span of selected) {
     if (!openings.has(span.start))
       openings.set(span.start, []);
@@ -2282,26 +2291,34 @@ function applyColorSpans(source, spans) {
     if (!closings.has(span.end))
       closings.set(span.end, []);
     closings.get(span.end).push(span);
+    events.add(span.start);
+    events.add(span.end);
   }
+  const sortedEvents = Array.from(events).sort((a, b) => a - b);
   const pieces = [];
-  for (let index = 0; index <= source.length; index++) {
-    const closeList = closings.get(index);
+  let lastIdx = 0;
+  for (const idx of sortedEvents) {
+    if (idx > lastIdx) {
+      pieces.push(source.slice(lastIdx, idx));
+    }
+    const closeList = closings.get(idx);
     if (closeList) {
       const sortedClosings = [...closeList].sort((a, b) => b.start - a.start);
       for (let i = 0; i < sortedClosings.length; i++) {
         pieces.push("}");
       }
     }
-    const openList = openings.get(index);
+    const openList = openings.get(idx);
     if (openList) {
       const sortedOpenings = [...openList].sort((a, b) => b.end - a.end);
       for (const span of sortedOpenings) {
         pieces.push(`\\textcolor{${span.color}}{`);
       }
     }
-    if (index < source.length) {
-      pieces.push(source[index]);
-    }
+    lastIdx = idx;
+  }
+  if (lastIdx < source.length) {
+    pieces.push(source.slice(lastIdx));
   }
   return pieces.join("");
 }
@@ -2756,11 +2773,15 @@ function collectSingleConstantSpans(body, palette = COLORS) {
 }
 
 // src/parsers/braket.ts
+var BRAKET_REGEX = /\\langle\s*([^<|>]+?)\s*\|\s*([^<|>]+?)(?:\s*\|\s*([^<|>]+?))?\s*\\rangle/g;
+var KET_DELIM_REGEX = /(?:\||\\vert)\s*([^<|>]+?)\s*\\rangle/g;
+var BRA_DELIM_REGEX = /\\langle\s*([^<|>]+?)\s*(?:\||\\vert)/g;
+var VERT_BAR_REGEX = /(?:\||\\vert)/;
 function collectBraKetDelimiterSpans(body, palette = COLORS, delimColor = palette.orange || "#e0af68") {
   const spans = [];
-  const braketRegex = /\\langle\s*([^<|>]+?)\s*\|\s*([^<|>]+?)(?:\s*\|\s*([^<|>]+?))?\s*\\rangle/g;
+  BRAKET_REGEX.lastIndex = 0;
   let match;
-  while ((match = braketRegex.exec(body)) !== null) {
+  while ((match = BRAKET_REGEX.exec(body)) !== null) {
     const full = match[0];
     const langleIdx = match.index;
     const langleEnd = langleIdx + "\\langle".length;
@@ -2774,8 +2795,8 @@ function collectBraKetDelimiterSpans(body, palette = COLORS, delimColor = palett
       barSearch++;
     }
   }
-  const ketRegex = /(?:\||\\vert)\s*([^<|>]+?)\s*\\rangle/g;
-  while ((match = ketRegex.exec(body)) !== null) {
+  KET_DELIM_REGEX.lastIndex = 0;
+  while ((match = KET_DELIM_REGEX.exec(body)) !== null) {
     const full = match[0];
     const barIdx = match.index;
     const barEnd = barIdx + (full.startsWith("\\vert") ? 5 : 1);
@@ -2786,12 +2807,12 @@ function collectBraKetDelimiterSpans(body, palette = COLORS, delimColor = palett
       spans.push({ start: rangleIdx, end: rangleEnd, color: delimColor, priority: 25 });
     }
   }
-  const braRegex = /\\langle\s*([^<|>]+?)\s*(?:\||\\vert)/g;
-  while ((match = braRegex.exec(body)) !== null) {
+  BRA_DELIM_REGEX.lastIndex = 0;
+  while ((match = BRA_DELIM_REGEX.exec(body)) !== null) {
     const full = match[0];
     const langleIdx = match.index;
     const langleEnd = langleIdx + 7;
-    const barIdx = match.index + full.search(/(?:\||\\vert)/);
+    const barIdx = match.index + full.search(VERT_BAR_REGEX);
     const barEnd = barIdx + (full.endsWith("\\vert") ? 5 : 1);
     if (!spans.some((s) => s.start === langleIdx)) {
       spans.push({ start: langleIdx, end: langleEnd, color: delimColor, priority: 25 });
@@ -3060,6 +3081,9 @@ function collectDelimiterSpans(text, options) {
 }
 
 // src/parsers/differentials.ts
+var DERIV_FRAC_REGEX = /\\frac\s*\{\s*(?:d|\\partial|\\mathrm\{d\})(?:\^\{?\d+\}?)?\s*(?:[a-zA-Z\\]+)?\s*\}\s*\{\s*(?:d|\\partial|\\mathrm\{d\})\s*(?:[a-zA-Z]|\\\\[a-zA-Z]+)(?:\^\{?\d+\}?)?(?:\s*(?:d|\\partial|\\mathrm\{d\})\s*(?:[a-zA-Z]|\\\\[a-zA-Z]+))*\s*\}/g;
+var DIFF_REGEX = /(?:^|[\s+\-=*({]|\[|\\,|\\:|\\;|\\quad|\\qquad|~)(\s*(?:d|\\partial|\\mathrm\{d\}|\\delta)\s*(?:\\[a-zA-Z]+|[a-zA-Z])(?![a-zA-Z0-9_({])(?:\^\{?\d+\}?)?)/g;
+var D_OPERATOR_REGEX = /(?:d|\\partial|\\mathrm\{d\}|\\delta)/;
 function findDifferentialSpans(body) {
   const spans = [];
   function addSpan(start, end, text, kind) {
@@ -3069,17 +3093,17 @@ function findDifferentialSpans(body) {
       spans.push({ start, end, text, kind });
     }
   }
-  const derivFracRegex = /\\frac\s*\{\s*(?:d|\\partial|\\mathrm\{d\})(?:\^\{?\d+\}?)?\s*(?:[a-zA-Z\\]+)?\s*\}\s*\{\s*(?:d|\\partial|\\mathrm\{d\})\s*(?:[a-zA-Z]|\\\\[a-zA-Z]+)(?:\^\{?\d+\}?)?(?:\s*(?:d|\\partial|\\mathrm\{d\})\s*(?:[a-zA-Z]|\\\\[a-zA-Z]+))*\s*\}/g;
+  DERIV_FRAC_REGEX.lastIndex = 0;
   let match;
-  while ((match = derivFracRegex.exec(body)) !== null) {
+  while ((match = DERIV_FRAC_REGEX.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, match[0], "derivative_fraction");
   }
-  const diffRegex = /(?:^|[\s+\-=*({]|\[|\\,|\\:|\\;|\\quad|\\qquad|~)(\s*(?:d|\\partial|\\mathrm\{d\}|\\delta)\s*(?:\\[a-zA-Z]+|[a-zA-Z])(?![a-zA-Z0-9_({])(?:\^\{?\d+\}?)?)/g;
-  while ((match = diffRegex.exec(body)) !== null) {
+  DIFF_REGEX.lastIndex = 0;
+  while ((match = DIFF_REGEX.exec(body)) !== null) {
     const fullMatch = match[0];
     const diffGroup = match[1];
     const diffStart = match.index + (fullMatch.length - diffGroup.length);
-    const dOffset = diffGroup.search(/(?:d|\\partial|\\mathrm\{d\}|\\delta)/);
+    const dOffset = diffGroup.search(D_OPERATOR_REGEX);
     const actualStart = diffStart + dOffset;
     const diffText = diffGroup.slice(dOffset);
     const diffEnd = actualStart + diffText.length;
@@ -3128,6 +3152,15 @@ var COMMON_DIMENSIONLESS_NUMBERS = [
   "Fo"
   // Fourier number
 ];
+var DIMENSIONLESS_LIST = COMMON_DIMENSIONLESS_NUMBERS.join("|");
+var TEXT_REGEX = new RegExp(
+  `\\\\(?:text|mathrm)\\s*\\{\\s*(${DIMENSIONLESS_LIST})\\s*\\}`,
+  "g"
+);
+var BARE_REGEX = new RegExp(
+  `(?:^|[^\\\\a-zA-Z])(${DIMENSIONLESS_LIST})(?![a-zA-Z])`,
+  "g"
+);
 function findDimensionlessSpans(body) {
   const spans = [];
   function addSpan(start, end, text) {
@@ -3137,20 +3170,13 @@ function findDimensionlessSpans(body) {
       spans.push({ start, end, text });
     }
   }
-  const list = COMMON_DIMENSIONLESS_NUMBERS.join("|");
-  const textRegex = new RegExp(
-    `\\\\(?:text|mathrm)\\s*\\{\\s*(${list})\\s*\\}`,
-    "g"
-  );
+  TEXT_REGEX.lastIndex = 0;
   let match;
-  while ((match = textRegex.exec(body)) !== null) {
+  while ((match = TEXT_REGEX.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, match[0]);
   }
-  const bareRegex = new RegExp(
-    `(?:^|[^\\\\a-zA-Z])(${list})(?![a-zA-Z])`,
-    "g"
-  );
-  while ((match = bareRegex.exec(body)) !== null) {
+  BARE_REGEX.lastIndex = 0;
+  while ((match = BARE_REGEX.exec(body)) !== null) {
     const symbol = match[1];
     const symStart = match.index + (match[0].length - symbol.length);
     const symEnd = symStart + symbol.length;
@@ -3572,6 +3598,21 @@ var SI_UNITS = "m|s|g|Hz|N|Pa|J|W|C|V|A|F|T|H|mol|L|l|K|bar|atm|torr|eV|cal|rad|
 var PREFIXES = "k|M|G|T|c|m|n|p|f|d|da|\\\\mu|\xB5";
 var SAFE_MICRO_UNITS = "m|s|g|mol|Hz|Pa|bar|rad|\\\\Omega|L|l";
 var AMBIGUOUS_MICRO_UNITS = "N|A|V|F|H|W|J|C";
+var MICRO_TEXT_REGEX = /\\mu\s*(?:\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%ΩμÅ/^0-9\s.\\-]+?)\s*\})(?:\^\{?-?\d+\}?)?/g;
+var SAFE_MICRO_REGEX = new RegExp(
+  `\\\\mu\\s*(${SAFE_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?`,
+  "g"
+);
+var DEG_REGEX = /\^\s*\\circ\s*(?:\\(?:text|mathrm)\s*\{[A-Za-z]+\}|[A-Za-z]+)/g;
+var NUMBER_UNIT_REGEX = new RegExp(
+  `(?:^|[^A-Za-z0-9_])(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:\\s*(?:\\\\times|\\\\cdot|\xB7|\\*)\\s*10\\^\\{?[+-]?\\d+\\}?|\\s*[eE][+-]?\\d+)?(?:\\s*|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)*(\\\\(?:text|mathrm)\\s*\\{[^}]+\\}(?:\\^\\{?-?\\d+\\}?)?|\\\\mu\\s*(?:${SAFE_MICRO_UNITS}|${AMBIGUOUS_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?|(?:(?:(?!m[LK])(?:${PREFIXES}))?(?:${SI_UNITS}))(?:\\/(?:(?:${PREFIXES})?(?:${SI_UNITS})))*(?:\\^\\{?-?\\d+\\}?)?(?![A-Za-z0-9_({]))`,
+  "g"
+);
+var TEXT_UNIT_REGEX = /\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%ΩμÅ/^0-9\s.\\-]+?)\s*\}(?:\^\{?-?\\d+\}?)?/g;
+var IS_UNIT_REGEX = new RegExp(
+  `^(?:${PREFIXES})?(?:${SI_UNITS})(?:\\/(?:${PREFIXES})?(?:${SI_UNITS}))*(?:\\^\\{?-?\\d+\\}?)?$`,
+  "i"
+);
 function findUnitSpans(body) {
   const spans = [];
   function addSpan(start, end, text) {
@@ -3581,27 +3622,21 @@ function findUnitSpans(body) {
       spans.push({ start, end, text });
     }
   }
-  const microTextRegex = /\\mu\s*(?:\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%ΩμÅ/^0-9\s.\\-]+?)\s*\})(?:\^\{?-?\d+\}?)?/g;
+  MICRO_TEXT_REGEX.lastIndex = 0;
   let match;
-  while ((match = microTextRegex.exec(body)) !== null) {
+  while ((match = MICRO_TEXT_REGEX.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, match[0]);
   }
-  const safeMicroRegex = new RegExp(
-    `\\\\mu\\s*(${SAFE_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?`,
-    "g"
-  );
-  while ((match = safeMicroRegex.exec(body)) !== null) {
+  SAFE_MICRO_REGEX.lastIndex = 0;
+  while ((match = SAFE_MICRO_REGEX.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, match[0]);
   }
-  const degRegex = /\^\s*\\circ\s*(?:\\(?:text|mathrm)\s*\{[A-Za-z]+\}|[A-Za-z]+)/g;
-  while ((match = degRegex.exec(body)) !== null) {
+  DEG_REGEX.lastIndex = 0;
+  while ((match = DEG_REGEX.exec(body)) !== null) {
     addSpan(match.index, match.index + match[0].length, match[0]);
   }
-  const numberUnitRegex = new RegExp(
-    `(?:^|[^A-Za-z0-9_])(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:\\s*(?:\\\\times|\\\\cdot|\xB7|\\*)\\s*10\\^\\{?[+-]?\\d+\\}?|\\s*[eE][+-]?\\d+)?(?:\\s*|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)*(\\\\(?:text|mathrm)\\s*\\{[^}]+\\}(?:\\^\\{?-?\\d+\\}?)?|\\\\mu\\s*(?:${SAFE_MICRO_UNITS}|${AMBIGUOUS_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?|(?:(?:(?!m[LK])(?:${PREFIXES}))?(?:${SI_UNITS}))(?:\\/(?:(?:${PREFIXES})?(?:${SI_UNITS})))*(?:\\^\\{?-?\\d+\\}?)?(?![A-Za-z0-9_({]))`,
-    "g"
-  );
-  while ((match = numberUnitRegex.exec(body)) !== null) {
+  NUMBER_UNIT_REGEX.lastIndex = 0;
+  while ((match = NUMBER_UNIT_REGEX.exec(body)) !== null) {
     const fullMatch = match[0];
     const unitPart = match[1];
     const unitOffset = fullMatch.lastIndexOf(unitPart);
@@ -3609,14 +3644,10 @@ function findUnitSpans(body) {
     const unitEnd = unitStart + unitPart.length;
     addSpan(unitStart, unitEnd, unitPart);
   }
-  const textUnitRegex = /\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%ΩμÅ/^0-9\s.\\-]+?)\s*\}(?:\^\{?-?\d+\}?)?/g;
-  while ((match = textUnitRegex.exec(body)) !== null) {
+  TEXT_UNIT_REGEX.lastIndex = 0;
+  while ((match = TEXT_UNIT_REGEX.exec(body)) !== null) {
     const inner = match[1].trim();
-    const isUnit = new RegExp(
-      `^(?:${PREFIXES})?(?:${SI_UNITS})(?:\\/(?:${PREFIXES})?(?:${SI_UNITS}))*(?:\\^\\{?-?\\d+\\}?)?$`,
-      "i"
-    ).test(inner);
-    if (isUnit) {
+    if (IS_UNIT_REGEX.test(inner)) {
       addSpan(match.index, match.index + match[0].length, match[0]);
     }
   }
@@ -3643,15 +3674,16 @@ function skipComment4(text, start) {
   }
   return Math.min(index + 1, text.length);
 }
+var INDEX_PATTERN = /(\\(?:sum|prod|coprod|bigcup|bigcap|lim|inf|sup))_\{?\s*([A-Za-z])\s*(?:=|\to|\\to)/g;
 function collectTaxonomySpans(body, palette = COLORS, unitSpans, diffSpans, dimSpans) {
   const units = unitSpans || findUnitSpans(body);
   const diffs = diffSpans || findDifferentialSpans(body);
   const dims = dimSpans || findDimensionlessSpans(body);
   const spans = [];
   let index = 0;
-  const indexPattern = /(\\(?:sum|prod|coprod|bigcup|bigcap|lim|inf|sup))_\{?\s*([A-Za-z])\s*(?:=|\to|\\to)/g;
+  INDEX_PATTERN.lastIndex = 0;
   let match;
-  while ((match = indexPattern.exec(body)) !== null) {
+  while ((match = INDEX_PATTERN.exec(body)) !== null) {
     const operatorStr = match[1];
     const varName = match[2];
     const varOffset = match[0].indexOf(varName, operatorStr.length);
@@ -4148,9 +4180,12 @@ function colorLatexBody(body, palette = COLORS, options) {
     return body;
   }
   const normalized = normalizeLatexBraces(body);
-  const unitSpans = findUnitSpans(normalized);
-  const diffSpans = findDifferentialSpans(normalized);
-  const dimSpans = findDimensionlessSpans(normalized);
+  const needUnits = options?.colorUnits !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
+  const needDiffs = options?.colorDifferentials !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
+  const needDims = options?.colorDimensionless !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
+  const unitSpans = needUnits ? findUnitSpans(normalized) : [];
+  const diffSpans = needDiffs ? findDifferentialSpans(normalized) : [];
+  const dimSpans = needDims ? findDimensionlessSpans(normalized) : [];
   const bareFunctions = getBareFunctions(options);
   const spans = [
     ...collectFunctionSpans(normalized, palette, bareFunctions),
@@ -4429,27 +4464,50 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
         }
         const builder = new import_state.RangeSetBuilder();
         const doc = view.state.doc;
-        const text = doc.toString();
         const palette = getPalette();
         const options = getOptions ? getOptions() : void 0;
+        const bareFunctions = getBareFunctions(options);
+        let text;
+        let offset = 0;
+        if (doc.length > 2e4 && view.visibleRanges.length > 0) {
+          let minFrom = Infinity;
+          let maxTo = -Infinity;
+          for (const r of view.visibleRanges) {
+            if (r.from < minFrom)
+              minFrom = r.from;
+            if (r.to > maxTo)
+              maxTo = r.to;
+          }
+          const rawStart = Math.max(0, minFrom - 3e3);
+          const rawEnd = Math.min(doc.length, maxTo + 3e3);
+          const lineStart = doc.lineAt(rawStart).from;
+          const lineEnd = doc.lineAt(rawEnd).to;
+          text = doc.sliceString(lineStart, lineEnd);
+          offset = lineStart;
+        } else {
+          text = doc.toString();
+        }
         const scan = scanMarkdown(text);
         const allMath = [...scan.mathBlocks, ...scan.mathInlines];
         for (const block of allMath) {
-          const blockStart = block.contentStart;
-          const blockEnd = block.contentEnd;
+          const blockStart = offset + block.contentStart;
+          const blockEnd = offset + block.contentEnd;
           const isVisible = view.visibleRanges.some(
             (r) => Math.max(r.from, blockStart) <= Math.min(r.to, blockEnd)
           );
           if (!isVisible)
             continue;
-          const body = text.slice(blockStart, blockEnd);
+          const body = text.slice(block.contentStart, block.contentEnd);
           if (containsColorWrapper(body))
             continue;
-          const unitSpans = findUnitSpans(body);
-          const diffSpans = findDifferentialSpans(body);
-          const dimSpans = findDimensionlessSpans(body);
+          const needUnits = options?.colorUnits !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
+          const needDiffs = options?.colorDifferentials !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
+          const needDims = options?.colorDimensionless !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
+          const unitSpans = needUnits ? findUnitSpans(body) : [];
+          const diffSpans = needDiffs ? findDifferentialSpans(body) : [];
+          const dimSpans = needDims ? findDimensionlessSpans(body) : [];
           const allSpans = [
-            ...collectFunctionSpans(body, palette),
+            ...collectFunctionSpans(body, palette, bareFunctions),
             ...collectScannerSpans(body, palette)
           ];
           if (options?.colorUnits !== false) {
@@ -4477,7 +4535,7 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
             allSpans.push(...collectTaxonomySpans(body, palette, unitSpans, diffSpans, dimSpans));
           }
           if (options?.variableDataFlow) {
-            allSpans.push(...collectVariableSpans(body, void 0, unitSpans, diffSpans, dimSpans));
+            allSpans.push(...collectVariableSpans(body, void 0, unitSpans, diffSpans, dimSpans, bareFunctions));
           }
           const selected = selectColorSpans(body, allSpans);
           const nonOverlapping = [];
