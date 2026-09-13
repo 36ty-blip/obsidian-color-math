@@ -583,11 +583,11 @@ class ColorMathSettingTab extends PluginSettingTab {
   }
 
   getControlValue(key: string): unknown {
-    return (this.plugin.settings as Record<string, unknown>)[key];
+    return (this.plugin.settings as unknown as Record<string, unknown>)[key];
   }
 
   async setControlValue(key: string, value: unknown): Promise<void> {
-    (this.plugin.settings as Record<string, unknown>)[key] = value;
+    (this.plugin.settings as unknown as Record<string, unknown>)[key] = value;
     await this.plugin.saveSettings();
     if (key === "showRibbonIcon") {
       this.plugin.refreshRibbonIcon();
