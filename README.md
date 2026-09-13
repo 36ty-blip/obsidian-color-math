@@ -21,6 +21,7 @@ Obsidian Color Math dynamically transforms plain monochrome equations into rich,
 ### 1. ⚡ Dynamic MathJax Interceptor (Zero Note Modification)
 - **Automatic Rendering:** Color Math hooks directly into Obsidian's internal MathJax pipeline (`tex2chtml` and `tex2svg`). Rendered equations in **Live Preview** and **Reading View** appear in full color automatically without altering your raw notes!
 - **Both Inline & Display Math:** Full support for inline equations (`$...$`) and display blocks (`$$...$$`).
+- **Piecewise Environments (`\begin{cases}`):** Full multi-branch recognition with condition alignment (`&`) and relations (`\ge`, `\le`, `\ne`, `<`, `>`).
 
 ### 2. 🌈 Rich Semantic Palette & Theme Integration
 - **Signature Tokyo Night Palette:** Carefully calibrated pastel tones designed to reduce visual clutter and eye strain.
@@ -28,6 +29,8 @@ Obsidian Color Math dynamically transforms plain monochrome equations into rich,
 - **Light / Dark Mode Contrast Adaptability:** Automatically shifts operator contrast (e.g. `=`, `\cdot`, spacing) so equations never wash out on light backgrounds.
 
 ### 3. 🧠 Smart Mathematical Disambiguation
+- **Piecewise Cases & Relations:** Accurately formats and colors multi-branch conditional functions without swallowing subsequent lines.
+- **Half-Colored Completion:** Automatically detects partially colored or edited equations and completes them end-to-end rather than skipping them.
 - **Physical Units & Metric Prefixes:** Distinguishes metric prefixes (e.g. `1.064\, \mu m`, `10 m/s`, `500 nm`, `50 kg`) from algebraic variables, with a dedicated **"Natural Color"** option to keep units uncolored if desired.
 - **Calculus Differentials & Derivatives:** Identifies infinitesimal differentials (`dx`, `dt`, `d\theta`) and derivative fractions (`\frac{d}{dx}`, `\frac{df}{dx}`, `\frac{\partial \psi}{\partial t}`) so calculus operators stay unified, while preserving standalone distance `$d$`.
 - **Quantum Bra-Ket Notation (Dirac):** Recognizes kets (`|\psi\rangle`), bras (`\langle\phi|`), and brackets (`\langle\phi|\psi\rangle`, `\langle\psi|\hat{H}|\psi\rangle`), keeping delimiters cleanly styled.
@@ -44,7 +47,7 @@ Obsidian Color Math dynamically transforms plain monochrome equations into rich,
 
 ### Ribbon Menu
 Click the **Color Math** palette icon on the left ribbon to access quick actions:
-- **Bake colors into note (Permanent):** Permanently embeds LaTeX `\textcolor{...}{...}` wrappers into all math blocks in your note.
+- **Bake colors into note (Permanent):** Permanently embeds LaTeX `\textcolor{...}{...}` wrappers into all math blocks and inline math in your note.
 - **Clean baked colors from note:** Safely strips all color wrappers back to clean, plain LaTeX.
 - **Bake / Clean current math block:** Targets only the equation under your cursor.
 - **Bake / Clean selection:** Targets highlighted text in the editor.
