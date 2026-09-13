@@ -197,6 +197,47 @@ export function findDelimiterPairs(text: string): DelimiterPair[] {
       continue;
     }
 
+    // Bare angle brackets \langle and \rangle
+    if (text.startsWith("\\langle", index)) {
+      const depth = stack.length;
+      stack.push({
+        item: {
+          type: "angle",
+          start: index,
+          end: index + 7,
+          isLeftRight: false,
+        },
+        depth,
+      });
+      index += 7;
+      continue;
+    }
+
+    if (text.startsWith("\\rangle", index)) {
+      let matchIdx = -1;
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (!stack[i].item.isLeftRight && stack[i].item.type === "angle") {
+          matchIdx = i;
+          break;
+        }
+      }
+      if (matchIdx !== -1) {
+        const matched = stack.splice(matchIdx, 1)[0];
+        pairs.push({
+          open: matched.item,
+          close: {
+            type: "angle",
+            start: index,
+            end: index + 7,
+            isLeftRight: false,
+          },
+          depth: matched.depth,
+        });
+      }
+      index += 7;
+      continue;
+    }
+
     // Standard brackets ( ... ) and [ ... ]
     if (text[index] === "(" || text[index] === "[") {
       const type = text[index] === "(" ? "paren" : "bracket";

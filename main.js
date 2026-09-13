@@ -2897,10 +2897,27 @@ function collectSingleConstantSpans(body, palette = COLORS) {
 }
 
 // src/parsers/braket.ts
-var BRAKET_REGEX = /\\langle\s*([^<|>]+?)\s*\|\s*([^<|>]+?)(?:\s*\|\s*([^<|>]+?))?\s*\\rangle/g;
-var KET_DELIM_REGEX = /(?:\||\\vert)\s*([^<|>]+?)\s*\\rangle/g;
-var BRA_DELIM_REGEX = /\\langle\s*([^<|>]+?)\s*(?:\||\\vert)/g;
+var BRAKET_REGEX = /\\langle\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)\s*\|\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)(?:\s*\|\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?))?\s*\\rangle/g;
+var KET_DELIM_REGEX = /(?:\||\\vert)\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)\s*\\rangle/g;
+var BRA_DELIM_REGEX = /\\langle\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)\s*(?:\||\\vert)/g;
+var INNER_PRODUCT_REGEX = /\\langle\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)\s*\\rangle/g;
 var VERT_BAR_REGEX = /(?:\||\\vert)/;
+var SIZED_PREFIXES = [
+  "\\left",
+  "\\right",
+  "\\bigl",
+  "\\bigr",
+  "\\Bigl",
+  "\\Bigr",
+  "\\biggl",
+  "\\biggr",
+  "\\Biggl",
+  "\\Biggr"
+];
+function hasSizedPrefix(body, idx) {
+  const before = body.slice(0, idx).trimEnd();
+  return SIZED_PREFIXES.some((prefix) => before.endsWith(prefix));
+}
 function collectBraKetDelimiterSpans(body, palette = COLORS, delimColor = palette.orange || "#e0af68") {
   const spans = [];
   BRAKET_REGEX.lastIndex = 0;
@@ -2911,8 +2928,12 @@ function collectBraKetDelimiterSpans(body, palette = COLORS, delimColor = palett
     const langleEnd = langleIdx + "\\langle".length;
     const rangleIdx = match.index + full.lastIndexOf("\\rangle");
     const rangleEnd = rangleIdx + "\\rangle".length;
-    spans.push({ start: langleIdx, end: langleEnd, color: delimColor, priority: 25 });
-    spans.push({ start: rangleIdx, end: rangleEnd, color: delimColor, priority: 25 });
+    if (!hasSizedPrefix(body, langleIdx)) {
+      spans.push({ start: langleIdx, end: langleEnd, color: delimColor, priority: 25 });
+    }
+    if (!hasSizedPrefix(body, rangleIdx)) {
+      spans.push({ start: rangleIdx, end: rangleEnd, color: delimColor, priority: 25 });
+    }
     let barSearch = match.index;
     while ((barSearch = body.indexOf("|", barSearch)) !== -1 && barSearch < rangleIdx) {
       spans.push({ start: barSearch, end: barSearch + 1, color: delimColor, priority: 25 });
@@ -2926,7 +2947,7 @@ function collectBraKetDelimiterSpans(body, palette = COLORS, delimColor = palett
     const barEnd = barIdx + (full.startsWith("\\vert") ? 5 : 1);
     const rangleIdx = match.index + full.lastIndexOf("\\rangle");
     const rangleEnd = rangleIdx + 7;
-    if (!spans.some((s) => s.start === barIdx)) {
+    if (!hasSizedPrefix(body, rangleIdx) && !spans.some((s) => s.start === barIdx)) {
       spans.push({ start: barIdx, end: barEnd, color: delimColor, priority: 25 });
       spans.push({ start: rangleIdx, end: rangleEnd, color: delimColor, priority: 25 });
     }
@@ -2938,9 +2959,23 @@ function collectBraKetDelimiterSpans(body, palette = COLORS, delimColor = palett
     const langleEnd = langleIdx + 7;
     const barIdx = match.index + full.search(VERT_BAR_REGEX);
     const barEnd = barIdx + (full.endsWith("\\vert") ? 5 : 1);
-    if (!spans.some((s) => s.start === langleIdx)) {
+    if (!hasSizedPrefix(body, langleIdx) && !spans.some((s) => s.start === langleIdx)) {
       spans.push({ start: langleIdx, end: langleEnd, color: delimColor, priority: 25 });
       spans.push({ start: barIdx, end: barEnd, color: delimColor, priority: 25 });
+    }
+  }
+  INNER_PRODUCT_REGEX.lastIndex = 0;
+  while ((match = INNER_PRODUCT_REGEX.exec(body)) !== null) {
+    const full = match[0];
+    const langleIdx = match.index;
+    const langleEnd = langleIdx + "\\langle".length;
+    const rangleIdx = match.index + full.lastIndexOf("\\rangle");
+    const rangleEnd = rangleIdx + "\\rangle".length;
+    if (!hasSizedPrefix(body, langleIdx) && !hasSizedPrefix(body, rangleIdx)) {
+      if (!spans.some((s) => s.start === langleIdx)) {
+        spans.push({ start: langleIdx, end: langleEnd, color: delimColor, priority: 25 });
+        spans.push({ start: rangleIdx, end: rangleEnd, color: delimColor, priority: 25 });
+      }
     }
   }
   return spans.sort((a, b) => a.start - b.start);
@@ -3106,6 +3141,44 @@ function findDelimiterPairs(text) {
         });
       }
       index += 2;
+      continue;
+    }
+    if (text.startsWith("\\langle", index)) {
+      const depth = stack.length;
+      stack.push({
+        item: {
+          type: "angle",
+          start: index,
+          end: index + 7,
+          isLeftRight: false
+        },
+        depth
+      });
+      index += 7;
+      continue;
+    }
+    if (text.startsWith("\\rangle", index)) {
+      let matchIdx = -1;
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (!stack[i].item.isLeftRight && stack[i].item.type === "angle") {
+          matchIdx = i;
+          break;
+        }
+      }
+      if (matchIdx !== -1) {
+        const matched = stack.splice(matchIdx, 1)[0];
+        pairs.push({
+          open: matched.item,
+          close: {
+            type: "angle",
+            start: index,
+            end: index + 7,
+            isLeftRight: false
+          },
+          depth: matched.depth
+        });
+      }
+      index += 7;
       continue;
     }
     if (text[index] === "(" || text[index] === "[") {

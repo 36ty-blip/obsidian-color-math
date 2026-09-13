@@ -16,17 +16,22 @@ export interface BraKetSpan {
  * - Bra: \langle \phi |, \langle \phi \vert, \bra{\phi}
  */
 const BRAKET_REGEX =
-  /\\langle\s*([^<|>]+?)\s*\|\s*([^<|>]+?)(?:\s*\|\s*([^<|>]+?))?\s*\\rangle/g;
+  /\\langle\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)\s*\|\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)(?:\s*\|\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?))?\s*\\rangle/g;
 
 const KET_MACRO_REGEX =
-  /(?:\||\\vert)\s*([^<|>]+?)\s*\\rangle|\\ket\s*\{([^}]+)\}/g;
+  /(?:\||\\vert)\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)\s*\\rangle|\\ket\s*\{([^}]+)\}/g;
 
 const BRA_MACRO_REGEX =
-  /\\langle\s*([^<|>]+?)\s*(?:\||\\vert)|\\bra\s*\{([^}]+)\}/g;
+  /\\langle\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)\s*(?:\||\\vert)|\\bra\s*\{([^}]+)\}/g;
 
-const KET_DELIM_REGEX = /(?:\||\\vert)\s*([^<|>]+?)\s*\\rangle/g;
+const KET_DELIM_REGEX =
+  /(?:\||\\vert)\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)\s*\\rangle/g;
 
-const BRA_DELIM_REGEX = /\\langle\s*([^<|>]+?)\s*(?:\||\\vert)/g;
+const BRA_DELIM_REGEX =
+  /\\langle\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)\s*(?:\||\\vert)/g;
+
+const INNER_PRODUCT_REGEX =
+  /\\langle\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)\s*\\rangle/g;
 
 const VERT_BAR_REGEX = /(?:\||\\vert)/;
 
@@ -35,6 +40,7 @@ const VERT_BAR_REGEX = /(?:\||\\vert)/;
  * - <psi|A|phi> or \langle \psi | A | \phi \rangle
  * - |psi> or \ket{\psi}
  * - <phi| or \bra{\phi}
+ * - \langle x, y \rangle (inner product) or \langle A \rangle (expectation value)
  */
 export function findBraKetSpans(body: string): BraKetSpan[] {
   const spans: BraKetSpan[] = [];
@@ -65,7 +71,31 @@ export function findBraKetSpans(body: string): BraKetSpan[] {
     addSpan(match.index, match.index + match[0].length, "bra");
   }
 
+  // 4. Standard inner product / expectation value: \langle ... \rangle
+  INNER_PRODUCT_REGEX.lastIndex = 0;
+  while ((match = INNER_PRODUCT_REGEX.exec(body)) !== null) {
+    addSpan(match.index, match.index + match[0].length, "bracket");
+  }
+
   return spans.sort((a, b) => a.start - b.start);
+}
+
+const SIZED_PREFIXES = [
+  "\\left",
+  "\\right",
+  "\\bigl",
+  "\\bigr",
+  "\\Bigl",
+  "\\Bigr",
+  "\\biggl",
+  "\\biggr",
+  "\\Biggl",
+  "\\Biggr",
+];
+
+function hasSizedPrefix(body: string, idx: number): boolean {
+  const before = body.slice(0, idx).trimEnd();
+  return SIZED_PREFIXES.some((prefix) => before.endsWith(prefix));
 }
 
 /**
@@ -89,8 +119,12 @@ export function collectBraKetDelimiterSpans(
     const rangleIdx = match.index + full.lastIndexOf("\\rangle");
     const rangleEnd = rangleIdx + "\\rangle".length;
 
-    spans.push({ start: langleIdx, end: langleEnd, color: delimColor, priority: 25 });
-    spans.push({ start: rangleIdx, end: rangleEnd, color: delimColor, priority: 25 });
+    if (!hasSizedPrefix(body, langleIdx)) {
+      spans.push({ start: langleIdx, end: langleEnd, color: delimColor, priority: 25 });
+    }
+    if (!hasSizedPrefix(body, rangleIdx)) {
+      spans.push({ start: rangleIdx, end: rangleEnd, color: delimColor, priority: 25 });
+    }
 
     let barSearch = match.index;
     while ((barSearch = body.indexOf("|", barSearch)) !== -1 && barSearch < rangleIdx) {
@@ -108,7 +142,7 @@ export function collectBraKetDelimiterSpans(
     const rangleIdx = match.index + full.lastIndexOf("\\rangle");
     const rangleEnd = rangleIdx + 7;
 
-    if (!spans.some((s) => s.start === barIdx)) {
+    if (!hasSizedPrefix(body, rangleIdx) && !spans.some((s) => s.start === barIdx)) {
       spans.push({ start: barIdx, end: barEnd, color: delimColor, priority: 25 });
       spans.push({ start: rangleIdx, end: rangleEnd, color: delimColor, priority: 25 });
     }
@@ -123,9 +157,26 @@ export function collectBraKetDelimiterSpans(
     const barIdx = match.index + full.search(VERT_BAR_REGEX);
     const barEnd = barIdx + (full.endsWith("\\vert") ? 5 : 1);
 
-    if (!spans.some((s) => s.start === langleIdx)) {
+    if (!hasSizedPrefix(body, langleIdx) && !spans.some((s) => s.start === langleIdx)) {
       spans.push({ start: langleIdx, end: langleEnd, color: delimColor, priority: 25 });
       spans.push({ start: barIdx, end: barEnd, color: delimColor, priority: 25 });
+    }
+  }
+
+  // 4. Standard inner product / expectation value: \langle ... \rangle
+  INNER_PRODUCT_REGEX.lastIndex = 0;
+  while ((match = INNER_PRODUCT_REGEX.exec(body)) !== null) {
+    const full = match[0];
+    const langleIdx = match.index;
+    const langleEnd = langleIdx + "\\langle".length;
+    const rangleIdx = match.index + full.lastIndexOf("\\rangle");
+    const rangleEnd = rangleIdx + "\\rangle".length;
+
+    if (!hasSizedPrefix(body, langleIdx) && !hasSizedPrefix(body, rangleIdx)) {
+      if (!spans.some((s) => s.start === langleIdx)) {
+        spans.push({ start: langleIdx, end: langleEnd, color: delimColor, priority: 25 });
+        spans.push({ start: rangleIdx, end: rangleEnd, color: delimColor, priority: 25 });
+      }
     }
   }
 

@@ -68,4 +68,46 @@ describe("Rainbow Delimiters Parser", () => {
     expect(result).toContain(`\\textcolor{${RAINBOW_DELIMITER_COLORS[1]}}{[}`);
     expect(result).toContain(`\\textcolor{${RAINBOW_DELIMITER_COLORS[1]}}{]}`);
   });
+
+  it("parses bare angle brackets \\langle and \\rangle", () => {
+    const pairs = findDelimiterPairs("\\langle x, y \\rangle");
+    expect(pairs.length).toBe(1);
+    expect(pairs[0].depth).toBe(0);
+    expect(pairs[0].open.type).toBe("angle");
+    expect(pairs[0].close.type).toBe("angle");
+  });
+
+  it("parses \\left\\langle and \\right\\rangle pairs", () => {
+    const pairs = findDelimiterPairs("\\left\\langle x, y \\right\\rangle");
+    expect(pairs.length).toBe(1);
+    expect(pairs[0].open.isLeftRight).toBe(true);
+    expect(pairs[0].close.isLeftRight).toBe(true);
+    expect(pairs[0].open.type).toBe("angle");
+    expect(pairs[0].close.type).toBe("angle");
+  });
+
+  it("correctly colors inner product and norms without cross-matching ket regex", () => {
+    const expr1 = "|x| =\\sqrt{\\langle x,x\\rangle},";
+    const res1 = colorLatexBody(expr1, undefined, {
+      rainbowDelimiters: true,
+      colorBraKet: true,
+      variableDataFlow: true,
+    });
+    expect(res1).toContain("\\langle");
+    expect(res1).toContain("\\rangle");
+    // Both angle brackets are colored
+    expect(res1).toMatch(/\\textcolor\{[^}]+\}\{\\langle\}/);
+    expect(res1).toMatch(/\\textcolor\{[^}]+\}\{\\rangle\}/);
+    // |x| must not be swallowed into a single ket
+    expect(res1).toContain("|\\textcolor{");
+
+    const expr2 = "\\cos\\theta=\\frac{\\langle x,y\\rangle}{|x||y|},";
+    const res2 = colorLatexBody(expr2, undefined, {
+      rainbowDelimiters: true,
+      colorBraKet: true,
+      variableDataFlow: true,
+    });
+    expect(res2).toMatch(/\\textcolor\{[^}]+\}\{\\langle\}/);
+    expect(res2).toMatch(/\\textcolor\{[^}]+\}\{\\rangle\}/);
+  });
 });
