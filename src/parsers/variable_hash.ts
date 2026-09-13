@@ -7,8 +7,8 @@ import {
   FONT_STYLE_MACROS,
   BARE_FUNCTIONS,
 } from "../config";
-import { readOperand, OPAQUE_MACROS } from "./latex_spans";
-import { readBraced, readColorCommand } from "../utils/latex_helpers";
+import { readOperand } from "./latex_spans";
+import { readBraced, readColorCommand, skipEnvironmentHead } from "../utils/latex_helpers";
 import { ColorSpan } from "../utils/spans";
 import { findDifferentialSpans, DifferentialSpan } from "./differentials";
 import { findDimensionlessSpans, DimensionlessSpan } from "./dimensionless";
@@ -108,20 +108,10 @@ export function collectVariableSpans(
         const cmdName = match[0];
         const cmdEnd = index + cmdName.length;
 
-        // Skip environment arguments: \begin{bmatrix}, \end{bmatrix}, \begin{cases}
-        if (cmdName === "\\begin" || cmdName === "\\end") {
-          let afterCmd = cmdEnd;
-          while (afterCmd < body.length && /\s/.test(body[afterCmd])) {
-            afterCmd++;
-          }
-          if (afterCmd < body.length && body[afterCmd] === "{") {
-            const braced = readBraced(body, afterCmd);
-            if (braced !== null) {
-              index = braced[1];
-              continue;
-            }
-          }
-          index = cmdEnd;
+        // Skip environment arguments: \begin{bmatrix}, \end{bmatrix}, \begin{array}{cc|c}
+        const envEnd = skipEnvironmentHead(body, cmdName, cmdEnd);
+        if (envEnd !== null) {
+          index = envEnd;
           continue;
         }
 

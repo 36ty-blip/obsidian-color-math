@@ -13,6 +13,7 @@ import { collectUnitSpans, findUnitSpans } from "../parsers/units";
 import { collectVariableSpans } from "../parsers/variable_hash";
 import { containsColorWrapper, normalizeLatexBraces } from "../utils/latex_helpers";
 import { ColorSpan, applyColorSpans } from "../utils/spans";
+import { uncolorFragment } from "../undo";
 
 const FUNCTION_COLOR_NAMES: ("main" | "derivative" | "chain")[] = [
   "main",
@@ -51,11 +52,8 @@ export function colorLatexBody(
   palette: ColorPalette = COLORS,
   options?: ColorMathOptions
 ): string {
-  if (containsColorWrapper(body)) {
-    return body;
-  }
-
-  const normalized = normalizeLatexBraces(body);
+  const cleanBody = containsColorWrapper(body) ? uncolorFragment(body) : body;
+  const normalized = normalizeLatexBraces(cleanBody);
 
   const needUnits = options?.colorUnits !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
   const needDiffs = options?.colorDifferentials !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);

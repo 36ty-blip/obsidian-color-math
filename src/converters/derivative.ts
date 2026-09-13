@@ -11,6 +11,7 @@ import {
 import { collectOperatorSpans } from "../parsers/scanner";
 import { containsColorWrapper } from "../utils/latex_helpers";
 import { ColorSpan, applyColorSpans } from "../utils/spans";
+import { uncolorText } from "../undo";
 import {
   firstEquality,
   parseMathBlock,
@@ -226,12 +227,10 @@ export function convertDerivativeLine(
   source: string,
   palette: ColorPalette = COLORS
 ): string | null {
-  const block = parseMathBlock(source);
+  const cleanSource = containsColorWrapper(source) ? uncolorText(source) : source;
+  const block = parseMathBlock(cleanSource);
   if (block === null) {
     return null;
-  }
-  if (containsColorWrapper(block.body)) {
-    return source;
   }
 
   const bodyStart = skipIgnorable(block.body, 0, block.body.length);

@@ -10,6 +10,7 @@ import {
 import { collectOperatorSpans } from "../parsers/scanner";
 import { containsColorWrapper } from "../utils/latex_helpers";
 import { ColorSpan, applyColorSpans } from "../utils/spans";
+import { uncolorText } from "../undo";
 import { firstEquality, parseMathBlock, relationSpans } from "./semantic";
 
 const MATRIX_COMMAND_RE =
@@ -100,12 +101,10 @@ export function convertMatrixBlock(
   source: string,
   palette: ColorPalette = COLORS
 ): string | null {
-  const block = parseMathBlock(source);
+  const cleanSource = containsColorWrapper(source) ? uncolorText(source) : source;
+  const block = parseMathBlock(cleanSource);
   if (block === null || !isMatrixExpression(block.body)) {
     return null;
-  }
-  if (containsColorWrapper(block.body)) {
-    return source;
   }
 
   const equality = firstEquality(block.body);

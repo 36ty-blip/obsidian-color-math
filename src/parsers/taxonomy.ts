@@ -11,7 +11,7 @@ import {
   FONT_STYLE_MACROS,
 } from "../config";
 import { readOperand, OPAQUE_MACROS } from "./latex_spans";
-import { readBraced, readColorCommand } from "../utils/latex_helpers";
+import { readBraced, readColorCommand, skipEnvironmentHead } from "../utils/latex_helpers";
 import { ColorSpan } from "../utils/spans";
 import { findDifferentialSpans, DifferentialSpan } from "./differentials";
 import { findDimensionlessSpans, DimensionlessSpan } from "./dimensionless";
@@ -126,20 +126,10 @@ export function collectTaxonomySpans(
         const name = match[0];
         const cmdEnd = index + name.length;
 
-        // Skip environment arguments: \begin{bmatrix}, \end{cases}
-        if (name === "\\begin" || name === "\\end") {
-          let afterCmd = cmdEnd;
-          while (afterCmd < body.length && /\s/.test(body[afterCmd])) {
-            afterCmd++;
-          }
-          if (afterCmd < body.length && body[afterCmd] === "{") {
-            const braced = readBraced(body, afterCmd);
-            if (braced !== null) {
-              index = braced[1];
-              continue;
-            }
-          }
-          index = cmdEnd;
+        // Skip environment arguments: \begin{bmatrix}, \end{cases}, \begin{array}{cc|c}
+        const envEnd = skipEnvironmentHead(body, name, cmdEnd);
+        if (envEnd !== null) {
+          index = envEnd;
           continue;
         }
 

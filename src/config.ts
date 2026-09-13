@@ -73,8 +73,11 @@ export const LIMIT_OPERATORS = new Set([
 
 export const RELATIONS = new Set([
   "\\neq",
+  "\\ne",
   "\\leq",
+  "\\le",
   "\\geq",
+  "\\ge",
   "\\approx",
   "\\sim",
   "\\equiv",

@@ -1,11 +1,9 @@
 // src/parsers/math_parser.ts
 
 import { BARE_FUNCTIONS, MATH_FUNCTIONS } from "../config";
-import { readBraced } from "../utils/latex_helpers";
+import { readBraced, skipEnvironmentHead } from "../utils/latex_helpers";
 import { readOperand, OPAQUE_MACROS } from "./latex_spans";
 import { scanMarkdown } from "./markdown_scanner";
-
-// OPAQUE_MACROS imported from latex_spans
 
 export interface SemanticSpan {
   kind: string;
@@ -274,20 +272,10 @@ function collectSemanticSpansInternal(
             continue;
           }
         }
-        // Skip environment arguments: \begin{bmatrix}, \end{cases}
-        if (name === "\\begin" || name === "\\end") {
-          let afterCmd = commandEnd;
-          while (afterCmd < end && /\s/.test(text[afterCmd])) {
-            afterCmd++;
-          }
-          if (afterCmd < end && text[afterCmd] === "{") {
-            const group = readBraced(text, afterCmd);
-            if (group !== null && group[1] <= end) {
-              index = group[1];
-              continue;
-            }
-          }
-          index = commandEnd;
+        // Skip environment arguments: \begin{bmatrix}, \end{cases}, \begin{array}{cc|c}
+        const envEnd = skipEnvironmentHead(text, name, commandEnd, end);
+        if (envEnd !== null) {
+          index = envEnd;
           continue;
         }
 

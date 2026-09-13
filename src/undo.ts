@@ -24,8 +24,14 @@ export function uncolorFragment(text: string): string {
       const wrapper = readColorWrapper(text, index);
       if (wrapper !== null) {
         const [value, nextIndex] = wrapper;
-        output.push(uncolorFragment(value));
+        if (value.length > 0) {
+          output.push(uncolorFragment(value));
+        }
         index = nextIndex;
+        // If a standalone color declaration was stripped, clean up one following space
+        if (value.length === 0 && index < text.length && text[index] === " ") {
+          index++;
+        }
         continue;
       }
 
@@ -53,14 +59,19 @@ export function uncolorFragment(text: string): string {
 }
 
 export function uncolorText(text: string): string {
-  const mathBlocks = scanMarkdown(text).mathBlocks;
-  if (mathBlocks.length === 0) {
-    return text;
+  const scan = scanMarkdown(text);
+  const allSpans = [...scan.mathBlocks, ...scan.mathInlines].sort(
+    (a, b) => a.start - b.start
+  );
+
+  if (allSpans.length === 0) {
+    // If no markdown math delimiters are present, uncolor as a raw LaTeX fragment directly
+    return uncolorFragment(text);
   }
 
   const output: string[] = [];
   let index = 0;
-  for (const span of mathBlocks) {
+  for (const span of allSpans) {
     output.push(text.slice(index, span.start));
     output.push(uncolorFragment(text.slice(span.start, span.end)));
     index = span.end;

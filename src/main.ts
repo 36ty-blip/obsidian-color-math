@@ -9,6 +9,7 @@ import {
   Plugin,
   PluginSettingTab,
   Setting,
+  type SettingDefinitionItem,
 } from "obsidian";
 import { ColorPalette, ColorRole, ColorMathOptions, DEFAULT_COLORS, setPalette } from "./config";
 import { convertMathBlock, convertText } from "./converters/block";
@@ -17,6 +18,7 @@ import { MathJaxInterceptor, ErrorDisplayMode } from "./editor/mathjax_intercept
 import { scanMarkdown } from "./parsers/markdown_scanner";
 import { uncolorFragment, uncolorText } from "./undo";
 import { extractThemePalette, isVaultLightMode } from "./utils/theme_colors";
+import { registerColorMathMcpTools } from "./mcp";
 
 interface ColorMathSettings {
   palette: ColorPalette;
@@ -73,6 +75,7 @@ export default class ColorMathPlugin extends Plugin {
   settings: ColorMathSettings = DEFAULT_SETTINGS;
   ribbonIconEl: HTMLElement | null = null;
   interceptor: MathJaxInterceptor | null = null;
+  private mcpCleanup: (() => void) | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -174,15 +177,44 @@ export default class ColorMathPlugin extends Plugin {
       },
     });
 
+    // 7. Toggle dynamic live rendering
+    this.addCommand({
+      id: "toggle-live-rendering",
+      name: "Toggle dynamic live rendering",
+      callback: async () => {
+        this.settings.liveRendering = !this.settings.liveRendering;
+        await this.saveSettings();
+        this.rerenderMath();
+        new Notice(
+          `Color Math: Dynamic live rendering is now ${this.settings.liveRendering ? "ON" : "OFF"}.`
+        );
+      },
+    });
+
     // Settings tab
     this.addSettingTab(new ColorMathSettingTab(this.app, this));
+
+    // Register MCP tools with Obsidian Local REST API if installed
+    this.setupMcpTools();
+    this.app.workspace.onLayoutReady(() => {
+      if (!this.mcpCleanup) {
+        this.setupMcpTools();
+      }
+    });
 
     // Initial workspace math rerender
     this.rerenderMath();
   }
 
   onunload() {
+    this.mcpCleanup?.();
+    this.mcpCleanup = null;
     this.interceptor?.uninstall();
+  }
+
+  setupMcpTools() {
+    if (this.mcpCleanup) return;
+    this.mcpCleanup = registerColorMathMcpTools(this);
   }
 
   rerenderMath() {
@@ -232,6 +264,24 @@ export default class ColorMathPlugin extends Plugin {
         .setTitle("Clean baked colors from note")
         .setIcon("undo")
         .onClick(() => this.uncolorActiveNote())
+    );
+
+    menu.addItem((item) =>
+      item
+        .setTitle(
+          this.settings.liveRendering
+            ? "Turn off dynamic live rendering"
+            : "Turn on dynamic live rendering"
+        )
+        .setIcon(this.settings.liveRendering ? "eye-off" : "eye")
+        .onClick(async () => {
+          this.settings.liveRendering = !this.settings.liveRendering;
+          await this.saveSettings();
+          this.rerenderMath();
+          new Notice(
+            `Color Math: Dynamic live rendering is now ${this.settings.liveRendering ? "ON" : "OFF"}.`
+          );
+        })
     );
 
     menu.addSeparator();
@@ -365,28 +415,37 @@ export default class ColorMathPlugin extends Plugin {
     const cursor = editor.getCursor();
     const offset = editor.posToOffset(cursor);
 
-    const mathBlocks = scanMarkdown(content).mathBlocks;
-    const currentBlock = mathBlocks.find(
+    const scan = scanMarkdown(content);
+    const allSpans = [...scan.mathBlocks, ...scan.mathInlines];
+    const currentSpan = allSpans.find(
       (span) => span.start <= offset && offset <= span.end
     );
 
-    if (!currentBlock) {
-      new Notice("Color Math: Cursor is not inside a math block ($$...$$).");
+    if (!currentSpan) {
+      new Notice("Color Math: Cursor is not inside a math expression ($...$ or $$...$$).");
       return;
     }
 
-    const rawBlock = content.slice(currentBlock.start, currentBlock.end);
-    const uncolored = uncolorFragment(rawBlock);
+    const rawSpan = content.slice(currentSpan.start, currentSpan.end);
+    const uncolored = uncolorFragment(rawSpan);
 
-    if (uncolored === rawBlock) {
-      new Notice("Color Math: No color wrappers found to remove in this block.");
+    if (uncolored === rawSpan) {
+      new Notice("Color Math: No baked color wrappers found to remove in this equation.");
       return;
     }
 
-    const from = editor.offsetToPos(currentBlock.start);
-    const to = editor.offsetToPos(currentBlock.end);
+    const from = editor.offsetToPos(currentSpan.start);
+    const to = editor.offsetToPos(currentSpan.end);
     editor.replaceRange(uncolored, from, to);
-    new Notice("Color Math: Reverted math block to clean LaTeX.");
+
+    if (this.settings.liveRendering) {
+      new Notice(
+        "Color Math: Cleaned baked colors from math expression!\n(Live Preview dynamic coloring is currently ON in settings).",
+        5000
+      );
+    } else {
+      new Notice("Color Math: Reverted math expression to clean LaTeX.");
+    }
   }
 
   colorizeSelection(editor: Editor) {
@@ -408,8 +467,19 @@ export default class ColorMathPlugin extends Plugin {
     const selection = editor.getSelection();
     if (selection) {
       const uncolored = uncolorFragment(selection);
+      if (uncolored === selection) {
+        new Notice("Color Math: No baked color wrappers found to remove in selection.");
+        return;
+      }
       editor.replaceSelection(uncolored);
-      new Notice("Color Math: Reverted selection to clean LaTeX.");
+      if (this.settings.liveRendering) {
+        new Notice(
+          "Color Math: Cleaned baked colors from selection!\n(Live Preview dynamic coloring is currently ON in settings).",
+          5000
+        );
+      } else {
+        new Notice("Color Math: Reverted selection to clean LaTeX.");
+      }
     } else {
       new Notice("Color Math: Please select text to undo colors.");
     }
@@ -453,14 +523,22 @@ export default class ColorMathPlugin extends Plugin {
     const uncolored = uncolorText(content);
 
     if (uncolored === content) {
-      new Notice("Color Math: No color wrappers found to remove.");
+      new Notice("Color Math: No baked color wrappers found to remove.");
       return;
     }
 
     const cursor = editor.getCursor();
     editor.setValue(uncolored);
     editor.setCursor(cursor);
-    new Notice("Color Math: Reverted math colors to clean LaTeX.");
+
+    if (this.settings.liveRendering) {
+      new Notice(
+        "Color Math: Cleaned all baked colors from note equations! 🧹\n(Live Preview dynamic coloring is currently ON in settings).",
+        6000
+      );
+    } else {
+      new Notice("Color Math: Successfully cleaned colors from note! 🧹");
+    }
   }
 
   async handleThemeChange() {
@@ -502,6 +580,229 @@ class ColorMathSettingTab extends PluginSettingTab {
   constructor(app: App, plugin: ColorMathPlugin) {
     super(app, plugin);
     this.plugin = plugin;
+  }
+
+  getControlValue(key: string): unknown {
+    return (this.plugin.settings as Record<string, unknown>)[key];
+  }
+
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    (this.plugin.settings as Record<string, unknown>)[key] = value;
+    await this.plugin.saveSettings();
+    if (key === "showRibbonIcon") {
+      this.plugin.refreshRibbonIcon();
+    } else if (key !== "livePreviewHighlighting") {
+      this.plugin.rerenderMath();
+    }
+  }
+
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    return [
+      {
+        name: "Show ribbon icon",
+        desc: "Display the Color Math palette icon on the left ribbon bar. Note: you can reorder or move ribbon icons via Settings > Appearance > Ribbon menu.",
+        control: {
+          key: "showRibbonIcon",
+          type: "toggle",
+          defaultValue: true,
+        },
+      },
+      {
+        name: "Live rendered math coloring",
+        desc: "Automatically colorize rendered MathJax equations in Reading View and Live Preview without modifying your raw Markdown notes.",
+        control: {
+          key: "liveRendering",
+          type: "toggle",
+          defaultValue: true,
+        },
+      },
+      {
+        name: "Real-time editor syntax highlighting",
+        desc: "Highlight equations inside the editor in real-time as you type.",
+        control: {
+          key: "livePreviewHighlighting",
+          type: "toggle",
+          defaultValue: true,
+        },
+      },
+      {
+        type: "group",
+        heading: "IDE Visual Enhancements",
+        items: [
+          {
+            name: "Rainbow delimiters",
+            desc: "Color nested parentheses, brackets, and braces by depth to prevent delimiter blindness.",
+            control: {
+              key: "rainbowDelimiters",
+              type: "toggle",
+              defaultValue: true,
+            },
+          },
+          {
+            name: "Mathematical symbol taxonomy",
+            desc: "Semantically categorize and color constants, standard functions, parameters, and bound indices.",
+            control: {
+              key: "enableTaxonomy",
+              type: "toggle",
+              defaultValue: true,
+            },
+          },
+          {
+            name: "Variable data-flow hashing",
+            desc: "Deterministically assign a unique color to each variable in an expression to trace its flow.",
+            control: {
+              key: "variableDataFlow",
+              type: "toggle",
+              defaultValue: true,
+            },
+          },
+          {
+            name: "Color physical units",
+            desc: "Distinguish physical units and metric prefixes (e.g. μm, m/s, kg) from algebraic variables and parameters.",
+            control: {
+              key: "colorUnits",
+              type: "toggle",
+              defaultValue: true,
+            },
+          },
+          {
+            name: "Calculus differentials & derivatives",
+            desc: "Color differentials (dx, dt, dθ) and derivative fractions (df/dx, ∂/∂t) with the derivative role to prevent misidentifying 'd' as a variable.",
+            control: {
+              key: "colorDifferentials",
+              type: "toggle",
+              defaultValue: true,
+            },
+          },
+          {
+            name: "Quantum bra-ket notation",
+            desc: "Highlight Dirac bra-ket state vectors (|ψ⟩, ⟨ϕ|, ⟨ϕ|ψ⟩) with clean delimiter styling.",
+            control: {
+              key: "colorBraKet",
+              type: "toggle",
+              defaultValue: true,
+            },
+          },
+          {
+            name: "Engineering dimensionless numbers",
+            desc: "Recognize contiguous dimensionless numbers (Re, Ma, Pr, Nu) as unified coefficients.",
+            control: {
+              key: "colorDimensionless",
+              type: "toggle",
+              defaultValue: true,
+            },
+          },
+          {
+            name: "Extended 2–3 letter functions",
+            desc: "Recognize shorthand 2–3 letter math functions (adj, var, cov, im, sp, div, rot, sh, ch, etc.) before parentheses.",
+            control: {
+              key: "extendedFunctions",
+              type: "toggle",
+              defaultValue: true,
+            },
+          },
+        ],
+      },
+      {
+        type: "group",
+        heading: "Error Handling & Diagnostics",
+        items: [
+          {
+            name: "Syntax error display mode",
+            desc: "Choose how to display errors when an equation has broken syntax.",
+            control: {
+              key: "errorDisplayMode",
+              type: "dropdown",
+              defaultValue: "inline",
+              options: {
+                inline: "Inline error message (e.g. \\text{LaTeX Error: ...})",
+                fallback: "Render original formula (Silent & clean with hover tooltip)",
+                notice: "Obsidian notice popup & original formula",
+                native: "Native MathJax error box (Default MathJax behavior)",
+              },
+            },
+          },
+        ],
+      },
+      {
+        type: "group",
+        heading: "Theme Integration",
+        items: [
+          {
+            name: "Sync with active theme",
+            desc: "Extract and apply matching colors from your currently active Obsidian theme.",
+            action: async () => {
+              this.plugin.settings.palette = extractThemePalette(
+                this.plugin.settings.autoLightDark ? isVaultLightMode() : false
+              );
+              await this.plugin.saveSettings();
+              this.plugin.rerenderMath();
+              new Notice("Color Math: Synced colors with active Obsidian theme!");
+            },
+          },
+          {
+            name: "Auto-match on theme change",
+            desc: "Automatically re-sync palette whenever you switch themes in Obsidian.",
+            control: {
+              key: "autoSyncTheme",
+              type: "toggle",
+              defaultValue: false,
+            },
+          },
+          {
+            name: "Auto-adapt for light / dark mode",
+            desc: "Adjust operator contrast (e.g. '=' and '\\cdot') so math never washes out on light backgrounds.",
+            control: {
+              key: "autoLightDark",
+              type: "toggle",
+              defaultValue: true,
+            },
+          },
+          {
+            name: "Restore default palette",
+            desc: "Revert all colors back to our signature Tokyo Night palette.",
+            action: async () => {
+              this.plugin.settings.palette = { ...DEFAULT_COLORS };
+              await this.plugin.saveSettings();
+              this.plugin.rerenderMath();
+              new Notice("Color Math: Restored default Tokyo Night palette.");
+            },
+          },
+        ],
+      },
+      {
+        type: "group",
+        heading: "Color Palette Roles",
+        items: (Object.keys(DEFAULT_COLORS) as ColorRole[]).map((role) => ({
+          name: role.charAt(0).toUpperCase() + role.slice(1),
+          desc: COLOR_ROLE_DESCRIPTIONS[role] || role,
+          render: (setting: Setting) => {
+            const currentColor = this.plugin.settings.palette[role] || DEFAULT_COLORS[role];
+            if (currentColor.startsWith("#")) {
+              setting.addColorPicker((picker) => {
+                picker.setValue(currentColor).onChange(async (val) => {
+                  this.plugin.settings.palette[role] = val;
+                  await this.plugin.saveSettings();
+                  this.plugin.rerenderMath();
+                });
+              });
+            }
+            setting.addText((text) => {
+              text
+                .setPlaceholder(DEFAULT_COLORS[role])
+                .setValue(this.plugin.settings.palette[role])
+                .onChange(async (val) => {
+                  if (val.trim()) {
+                    this.plugin.settings.palette[role] = val.trim();
+                    await this.plugin.saveSettings();
+                    this.plugin.rerenderMath();
+                  }
+                });
+            });
+          },
+        })),
+      },
+    ];
   }
 
   display(): void {

@@ -64,164 +64,18 @@ export class MathJaxInterceptor {
       }
     };
 
-    const self = this;
-
-    const formatSafeErrorLatex = (msg: string): string => {
-      const escaped = msg
-        .replace(/\\/g, "/")
-        .replace(/[{}\^_%$&#~]/g, " ");
-      return `\\textcolor{#f7768e}{\\text{[Color Math: ${escaped}]}}`;
-    };
-
-    const getMathJaxError = (el: unknown): string | null => {
-      if (!el || typeof el !== "object") return null;
-      const dom = el as Element;
-      if (typeof dom.getAttribute === "function") {
-        const errAttr = dom.getAttribute("data-mjx-error");
-        if (errAttr) return errAttr;
-      }
-      if (typeof dom.querySelector === "function") {
-        const errNode = dom.querySelector(".merror, [data-mjx-error], mjx-merror");
-        if (errNode) {
-          return (
-            errNode.getAttribute("data-mjx-error") ||
-            errNode.getAttribute("title") ||
-            errNode.textContent?.trim() ||
-            "LaTeX syntax error"
-          );
-        }
-      }
-      return null;
-    };
-
-    const handleResult = <T extends HTMLElement | SVGElement>(
-      result: T,
-      origFn: (latex: string, options?: unknown) => T,
-      context: unknown,
-      originalLatex: string,
-      transformedLatex: string,
-      options?: unknown
-    ): T => {
-      const errorMsg = getMathJaxError(result);
-      if (errorMsg) {
-        console.warn("Color Math: MathJax rendered error for colored LaTeX:", {
-          error: errorMsg,
-          original: originalLatex,
-          transformed: transformedLatex,
-        });
-
-        const mode = self.getErrorMode();
-        if (mode === "native") {
-          return result;
-        }
-
-        if (mode === "notice") {
-          self.notifyUserError(errorMsg);
-        }
-
-        if (mode === "inline") {
-          try {
-            const inlineErrorLatex = formatSafeErrorLatex(errorMsg);
-            const inlineEl = origFn.call(context, inlineErrorLatex, options);
-            if (inlineEl && typeof (inlineEl as Element).setAttribute === "function") {
-              (inlineEl as Element).setAttribute(
-                "title",
-                `Color Math Error: ${errorMsg}\nOriginal: ${originalLatex}\nTransformed: ${transformedLatex}`
-              );
-            }
-            return inlineEl;
-          } catch {
-            // fallback
-          }
-        }
-
-        // Fallback to rendering the original clean LaTeX
-        try {
-          const fallback = origFn.call(context, originalLatex, options);
-          if (fallback && typeof (fallback as Element).setAttribute === "function") {
-            (fallback as Element).setAttribute(
-              "title",
-              `Color Math: Rendered uncolored formula because colored syntax had error: ${errorMsg}`
-            );
-          }
-          return fallback;
-        } catch {
-          return result;
-        }
-      }
-      return result;
-    };
-
-    const handleAsyncResult = async <T extends HTMLElement | SVGElement>(
-      resultPromise: Promise<T>,
-      origFn: (latex: string, options?: unknown) => Promise<T>,
-      context: unknown,
-      originalLatex: string,
-      transformedLatex: string,
-      options?: unknown
-    ): Promise<T> => {
-      const result = await resultPromise;
-      const errorMsg = getMathJaxError(result);
-      if (errorMsg) {
-        console.warn("Color Math: MathJax rendered error for colored LaTeX (async):", {
-          error: errorMsg,
-          original: originalLatex,
-          transformed: transformedLatex,
-        });
-
-        const mode = self.getErrorMode();
-        if (mode === "native") {
-          return result;
-        }
-
-        if (mode === "notice") {
-          self.notifyUserError(errorMsg);
-        }
-
-        if (mode === "inline") {
-          try {
-            const inlineErrorLatex = formatSafeErrorLatex(errorMsg);
-            const inlineEl = await origFn.call(context, inlineErrorLatex, options);
-            if (inlineEl && typeof (inlineEl as Element).setAttribute === "function") {
-              (inlineEl as Element).setAttribute(
-                "title",
-                `Color Math Error: ${errorMsg}\nOriginal: ${originalLatex}\nTransformed: ${transformedLatex}`
-              );
-            }
-            return inlineEl;
-          } catch {
-            // fallback
-          }
-        }
-
-        try {
-          const fallback = await origFn.call(context, originalLatex, options);
-          if (fallback && typeof (fallback as Element).setAttribute === "function") {
-            (fallback as Element).setAttribute(
-              "title",
-              `Color Math: Rendered uncolored formula because colored syntax had error: ${errorMsg}`
-            );
-          }
-          return fallback;
-        } catch {
-          return result;
-        }
-      }
-      return result;
-    };
-
     // 1. Hook tex2chtml
     if (typeof mathJax.tex2chtml === "function") {
       const orig = mathJax.tex2chtml;
-      mathJax.tex2chtml = function (this: unknown, latex: string, options?: unknown) {
-        if (!self.isEnabled()) return orig.call(this, latex, options);
+      mathJax.tex2chtml = (latex: string, options?: unknown) => {
+        if (!this.isEnabled()) return orig.call(mathJax, latex, options);
         try {
           const transformed = transform(latex);
-          const res = orig.call(this, transformed, options);
-          return handleResult(res, orig, this, latex, transformed, options);
+          const res = orig.call(mathJax, transformed, options);
+          return this.handleResult(res, orig, mathJax, latex, transformed, options);
         } catch (err) {
           console.warn("Color Math: Exception during tex2chtml, falling back to original LaTeX:", err);
-          return orig.call(this, latex, options);
+          return orig.call(mathJax, latex, options);
         }
       };
       this.unpatchFns.push(() => {
@@ -232,21 +86,21 @@ export class MathJaxInterceptor {
     // 2. Hook tex2chtmlPromise
     if (typeof mathJax.tex2chtmlPromise === "function") {
       const orig = mathJax.tex2chtmlPromise;
-      mathJax.tex2chtmlPromise = async function (this: unknown, latex: string, options?: unknown) {
-        if (!self.isEnabled()) return orig.call(this, latex, options);
+      mathJax.tex2chtmlPromise = async (latex: string, options?: unknown) => {
+        if (!this.isEnabled()) return orig.call(mathJax, latex, options);
         try {
           const transformed = transform(latex);
-          return await handleAsyncResult(
-            orig.call(this, transformed, options),
+          return await this.handleAsyncResult(
+            orig.call(mathJax, transformed, options),
             orig,
-            this,
+            mathJax,
             latex,
             transformed,
             options
           );
         } catch (err) {
           console.warn("Color Math: Exception during tex2chtmlPromise, falling back to original LaTeX:", err);
-          return await orig.call(this, latex, options);
+          return await orig.call(mathJax, latex, options);
         }
       };
       this.unpatchFns.push(() => {
@@ -257,15 +111,15 @@ export class MathJaxInterceptor {
     // 3. Hook tex2svg
     if (typeof mathJax.tex2svg === "function") {
       const orig = mathJax.tex2svg;
-      mathJax.tex2svg = function (this: unknown, latex: string, options?: unknown) {
-        if (!self.isEnabled()) return orig.call(this, latex, options);
+      mathJax.tex2svg = (latex: string, options?: unknown) => {
+        if (!this.isEnabled()) return orig.call(mathJax, latex, options);
         try {
           const transformed = transform(latex);
-          const res = orig.call(this, transformed, options);
-          return handleResult(res, orig, this, latex, transformed, options);
+          const res = orig.call(mathJax, transformed, options);
+          return this.handleResult(res, orig, mathJax, latex, transformed, options);
         } catch (err) {
           console.warn("Color Math: Exception during tex2svg, falling back to original LaTeX:", err);
-          return orig.call(this, latex, options);
+          return orig.call(mathJax, latex, options);
         }
       };
       this.unpatchFns.push(() => {
@@ -276,27 +130,174 @@ export class MathJaxInterceptor {
     // 4. Hook tex2svgPromise
     if (typeof mathJax.tex2svgPromise === "function") {
       const orig = mathJax.tex2svgPromise;
-      mathJax.tex2svgPromise = async function (this: unknown, latex: string, options?: unknown) {
-        if (!self.isEnabled()) return orig.call(this, latex, options);
+      mathJax.tex2svgPromise = async (latex: string, options?: unknown) => {
+        if (!this.isEnabled()) return orig.call(mathJax, latex, options);
         try {
           const transformed = transform(latex);
-          return await handleAsyncResult(
-            orig.call(this, transformed, options),
+          return await this.handleAsyncResult(
+            orig.call(mathJax, transformed, options),
             orig,
-            this,
+            mathJax,
             latex,
             transformed,
             options
           );
         } catch (err) {
           console.warn("Color Math: Exception during tex2svgPromise, falling back to original LaTeX:", err);
-          return await orig.call(this, latex, options);
+          return await orig.call(mathJax, latex, options);
         }
       };
       this.unpatchFns.push(() => {
         mathJax.tex2svgPromise = orig;
       });
     }
+  }
+
+  private formatSafeErrorLatex(msg: string): string {
+    const escaped = msg
+      .replace(/\\/g, "/")
+      .replace(/[{}^_%$&#~]/g, " ");
+    return `\\textcolor{#f7768e}{\\text{[Color Math: ${escaped}]}}`;
+  }
+
+  private getMathJaxError(el: unknown): string | null {
+    if (!el || typeof el !== "object") return null;
+    const dom = el as Element;
+    if (typeof dom.getAttribute === "function") {
+      const errAttr = dom.getAttribute("data-mjx-error");
+      if (errAttr) return errAttr;
+    }
+    const findFn = (dom as any).find
+      ? (selector: string) => (dom as any).find(selector)
+      : (selector: string) => (dom as any)["querySelector"]?.(selector);
+    if (typeof findFn === "function") {
+      const errNode = findFn(".merror, [data-mjx-error], mjx-merror");
+      if (errNode) {
+        return (
+          errNode.getAttribute("data-mjx-error") ||
+          errNode.getAttribute("title") ||
+          errNode.textContent?.trim() ||
+          "LaTeX syntax error"
+        );
+      }
+    }
+    return null;
+  }
+
+  private handleResult<T extends HTMLElement | SVGElement>(
+    result: T,
+    origFn: (latex: string, options?: unknown) => T,
+    context: unknown,
+    originalLatex: string,
+    transformedLatex: string,
+    options?: unknown
+  ): T {
+    const errorMsg = this.getMathJaxError(result);
+    if (errorMsg) {
+      console.warn("Color Math: MathJax rendered error for colored LaTeX:", {
+        error: errorMsg,
+        original: originalLatex,
+        transformed: transformedLatex,
+      });
+
+      const mode = this.getErrorMode();
+      if (mode === "native") {
+        return result;
+      }
+
+      if (mode === "notice") {
+        this.notifyUserError(errorMsg);
+      }
+
+      if (mode === "inline") {
+        try {
+          const inlineErrorLatex = this.formatSafeErrorLatex(errorMsg);
+          const inlineEl = origFn.call(context, inlineErrorLatex, options);
+          if (inlineEl && typeof (inlineEl as Element).setAttribute === "function") {
+            (inlineEl as Element).setAttribute(
+              "title",
+              `Color Math Error: ${errorMsg}\nOriginal: ${originalLatex}\nTransformed: ${transformedLatex}`
+            );
+          }
+          return inlineEl;
+        } catch {
+          // fallback
+        }
+      }
+
+      // Fallback to rendering the original clean LaTeX
+      try {
+        const fallback = origFn.call(context, originalLatex, options);
+        if (fallback && typeof (fallback as Element).setAttribute === "function") {
+          (fallback as Element).setAttribute(
+            "title",
+            `Color Math: Rendered uncolored formula because colored syntax had error: ${errorMsg}`
+          );
+        }
+        return fallback;
+      } catch {
+        return result;
+      }
+    }
+    return result;
+  }
+
+  private async handleAsyncResult<T extends HTMLElement | SVGElement>(
+    resultPromise: Promise<T>,
+    origFn: (latex: string, options?: unknown) => Promise<T>,
+    context: unknown,
+    originalLatex: string,
+    transformedLatex: string,
+    options?: unknown
+  ): Promise<T> {
+    const result = await resultPromise;
+    const errorMsg = this.getMathJaxError(result);
+    if (errorMsg) {
+      console.warn("Color Math: MathJax rendered error for colored LaTeX (async):", {
+        error: errorMsg,
+        original: originalLatex,
+        transformed: transformedLatex,
+      });
+
+      const mode = this.getErrorMode();
+      if (mode === "native") {
+        return result;
+      }
+
+      if (mode === "notice") {
+        this.notifyUserError(errorMsg);
+      }
+
+      if (mode === "inline") {
+        try {
+          const inlineErrorLatex = this.formatSafeErrorLatex(errorMsg);
+          const inlineEl = await origFn.call(context, inlineErrorLatex, options);
+          if (inlineEl && typeof (inlineEl as Element).setAttribute === "function") {
+            (inlineEl as Element).setAttribute(
+              "title",
+              `Color Math Error: ${errorMsg}\nOriginal: ${originalLatex}\nTransformed: ${transformedLatex}`
+            );
+          }
+          return inlineEl;
+        } catch {
+          // fallback
+        }
+      }
+
+      try {
+        const fallback = await origFn.call(context, originalLatex, options);
+        if (fallback && typeof (fallback as Element).setAttribute === "function") {
+          (fallback as Element).setAttribute(
+            "title",
+            `Color Math: Rendered uncolored formula because colored syntax had error: ${errorMsg}`
+          );
+        }
+        return fallback;
+      } catch {
+        return result;
+      }
+    }
+    return result;
   }
 
   uninstall(): void {

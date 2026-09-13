@@ -90,8 +90,10 @@ export const NON_OPERAND_COMMANDS = new Set([
   "Leftrightarrow",
   "Rightarrow",
   "geq",
+  "ge",
   "in",
   "leq",
+  "le",
   "leftarrow",
   "leftrightarrow",
   "limits",
@@ -101,6 +103,7 @@ export const NON_OPERAND_COMMANDS = new Set([
   "middle",
   "mp",
   "neq",
+  "ne",
   "nolimits",
   "notin",
   "over",
@@ -850,7 +853,9 @@ export function readOperand(
     }
 
     if (!argumentCount && !FUNCTION_MACROS.has(name)) {
-      return { kind: "opaque", start, end };
+      // Unknown commands have unknown arity, but hiding the remaining
+      // equation is worse than leaving their arguments unclassified.
+      return { kind: "structural", start, end: commandEnd };
     }
 
     const scriptedEnd = consumeScripts(source, atomEnd, end);

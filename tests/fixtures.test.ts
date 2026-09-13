@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import { convertText, uncolorText } from "../src/index";
+import { validateMarkdownMath } from "./validator";
 
 describe("Markdown Fixture Regression Tests", () => {
   const originalDir = path.resolve(__dirname, "original");
@@ -38,6 +39,17 @@ describe("Markdown Fixture Regression Tests", () => {
 
       it("is idempotent (convert(convert(source)) === convert(source))", () => {
         expect(convertText(actual)).toBe(actual);
+      });
+
+      it("validates all converted equations against both KaTeX and MathJax engines", () => {
+        const validation = validateMarkdownMath(actual, "both");
+        if (!validation.valid) {
+          console.error(`Validation failures in ${filename}:`, validation.failures);
+        }
+        expect(
+          validation.valid,
+          `Dual-engine validation failed for ${filename}: ${JSON.stringify(validation.failures)}`
+        ).toBe(true);
       });
     });
   }

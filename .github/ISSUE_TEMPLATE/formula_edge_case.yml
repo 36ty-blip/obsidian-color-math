@@ -1,0 +1,40 @@
+name: "Formula Edge Case / Misparsed LaTeX"
+description: "Submit a formula that was parsed or colored unexpectedly"
+title: "[Formula]: "
+labels: ["formula-edge-case"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve Color Math! Provide the raw LaTeX equation and details below.
+  - type: textarea
+    id: latex
+    attributes:
+      label: Raw LaTeX Equation
+      description: Enter the equation as written in Obsidian (with $...$ or $$...$$).
+      placeholder: |
+        $$\langle \psi | \hat{H} | \psi \rangle = E$$
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs. Actual Behavior
+      description: Describe what parts were miscolored or what you expected to see.
+      placeholder: |
+        The operator \hat{H} was colored as a generic variable instead of an operator.
+    validations:
+      required: true
+  - type: dropdown
+    id: domain
+    attributes:
+      label: Mathematical / Scientific Field
+      options:
+        - Physics (Quantum / Relativity / Mechanics)
+        - Chemistry / Chemical Equations
+        - Pure Mathematics (Algebra / Topology / Analysis)
+        - Engineering / Fluid Dynamics / Thermodynamics
+        - Statistics & Machine Learning
+        - Other
+    validations:
+      required: false

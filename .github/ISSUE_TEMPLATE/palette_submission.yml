@@ -1,0 +1,36 @@
+name: "Theme / Palette Submission"
+description: "Suggest a custom color palette for Color Math"
+title: "[Palette]: "
+labels: ["palette-preset"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share your theme palette mappings! Color Math uses 12 semantic roles.
+  - type: input
+    id: theme_name
+    attributes:
+      label: Theme Name
+      placeholder: e.g. Catppuccin Mocha, Nord, Gruvbox Dark
+    validations:
+      required: true
+  - type: textarea
+    id: palette_hex
+    attributes:
+      label: Semantic Hex Values
+      description: Provide hex codes for the 12 semantic roles.
+      value: |
+        main: "#..."
+        orange: "#..."
+        dot: "#..."
+        derivative: "#..."
+        chain: "#..."
+        upper: "#..."
+        relation: "#..."
+        arrow: "#..."
+        set: "#..."
+        spacing: "#..."
+        parameter: "#..."
+        unit: "#..."
+    validations:
+      required: true

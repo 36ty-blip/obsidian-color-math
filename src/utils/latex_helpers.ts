@@ -131,7 +131,7 @@ export function readScript(text: string, start: number): [string, number, boolea
 
 export function readColorWrapper(text: string, start: number): [string, number] | null {
   let command: string | null = null;
-  for (const candidate of ["\\textcolor", "\\color"]) {
+  for (const candidate of ["\\textcolor", "\\colorbox", "\\color"]) {
     if (
       text.startsWith(candidate, start) &&
       (start + candidate.length === text.length ||
@@ -151,6 +151,17 @@ export function readColorWrapper(text: string, start: number): [string, number] 
     index++;
   }
 
+  // Handle optional model in brackets, e.g. \textcolor[HTML]{...}{...} or \color[rgb]{...}
+  if (index < text.length && text[index] === "[") {
+    const closeBracket = text.indexOf("]", index);
+    if (closeBracket !== -1) {
+      index = closeBracket + 1;
+      while (index < text.length && /\s/.test(text[index])) {
+        index++;
+      }
+    }
+  }
+
   const colorData = readBraced(text, index);
   if (colorData === null) {
     return null;
@@ -161,6 +172,20 @@ export function readColorWrapper(text: string, start: number): [string, number] 
     index++;
   }
 
+  // If command is \color, it may be a declaration (\color{red} x) or legacy scoped (\color{red}{x})
+  if (command === "\\color") {
+    if (index < text.length && text[index] === "{") {
+      const valueData = readBraced(text, index);
+      if (valueData !== null) {
+        const [value, end] = valueData;
+        return [value.slice(1, -1), end];
+      }
+    }
+    // Standalone declaration: strip the command and color specifier
+    return ["", index];
+  }
+
+  // \textcolor and \colorbox require the second argument {content}
   const valueData = readBraced(text, index);
   if (valueData === null) {
     return null;
@@ -180,7 +205,7 @@ export function readColorCommand(text: string, start: number): [string, number] 
 }
 
 export function containsColorWrapper(text: string): boolean {
-  if (!text.includes("\\textcolor") && !text.includes("\\color")) {
+  if (!text.includes("\\textcolor") && !text.includes("\\color") && !text.includes("\\colorbox")) {
     return false;
   }
   let index = 0;
@@ -389,4 +414,62 @@ export function normalizeLatexBraces(source: string): string {
 
   return result;
 }
+
+/**
+ * Reads and skips environment declaration headers including arguments:
+ * e.g., \begin{matrix}, \begin{array}{cc|c}, \begin{alignedat}{2}, \end{array}
+ */
+export function skipEnvironmentHead(
+  text: string,
+  cmdName: string,
+  cmdEnd: number,
+  limit: number = text.length
+): number | null {
+  if (cmdName !== "\\begin" && cmdName !== "\\end") {
+    return null;
+  }
+  let afterCmd = cmdEnd;
+  while (afterCmd < limit && /\s/.test(text[afterCmd])) {
+    afterCmd++;
+  }
+  if (afterCmd < limit && text[afterCmd] === "{") {
+    const group = readBraced(text, afterCmd);
+    if (group !== null && group[1] <= limit) {
+      const rawName = group[0].trim();
+      const envName = rawName.startsWith("{") && rawName.endsWith("}")
+        ? rawName.slice(1, -1).trim()
+        : rawName;
+      let nextIdx = group[1];
+      if (
+        cmdName === "\\begin" &&
+        (envName === "array" ||
+          envName === "tabular" ||
+          envName.startsWith("alignat") ||
+          envName.startsWith("alignedat"))
+      ) {
+        // Skip optional position argument [t], [b], [c]
+        let scanOpt = nextIdx;
+        while (scanOpt < limit && /\s/.test(text[scanOpt])) scanOpt++;
+        if (scanOpt < limit && text[scanOpt] === "[") {
+          const bracketEnd = text.indexOf("]", scanOpt);
+          if (bracketEnd !== -1 && bracketEnd < limit) {
+            nextIdx = bracketEnd + 1;
+          }
+        }
+        // Skip column specification argument {cc|c} or {num}
+        let scanCols = nextIdx;
+        while (scanCols < limit && /\s/.test(text[scanCols])) scanCols++;
+        if (scanCols < limit && text[scanCols] === "{") {
+          const colBraced = readBraced(text, scanCols);
+          if (colBraced !== null && colBraced[1] <= limit) {
+            nextIdx = colBraced[1];
+          }
+        }
+      }
+      return nextIdx;
+    }
+  }
+  return null;
+}
+
 
