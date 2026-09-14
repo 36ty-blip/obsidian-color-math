@@ -368,7 +368,7 @@ function visibleRanges(length: number, excluded: MarkdownSpan[]): [number, numbe
   return ranges;
 }
 
-function isEscaped(text: string, index: number, lowerBound: number): boolean {
+function isEscaped(text: string, index: number, lowerBound = 0): boolean {
   let backslashes = 0;
   index -= 1;
   while (index >= lowerBound && text[index] === "\\") {
@@ -472,7 +472,7 @@ function findMathInlines(text: string, protectedSpans: MarkdownSpan[]): Markdown
   for (const [start, end] of visibleRanges(text.length, protectedSpans)) {
     let index = start;
     while (index < end) {
-      if (text[index] === "$" && (index === 0 || text[index - 1] !== "\\")) {
+      if (text[index] === "$" && !isEscaped(text, index)) {
         // Skip $$ display math delimiters
         if (index + 1 < end && text[index + 1] === "$") {
           index += 2;
@@ -498,9 +498,15 @@ function findMathInlines(text: string, protectedSpans: MarkdownSpan[]): Markdown
           if (text[closing] === "\r" || text[closing] === "\n") {
             break; // Inline math must not cross lines
           }
-          if (text[closing] === "$" && text[closing - 1] !== "\\") {
+          if (text[closing] === "$" && !isEscaped(text, closing)) {
             // Closing $ must not be preceded by whitespace
-            if (text[closing - 1] !== " " && text[closing - 1] !== "\t") {
+            // Pandoc / GFM: Closing $ must not be followed immediately by a digit
+            const prevChar = text[closing - 1];
+            const isPrevSpace =
+              prevChar === " " || prevChar === "\t" || prevChar === "\r" || prevChar === "\n";
+            const isNextDigit =
+              closing + 1 < end && text[closing + 1] >= "0" && text[closing + 1] <= "9";
+            if (!isPrevSpace && !isNextDigit) {
               found = true;
               break;
             }
@@ -527,9 +533,26 @@ function findMathInlines(text: string, protectedSpans: MarkdownSpan[]): Markdown
 }
 
 export function scanMarkdown(text: string): MarkdownScan {
+  if (!text.includes("$") && !text.includes("`") && !text.includes("~")) {
+    return {
+      protected: [],
+      mathBlocks: [],
+      mathInlines: [],
+    };
+  }
+
   const fenced = findFencedCode(text);
   const codeSpans = findCodeSpans(text, fenced);
   const protectedSpans = [...fenced, ...codeSpans].sort((a, b) => a.start - b.start);
+
+  if (!text.includes("$")) {
+    return {
+      protected: protectedSpans,
+      mathBlocks: [],
+      mathInlines: [],
+    };
+  }
+
   const mathBlocks = findMathBlocks(text, protectedSpans);
   const allProtected = [...protectedSpans, ...mathBlocks].sort(
     (a, b) => a.start - b.start

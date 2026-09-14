@@ -757,7 +757,7 @@ function visibleRanges(length, excluded) {
   }
   return ranges;
 }
-function isEscaped(text, index, lowerBound) {
+function isEscaped(text, index, lowerBound = 0) {
   let backslashes = 0;
   index -= 1;
   while (index >= lowerBound && text[index] === "\\") {
@@ -839,7 +839,7 @@ function findMathInlines(text, protectedSpans) {
   for (const [start, end] of visibleRanges(text.length, protectedSpans)) {
     let index = start;
     while (index < end) {
-      if (text[index] === "$" && (index === 0 || text[index - 1] !== "\\")) {
+      if (text[index] === "$" && !isEscaped(text, index)) {
         if (index + 1 < end && text[index + 1] === "$") {
           index += 2;
           continue;
@@ -855,8 +855,11 @@ function findMathInlines(text, protectedSpans) {
           if (text[closing] === "\r" || text[closing] === "\n") {
             break;
           }
-          if (text[closing] === "$" && text[closing - 1] !== "\\") {
-            if (text[closing - 1] !== " " && text[closing - 1] !== "	") {
+          if (text[closing] === "$" && !isEscaped(text, closing)) {
+            const prevChar = text[closing - 1];
+            const isPrevSpace = prevChar === " " || prevChar === "	" || prevChar === "\r" || prevChar === "\n";
+            const isNextDigit = closing + 1 < end && text[closing + 1] >= "0" && text[closing + 1] <= "9";
+            if (!isPrevSpace && !isNextDigit) {
               found = true;
               break;
             }
@@ -881,9 +884,23 @@ function findMathInlines(text, protectedSpans) {
   return spans;
 }
 function scanMarkdown(text) {
+  if (!text.includes("$") && !text.includes("`") && !text.includes("~")) {
+    return {
+      protected: [],
+      mathBlocks: [],
+      mathInlines: []
+    };
+  }
   const fenced = findFencedCode(text);
   const codeSpans = findCodeSpans(text, fenced);
   const protectedSpans = [...fenced, ...codeSpans].sort((a, b) => a.start - b.start);
+  if (!text.includes("$")) {
+    return {
+      protected: protectedSpans,
+      mathBlocks: [],
+      mathInlines: []
+    };
+  }
   const mathBlocks = findMathBlocks(text, protectedSpans);
   const allProtected = [...protectedSpans, ...mathBlocks].sort(
     (a, b) => a.start - b.start
@@ -4541,6 +4558,9 @@ function convertMathBlock(block, palette = COLORS, options) {
   return `${prefix}$$${colorLatexBody(body, palette, options)}$$${suffix}`;
 }
 function convertText(text, palette = COLORS, options) {
+  if (!text.includes("$")) {
+    return text;
+  }
   const scan = scanMarkdown(text);
   const allSpans = [...scan.mathBlocks, ...scan.mathInlines].sort(
     (a, b) => a.start - b.start

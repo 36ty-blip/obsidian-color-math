@@ -99,6 +99,10 @@ export function convertText(
   palette: ColorPalette = COLORS,
   options?: ColorMathOptions
 ): string {
+  if (!text.includes("$")) {
+    return text;
+  }
+
   const scan = scanMarkdown(text);
   const allSpans = [...scan.mathBlocks, ...scan.mathInlines].sort(
     (a, b) => a.start - b.start
