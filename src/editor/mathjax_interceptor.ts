@@ -11,6 +11,18 @@ interface MathJaxObject {
   tex2svgPromise?: (latex: string, options?: unknown) => Promise<SVGElement>;
 }
 
+interface DomErrorCandidate {
+  getAttribute?: (name: string) => string | null;
+  title?: string;
+  textContent?: string | null;
+}
+
+interface DomQueryableCandidate {
+  getAttribute?: (name: string) => string | null;
+  querySelector?: (selectors: string) => DomErrorCandidate | null;
+  find?: (selector: string) => DomErrorCandidate | null;
+}
+
 export type ErrorDisplayMode = "inline" | "fallback" | "notice" | "native";
 
 export class MathJaxInterceptor {
@@ -162,24 +174,30 @@ export class MathJaxInterceptor {
 
   private getMathJaxError(el: unknown): string | null {
     if (!el || typeof el !== "object") return null;
-    const dom = el as Element;
+    const dom = el as DomQueryableCandidate;
     if (typeof dom.getAttribute === "function") {
       const errAttr = dom.getAttribute("data-mjx-error");
       if (errAttr) return errAttr;
     }
-    const findFn = (dom as any).find
-      ? (selector: string) => (dom as any).find(selector)
-      : (selector: string) => (dom as any)["querySelector"]?.(selector);
-    if (typeof findFn === "function") {
-      const errNode = findFn(".merror, [data-mjx-error], mjx-merror");
-      if (errNode) {
-        return (
-          errNode.getAttribute("data-mjx-error") ||
-          errNode.getAttribute("title") ||
-          errNode.textContent?.trim() ||
-          "LaTeX syntax error"
-        );
-      }
+
+    let errNode: DomErrorCandidate | null = null;
+    if (typeof dom.querySelector === "function") {
+      errNode = dom.querySelector(".merror, [data-mjx-error], mjx-merror");
+    } else if (typeof dom.find === "function") {
+      errNode = dom.find(".merror, [data-mjx-error], mjx-merror");
+    }
+
+    if (errNode) {
+      const attrError =
+        typeof errNode.getAttribute === "function"
+          ? errNode.getAttribute("data-mjx-error")
+          : null;
+      const attrTitle =
+        typeof errNode.getAttribute === "function"
+          ? errNode.getAttribute("title")
+          : errNode.title;
+      const textContent = errNode.textContent?.trim();
+      return attrError || attrTitle || textContent || "LaTeX syntax error";
     }
     return null;
   }

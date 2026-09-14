@@ -4896,12 +4896,17 @@ var MathJaxInterceptor = class {
       if (errAttr)
         return errAttr;
     }
-    const findFn = dom.find ? (selector) => dom.find(selector) : (selector) => dom["querySelector"]?.(selector);
-    if (typeof findFn === "function") {
-      const errNode = findFn(".merror, [data-mjx-error], mjx-merror");
-      if (errNode) {
-        return errNode.getAttribute("data-mjx-error") || errNode.getAttribute("title") || errNode.textContent?.trim() || "LaTeX syntax error";
-      }
+    let errNode = null;
+    if (typeof dom.querySelector === "function") {
+      errNode = dom.querySelector(".merror, [data-mjx-error], mjx-merror");
+    } else if (typeof dom.find === "function") {
+      errNode = dom.find(".merror, [data-mjx-error], mjx-merror");
+    }
+    if (errNode) {
+      const attrError = typeof errNode.getAttribute === "function" ? errNode.getAttribute("data-mjx-error") : null;
+      const attrTitle = typeof errNode.getAttribute === "function" ? errNode.getAttribute("title") : errNode.title;
+      const textContent = errNode.textContent?.trim();
+      return attrError || attrTitle || textContent || "LaTeX syntax error";
     }
     return null;
   }
@@ -24886,11 +24891,9 @@ function registerColorMathMcpTools(plugin) {
         openWorldHint: false
       }
     );
-    console.log("Color Math: Successfully registered tools with Obsidian Local REST API MCP server.");
     return () => {
       try {
         api.unregister();
-        console.log("Color Math: Unregistered tools from Obsidian Local REST API MCP server.");
       } catch (e) {
         console.warn("Color Math: Error unregistering MCP tools:", e);
       }
@@ -25487,13 +25490,15 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
           {
             name: "Sync with active theme",
             desc: "Extract and apply matching colors from your currently active Obsidian theme.",
-            action: async () => {
-              this.plugin.settings.palette = extractThemePalette(
-                this.plugin.settings.autoLightDark ? isVaultLightMode() : false
-              );
-              await this.plugin.saveSettings();
-              this.plugin.rerenderMath();
-              new import_obsidian3.Notice("Color Math: Synced colors with active Obsidian theme!");
+            action: () => {
+              void (async () => {
+                this.plugin.settings.palette = extractThemePalette(
+                  this.plugin.settings.autoLightDark ? isVaultLightMode() : false
+                );
+                await this.plugin.saveSettings();
+                this.plugin.rerenderMath();
+                new import_obsidian3.Notice("Color Math: Synced colors with active Obsidian theme!");
+              })();
             }
           },
           {
@@ -25517,11 +25522,13 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
           {
             name: "Restore default palette",
             desc: "Revert all colors back to our signature Tokyo Night palette.",
-            action: async () => {
-              this.plugin.settings.palette = { ...DEFAULT_COLORS };
-              await this.plugin.saveSettings();
-              this.plugin.rerenderMath();
-              new import_obsidian3.Notice("Color Math: Restored default Tokyo Night palette.");
+            action: () => {
+              void (async () => {
+                this.plugin.settings.palette = { ...DEFAULT_COLORS };
+                await this.plugin.saveSettings();
+                this.plugin.rerenderMath();
+                new import_obsidian3.Notice("Color Math: Restored default Tokyo Night palette.");
+              })();
             }
           }
         ]

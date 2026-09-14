@@ -731,13 +731,15 @@ class ColorMathSettingTab extends PluginSettingTab {
           {
             name: "Sync with active theme",
             desc: "Extract and apply matching colors from your currently active Obsidian theme.",
-            action: async () => {
-              this.plugin.settings.palette = extractThemePalette(
-                this.plugin.settings.autoLightDark ? isVaultLightMode() : false
-              );
-              await this.plugin.saveSettings();
-              this.plugin.rerenderMath();
-              new Notice("Color Math: Synced colors with active Obsidian theme!");
+            action: () => {
+              void (async () => {
+                this.plugin.settings.palette = extractThemePalette(
+                  this.plugin.settings.autoLightDark ? isVaultLightMode() : false
+                );
+                await this.plugin.saveSettings();
+                this.plugin.rerenderMath();
+                new Notice("Color Math: Synced colors with active Obsidian theme!");
+              })();
             },
           },
           {
@@ -761,11 +763,13 @@ class ColorMathSettingTab extends PluginSettingTab {
           {
             name: "Restore default palette",
             desc: "Revert all colors back to our signature Tokyo Night palette.",
-            action: async () => {
-              this.plugin.settings.palette = { ...DEFAULT_COLORS };
-              await this.plugin.saveSettings();
-              this.plugin.rerenderMath();
-              new Notice("Color Math: Restored default Tokyo Night palette.");
+            action: () => {
+              void (async () => {
+                this.plugin.settings.palette = { ...DEFAULT_COLORS };
+                await this.plugin.saveSettings();
+                this.plugin.rerenderMath();
+                new Notice("Color Math: Restored default Tokyo Night palette.");
+              })();
             },
           },
         ],

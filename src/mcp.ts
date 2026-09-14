@@ -21,7 +21,7 @@ export interface LocalRestApiPublicApi {
   addMcpTool(
     name: string,
     description: string,
-    schema: Record<string, z.ZodTypeAny>,
+    schema: Record<string, z.ZodType>,
     callback: (args: Record<string, unknown>) => Promise<unknown>,
     annotations?: McpToolAnnotations
   ): void;
@@ -207,11 +207,9 @@ export function registerColorMathMcpTools(plugin: ColorMathPlugin): (() => void)
       }
     );
 
-    console.log("Color Math: Successfully registered tools with Obsidian Local REST API MCP server.");
     return () => {
       try {
         api.unregister();
-        console.log("Color Math: Unregistered tools from Obsidian Local REST API MCP server.");
       } catch (e) {
         console.warn("Color Math: Error unregistering MCP tools:", e);
       }
