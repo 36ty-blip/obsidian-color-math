@@ -789,29 +789,126 @@ var RAINBOW_DELIMITER_COLORS = [
 ];
 var VARIABLE_HASH_PALETTE = [
   "#7aa2f7",
-  // Tokyo Blue
+  // 0: Tokyo Blue
   "#7dcfff",
-  // Tokyo Cyan
+  // 1: Tokyo Cyan
   "#bb9af7",
-  // Tokyo Purple
+  // 2: Tokyo Purple
   "#f7768e",
-  // Tokyo Pink
+  // 3: Tokyo Pink
   "#e0af68",
-  // Tokyo Orange/Gold
+  // 4: Tokyo Orange/Gold
   "#9ece6a",
-  // Tokyo Green
+  // 5: Tokyo Green
   "#2ac3de",
-  // Light Cyan
+  // 6: Light Cyan/Teal
   "#ff9e64"
-  // Peach
+  // 7: Peach
 ];
-function hashStringToColor(str, palette = VARIABLE_HASH_PALETTE) {
-  let hash2 = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash2 = hash2 * 31 + str.charCodeAt(i) | 0;
+var CANONICAL_VARIABLE_SLOTS = {
+  // 1. Spatial 3D Cartesian coordinates: guaranteed maximum pairwise separation
+  x: 0,
+  // Tokyo Blue
+  y: 4,
+  // Tokyo Gold
+  z: 5,
+  // Tokyo Green
+  // 2. Coefficients: high-contrast against (x, y, z) and within the group
+  a: 2,
+  // Tokyo Purple
+  b: 3,
+  // Tokyo Pink
+  c: 6,
+  // Light Cyan/Teal
+  d: 7,
+  // Peach
+  // 3. Parameters / Velocity / Substitutions
+  u: 1,
+  // Tokyo Cyan
+  v: 2,
+  // Tokyo Purple
+  w: 4,
+  // Tokyo Gold
+  // 4. Discrete summation & matrix indices
+  i: 4,
+  // Tokyo Gold
+  j: 0,
+  // Tokyo Blue
+  k: 3,
+  // Tokyo Pink
+  l: 5,
+  // Tokyo Green
+  m: 2,
+  // Tokyo Purple
+  n: 6,
+  // Light Cyan/Teal
+  // 5. Calculus & Analysis duals
+  s: 3,
+  // Tokyo Pink
+  t: 1,
+  // Tokyo Cyan
+  p: 0,
+  // Tokyo Blue
+  q: 7,
+  // Peach
+  // 6. Thermodynamics & State
+  P: 3,
+  // Tokyo Pink
+  V: 0,
+  // Tokyo Blue
+  T: 4,
+  // Tokyo Gold
+  // 7. Greek letters & canonical duals
+  "\\theta": 4,
+  "\u03B8": 4,
+  "\u{1D717}": 4,
+  "\u03D1": 4,
+  "\\phi": 2,
+  "\\varphi": 2,
+  "\u03D5": 2,
+  "\u03C6": 2,
+  "\u{1D719}": 2,
+  "\u{1D711}": 2,
+  "\\psi": 2,
+  "\u03C8": 2,
+  "\u{1D713}": 2,
+  "\\epsilon": 2,
+  "\\varepsilon": 2,
+  "\u03B5": 2,
+  "\u{1D700}": 2,
+  "\\delta": 5,
+  "\u03B4": 5,
+  "\u{1D6FF}": 5,
+  "\\alpha": 2,
+  "\u03B1": 2,
+  "\u{1D6FC}": 2,
+  "\\beta": 3,
+  "\u03B2": 3,
+  "\u{1D6FD}": 3,
+  "\\gamma": 5,
+  "\u03B3": 5,
+  "\u{1D6FE}": 5,
+  "\\omega": 7,
+  "\u03C9": 7,
+  "\u{1D714}": 7,
+  "\\lambda": 6,
+  "\u03BB": 6,
+  "\u{1D706}": 6
+};
+function hashStringToSlot(str, numSlots = 8) {
+  if (Object.prototype.hasOwnProperty.call(CANONICAL_VARIABLE_SLOTS, str)) {
+    return CANONICAL_VARIABLE_SLOTS[str] % numSlots;
   }
-  const index = Math.abs(hash2) % palette.length;
-  return palette[index];
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = (h << 5) - h + str.charCodeAt(i) | 0;
+  }
+  const unsignedH = h >>> 0;
+  return Math.floor((unsignedH * 2654435761 >>> 0) % numSlots);
+}
+function hashStringToColor(str, palette = VARIABLE_HASH_PALETTE) {
+  const slot = hashStringToSlot(str, palette.length);
+  return palette[slot];
 }
 
 // src/parsers/markdown_scanner.ts

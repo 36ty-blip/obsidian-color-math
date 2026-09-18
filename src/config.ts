@@ -550,26 +550,85 @@ export const RAINBOW_DELIMITER_COLORS: string[] = [
 ];
 
 export const VARIABLE_HASH_PALETTE: string[] = [
-  "#7aa2f7", // Tokyo Blue
-  "#7dcfff", // Tokyo Cyan
-  "#bb9af7", // Tokyo Purple
-  "#f7768e", // Tokyo Pink
-  "#e0af68", // Tokyo Orange/Gold
-  "#9ece6a", // Tokyo Green
-  "#2ac3de", // Light Cyan
-  "#ff9e64", // Peach
+  "#7aa2f7", // 0: Tokyo Blue
+  "#7dcfff", // 1: Tokyo Cyan
+  "#bb9af7", // 2: Tokyo Purple
+  "#f7768e", // 3: Tokyo Pink
+  "#e0af68", // 4: Tokyo Orange/Gold
+  "#9ece6a", // 5: Tokyo Green
+  "#2ac3de", // 6: Light Cyan/Teal
+  "#ff9e64", // 7: Peach
 ];
+
+export const CANONICAL_VARIABLE_SLOTS: Record<string, number> = {
+  // 1. Spatial 3D Cartesian coordinates: guaranteed maximum pairwise separation
+  x: 0, // Tokyo Blue
+  y: 4, // Tokyo Gold
+  z: 5, // Tokyo Green
+
+  // 2. Coefficients: high-contrast against (x, y, z) and within the group
+  a: 2, // Tokyo Purple
+  b: 3, // Tokyo Pink
+  c: 6, // Light Cyan/Teal
+  d: 7, // Peach
+
+  // 3. Parameters / Velocity / Substitutions
+  u: 1, // Tokyo Cyan
+  v: 2, // Tokyo Purple
+  w: 4, // Tokyo Gold
+
+  // 4. Discrete summation & matrix indices
+  i: 4, // Tokyo Gold
+  j: 0, // Tokyo Blue
+  k: 3, // Tokyo Pink
+  l: 5, // Tokyo Green
+  m: 2, // Tokyo Purple
+  n: 6, // Light Cyan/Teal
+
+  // 5. Calculus & Analysis duals
+  s: 3, // Tokyo Pink
+  t: 1, // Tokyo Cyan
+  p: 0, // Tokyo Blue
+  q: 7, // Peach
+
+  // 6. Thermodynamics & State
+  P: 3, // Tokyo Pink
+  V: 0, // Tokyo Blue
+  T: 4, // Tokyo Gold
+
+  // 7. Greek letters & canonical duals
+  "\\theta": 4, "θ": 4, "𝜗": 4, "ϑ": 4,
+  "\\phi": 2, "\\varphi": 2, "ϕ": 2, "φ": 2, "𝜙": 2, "𝜑": 2,
+  "\\psi": 2, "ψ": 2, "𝜓": 2,
+  "\\epsilon": 2, "\\varepsilon": 2, "ε": 2, "𝜀": 2,
+  "\\delta": 5, "δ": 5, "𝛿": 5,
+  "\\alpha": 2, "α": 2, "𝛼": 2,
+  "\\beta": 3, "β": 3, "𝛽": 3,
+  "\\gamma": 5, "γ": 5, "𝛾": 5,
+  "\\omega": 7, "ω": 7, "𝜔": 7,
+  "\\lambda": 6, "λ": 6, "𝜆": 6,
+};
+
+export function hashStringToSlot(str: string, numSlots: number = 8): number {
+  if (Object.prototype.hasOwnProperty.call(CANONICAL_VARIABLE_SLOTS, str)) {
+    return CANONICAL_VARIABLE_SLOTS[str] % numSlots;
+  }
+
+  // Knuth 32-bit multiplicative hash with golden ratio constant 2654435761 (0x9E3779B9)
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  }
+  const unsignedH = h >>> 0;
+  return Math.floor(((unsignedH * 2654435761) >>> 0) % numSlots);
+}
 
 export function hashStringToColor(
   str: string,
   palette: string[] = VARIABLE_HASH_PALETTE
 ): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash * 31 + str.charCodeAt(i)) | 0;
-  }
-  const index = Math.abs(hash) % palette.length;
-  return palette[index];
+  const slot = hashStringToSlot(str, palette.length);
+  return palette[slot];
 }
 
 export interface ColorMathOptions {
