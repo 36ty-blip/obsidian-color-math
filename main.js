@@ -26021,7 +26021,7 @@ var DEFAULT_SETTINGS = {
   rainbowDelimiters: true,
   rainbowBareBraces: true,
   highlightUnmatchedBraces: true,
-  variableDataFlow: false,
+  variableDataFlow: true,
   colorUnits: true,
   colorDifferentials: true,
   colorDerivativeFractions: true,

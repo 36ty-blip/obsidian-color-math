@@ -22,7 +22,7 @@
   "autoLightDark": true,
   "enableTaxonomy": true,
   "rainbowDelimiters": true,
-  "variableDataFlow": false,
+  "variableDataFlow": true,
   "colorUnits": true,
   "colorDifferentials": true,
   "colorBraKet": true,

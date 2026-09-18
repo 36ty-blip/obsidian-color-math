@@ -93,7 +93,7 @@ const DEFAULT_SETTINGS: ColorMathSettings = {
   rainbowDelimiters: true,
   rainbowBareBraces: true,
   highlightUnmatchedBraces: true,
-  variableDataFlow: false,
+  variableDataFlow: true,
   colorUnits: true,
   colorDifferentials: true,
   colorDerivativeFractions: true,
