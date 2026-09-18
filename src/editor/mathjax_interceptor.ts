@@ -53,7 +53,19 @@ export class MathJaxInterceptor {
     }
   }
 
-  async install(): Promise<void> {
+  private installed: boolean = false;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryCount: number = 0;
+
+  isInstalled(): boolean {
+    return this.installed;
+  }
+
+  async install(onSuccess?: () => void): Promise<boolean> {
+    if (this.installed) {
+      return true;
+    }
+
     try {
       await loadMathJax();
     } catch (e) {
@@ -61,9 +73,9 @@ export class MathJaxInterceptor {
     }
 
     const mathJax = (window as Window & { MathJax?: MathJaxObject })?.MathJax;
-    if (!mathJax) {
-      console.warn("Color Math: window.MathJax is not defined yet.");
-      return;
+    if (!mathJax || typeof mathJax.tex2chtml !== "function") {
+      this.scheduleRetry(onSuccess);
+      return false;
     }
 
     const transform = (latex: string): string => {
@@ -163,6 +175,28 @@ export class MathJaxInterceptor {
         mathJax.tex2svgPromise = orig;
       });
     }
+
+    this.installed = true;
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+    this.retryCount = 0;
+    onSuccess?.();
+    return true;
+  }
+
+  private scheduleRetry(onSuccess?: () => void): void {
+    if (this.installed || this.retryCount >= 10) return;
+    const delays = [100, 250, 500, 1000, 2000, 3000, 4000];
+    const delay = delays[Math.min(this.retryCount, delays.length - 1)];
+    this.retryCount++;
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+    }
+    this.retryTimer = setTimeout(async () => {
+      await this.install(onSuccess);
+    }, delay);
   }
 
   private formatSafeErrorLatex(msg: string): string {
@@ -319,6 +353,10 @@ export class MathJaxInterceptor {
   }
 
   uninstall(): void {
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
     for (const unpatch of this.unpatchFns) {
       try {
         unpatch();
@@ -327,5 +365,6 @@ export class MathJaxInterceptor {
       }
     }
     this.unpatchFns = [];
+    this.installed = false;
   }
 }

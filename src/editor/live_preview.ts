@@ -19,6 +19,7 @@ import { collectFunctionSpans } from "../converters/generic";
 import { scanMarkdown } from "../parsers/markdown_scanner";
 import { collectScannerSpans } from "../parsers/scanner";
 import { collectTaxonomySpans } from "../parsers/taxonomy";
+import { collectQuantumOperatorSpans } from "../parsers/physics";
 import { collectUnitSpans, findUnitSpans } from "../parsers/units";
 import { collectVariableSpans } from "../parsers/variable_hash";
 import { containsColorWrapper } from "../utils/latex_helpers";
@@ -77,7 +78,11 @@ export function createColorMathLivePlugin(
         }
 
         const scan = scanMarkdown(text);
-        const allMath = [...scan.mathBlocks, ...scan.mathInlines];
+        const mathBlocks = options?.highlightDisplayMath !== false ? scan.mathBlocks : [];
+        const mathInlines = options?.highlightInlineMath !== false ? scan.mathInlines : [];
+        const allMath = [...mathBlocks, ...mathInlines].sort((a, b) => a.start - b.start);
+
+        const pendingDecorations: { from: number; to: number; decoration: Decoration }[] = [];
 
         for (const block of allMath) {
           const blockStart = offset + block.contentStart;
@@ -101,7 +106,7 @@ export function createColorMathLivePlugin(
           const dimSpans = needDims ? findDimensionlessSpans(body) : [];
 
           const allSpans: ColorSpan[] = [
-            ...collectFunctionSpans(body, palette, bareFunctions),
+            ...collectFunctionSpans(body, palette, bareFunctions, options),
             ...collectScannerSpans(body, palette),
           ];
 
@@ -110,7 +115,7 @@ export function createColorMathLivePlugin(
           }
 
           if (options?.colorDifferentials !== false) {
-            allSpans.push(...collectDifferentialSpans(body, palette, diffSpans));
+            allSpans.push(...collectDifferentialSpans(body, palette, diffSpans, options));
           }
 
           if (options?.colorDimensionless !== false) {
@@ -130,15 +135,44 @@ export function createColorMathLivePlugin(
           }
 
           if (options?.rainbowDelimiters) {
-            allSpans.push(...collectDelimiterSpans(body, { forLatexWrap: false }));
+            allSpans.push(
+              ...collectDelimiterSpans(body, {
+                forLatexWrap: false,
+                palette: options?.rainbowColors,
+                includeBareBraces: options?.rainbowBareBraces !== false,
+                highlightUnmatched: options?.highlightUnmatchedBraces !== false,
+              })
+            );
+          } else if (options?.highlightUnmatchedBraces !== false) {
+            allSpans.push(
+              ...collectDelimiterSpans(body, {
+                forLatexWrap: false,
+                includeBareBraces: true,
+                onlyUnmatched: true,
+                highlightUnmatched: true,
+              })
+            );
           }
 
           if (options?.enableTaxonomy) {
-            allSpans.push(...collectTaxonomySpans(body, palette, unitSpans, diffSpans, dimSpans));
+            allSpans.push(
+              ...collectTaxonomySpans(body, palette, unitSpans, diffSpans, dimSpans, options)
+            );
           }
 
           if (options?.variableDataFlow) {
             allSpans.push(...collectVariableSpans(body, undefined, unitSpans, diffSpans, dimSpans, bareFunctions));
+          }
+
+          if (options?.colorQuantumOperators || options?.field === "quantum" || options?.field === "physics") {
+            const quantumSpans = collectQuantumOperatorSpans(body, palette, options);
+            if (quantumSpans.length > 0) {
+              const filtered = allSpans.filter(
+                (s) => !quantumSpans.some((q) => q.start <= s.start && s.end <= q.end)
+              );
+              allSpans.length = 0;
+              allSpans.push(...filtered, ...quantumSpans);
+            }
           }
 
           const selected = selectColorSpans(body, allSpans);
@@ -157,17 +191,32 @@ export function createColorMathLivePlugin(
             const from = blockStart + span.start;
             const to = blockStart + span.end;
             if (from < to && to <= doc.length) {
-              builder.add(
+              const isUnmatched = span.priority >= 90;
+              pendingDecorations.push({
                 from,
                 to,
-                Decoration.mark({
+                decoration: Decoration.mark({
                   attributes: {
-                    style: `color: ${span.color}; font-weight: 500;`,
+                    style: isUnmatched
+                      ? `color: ${span.color}; font-weight: bold; text-decoration: underline wavy ${span.color}; background-color: rgba(247, 118, 142, 0.18); border-radius: 2px;`
+                      : `color: ${span.color}; font-weight: 500;`,
                   },
-                  class: "color-math-live-token",
-                })
-              );
+                  class: isUnmatched
+                    ? "color-math-live-token color-math-unmatched-delimiter"
+                    : "color-math-live-token",
+                }),
+              });
             }
+          }
+        }
+
+        // Add all decorations strictly in sorted order with no overlaps
+        pendingDecorations.sort((a, b) => a.from - b.from || a.to - b.to);
+        let lastEnd = -1;
+        for (const item of pendingDecorations) {
+          if (item.from >= lastEnd && item.from < item.to && item.to <= doc.length) {
+            builder.add(item.from, item.to, item.decoration);
+            lastEnd = item.to;
           }
         }
 

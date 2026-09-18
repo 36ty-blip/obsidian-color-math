@@ -110,4 +110,59 @@ describe("Rainbow Delimiters Parser", () => {
     expect(res2).toMatch(/\\textcolor\{[^}]+\}\{\\langle\}/);
     expect(res2).toMatch(/\\textcolor\{[^}]+\}\{\\rangle\}/);
   });
+
+  it("parses bare braces { and } when includeBareBraces is enabled", () => {
+    const pairs = findDelimiterPairs("\\frac{a}{b}", { includeBareBraces: true });
+    expect(pairs.length).toBe(2);
+    expect(pairs[0].open.type).toBe("bare_brace");
+    expect(pairs[0].depth).toBe(0);
+    expect(pairs[1].open.type).toBe("bare_brace");
+    expect(pairs[1].depth).toBe(0);
+  });
+
+  it("tracks nested bare braces depth in \\frac{x^{2}}{y}", () => {
+    const pairs = findDelimiterPairs("\\frac{x^{2}}{y}", { includeBareBraces: true });
+    expect(pairs.length).toBe(3);
+    const inner = pairs.find((p) => p.depth === 1);
+    expect(inner).toBeDefined();
+    expect(inner!.open.start).toBe(8); // '{' in x^{2}
+  });
+
+  it("detects unclosed bare brace in \\frac{a}{b", () => {
+    const scan = collectDelimiterSpans("\\frac{a}{b", {
+      includeBareBraces: true,
+      highlightUnmatched: true,
+    });
+    const errorSpans = scan.filter((s) => s.priority === 99);
+    expect(errorSpans.length).toBe(1);
+    expect(errorSpans[0].color).toBe("#f7768e");
+  });
+
+  it("detects stray closing bare brace in \\frac{a}{b}}", () => {
+    const scan = collectDelimiterSpans("\\frac{a}{b}}", {
+      includeBareBraces: true,
+      highlightUnmatched: true,
+    });
+    const errorSpans = scan.filter((s) => s.priority === 99);
+    expect(errorSpans.length).toBe(1);
+    expect(errorSpans[0].color).toBe("#f7768e");
+  });
+
+  it("strictly ignores bare braces during permanent LaTeX baking (forLatexWrap: true)", () => {
+    const bakedSpans = collectDelimiterSpans("\\frac{a}{b}", {
+      forLatexWrap: true,
+      includeBareBraces: true,
+    });
+    // Must NOT emit any bare braces into LaTeX string output!
+    expect(bakedSpans.length).toBe(0);
+
+    const converted = colorLatexBody("\\frac{a}{b}", undefined, {
+      rainbowDelimiters: true,
+      rainbowBareBraces: true,
+    });
+    // Raw bare braces must never be wrapped with \textcolor
+    expect(converted).not.toContain("\\textcolor{#");
+    expect(converted).toBe("\\frac{a}{b}");
+  });
 });
+

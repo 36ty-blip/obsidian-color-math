@@ -25,6 +25,280 @@ __export(main_exports, {
 module.exports = __toCommonJS(main_exports);
 var import_obsidian3 = require("obsidian");
 
+// src/config/unicode.ts
+var UNICODE_DIFFERENTIALS = {
+  "\\partial": "\u2202"
+};
+var UNICODE_CONSTANTS = {
+  "\\hbar": "\u210F",
+  "\\infty": "\u221E"
+};
+var UNICODE_VECTORS = {
+  "\\nabla": "\u2207"
+};
+var UNICODE_INTEGRALS = {
+  "\\int": "\u222B",
+  "\\iint": "\u222C",
+  "\\iiint": "\u222D",
+  "\\oint": "\u222E"
+};
+var UNICODE_BIG_OPERATORS = {
+  "\\sum": "\u2211",
+  "\\prod": "\u220F",
+  "\\coprod": "\u2210",
+  "\\bigcup": "\u22C3",
+  "\\bigcap": "\u22C2"
+};
+var UNICODE_RELATIONS = {
+  "\\le": "\u2264",
+  "\\leq": "\u2264",
+  "\\ge": "\u2265",
+  "\\geq": "\u2265",
+  "\\ne": "\u2260",
+  "\\neq": "\u2260",
+  "\\approx": "\u2248",
+  "\\sim": "\u223C",
+  "\\equiv": "\u2261",
+  "\\propto": "\u221D"
+};
+var UNICODE_ARROWS = {
+  "\\to": "\u2192",
+  "\\rightarrow": "\u2192",
+  "\\leftarrow": "\u2190",
+  "\\leftrightarrow": "\u27F7",
+  "\\mapsto": "\u21A6",
+  "\\implies": "\u27F9",
+  "\\Longrightarrow": "\u27F9",
+  "\\Rightarrow": "\u21D2",
+  "\\Leftarrow": "\u21D0",
+  "\\impliedby": "\u27F8",
+  "\\Longleftarrow": "\u27F8",
+  "\\iff": "\u21D4",
+  "\\Leftrightarrow": "\u21D4",
+  "\\uparrow": "\u2191",
+  "\\downarrow": "\u2193"
+};
+var UNICODE_SETS = {
+  "\\in": "\u2208",
+  "\\notin": "\u2209",
+  "\\subset": "\u2282",
+  "\\subseteq": "\u2286",
+  "\\supset": "\u2283",
+  "\\supseteq": "\u2287",
+  "\\cup": "\u222A",
+  "\\cap": "\u2229",
+  "\\emptyset": "\u2205",
+  "\\setminus": "\u2216",
+  "\\forall": "\u2200",
+  "\\exists": "\u2203",
+  "\\nexists": "\u2204",
+  "\\therefore": "\u2234",
+  "\\because": "\u2235"
+};
+var UNICODE_MULTIPLICATION = {
+  "\\times": "\xD7",
+  "\\cdot": "\xB7"
+};
+var UNICODE_ADDITIVE = {
+  "\\pm": "\xB1",
+  "\\mp": "\u2213"
+};
+var UNICODE_GREEK_LOWER_STANDARD = {
+  "\\alpha": "\u03B1",
+  "\\beta": "\u03B2",
+  "\\gamma": "\u03B3",
+  "\\delta": "\u03B4",
+  "\\epsilon": "\u03B5",
+  "\\varepsilon": "\u03B5",
+  "\\zeta": "\u03B6",
+  "\\eta": "\u03B7",
+  "\\theta": "\u03B8",
+  "\\vartheta": "\u03D1",
+  "\\iota": "\u03B9",
+  "\\kappa": "\u03BA",
+  "\\lambda": "\u03BB",
+  "\\mu": "\u03BC",
+  "\\nu": "\u03BD",
+  "\\xi": "\u03BE",
+  "\\pi": "\u03C0",
+  "\\varpi": "\u03D6",
+  "\\rho": "\u03C1",
+  "\\varrho": "\u03F1",
+  "\\sigma": "\u03C3",
+  "\\varsigma": "\u03C2",
+  "\\tau": "\u03C4",
+  "\\upsilon": "\u03C5",
+  "\\phi": "\u03C6",
+  "\\varphi": "\u03D5",
+  "\\chi": "\u03C7",
+  "\\psi": "\u03C8",
+  "\\omega": "\u03C9"
+};
+var UNICODE_GREEK_LOWER_PLANE1 = {
+  "\\alpha": "\u03B1",
+  "\\beta": "\u03B2",
+  "\\gamma": "\u03B3",
+  "\\delta": "\u03B4",
+  "\\epsilon": "\u03B5",
+  "\\varepsilon": "\u03F5",
+  "\\zeta": "\u{1D701}",
+  // U+1D70F
+  "\\eta": "\u03B7",
+  "\\theta": "\u03B8",
+  "\\vartheta": "\u03D1",
+  "\\iota": "\u03B9",
+  "\\kappa": "\u03BA",
+  "\\lambda": "\u03BB",
+  "\\mu": "\u03BC",
+  "\\nu": "\u03BD",
+  "\\xi": "\u03BE",
+  "\\pi": "\u{1D70B}",
+  // U+1D70B
+  "\\varpi": "\u03D6",
+  "\\rho": "\u03C1",
+  "\\varrho": "\u03F1",
+  "\\sigma": "\u03C3",
+  "\\varsigma": "\u03C2",
+  "\\tau": "\u03C4",
+  "\\upsilon": "\u03C5",
+  "\\phi": "\u03C6",
+  "\\varphi": "\u03D5",
+  "\\chi": "\u03C7",
+  "\\psi": "\u{1D713}",
+  // U+1D713 (Mathematical Italic Small Psi)
+  "\\omega": "\u{1D714}"
+  // U+1D714
+};
+var UNICODE_GREEK_UPPER_STANDARD = {
+  "\\Gamma": "\u0393",
+  "\\Delta": "\u0394",
+  "\\Theta": "\u0398",
+  "\\Lambda": "\u039B",
+  "\\Xi": "\u039E",
+  "\\Pi": "\u03A0",
+  "\\Sigma": "\u03A3",
+  "\\Upsilon": "\u03A5",
+  "\\Phi": "\u03A6",
+  "\\Psi": "\u03A8",
+  "\\Omega": "\u03A9"
+};
+var UNICODE_GREEK_UPPER_PLANE1 = {
+  "\\Gamma": "\u{1D6AA}",
+  // U+1D6AA
+  "\\Delta": "\u0394",
+  "\\Theta": "\u0398",
+  "\\Lambda": "\u039B",
+  "\\Xi": "\u039E",
+  "\\Pi": "\u03A0",
+  "\\Sigma": "\u03A3",
+  "\\Upsilon": "\u03A5",
+  "\\Phi": "\u03A6",
+  "\\Psi": "\u03A8",
+  "\\Omega": "\u03A9"
+};
+var PROTECTED_DELIMITER_MACROS = /* @__PURE__ */ new Set([
+  "langle",
+  "rangle",
+  "lceil",
+  "rceil",
+  "lfloor",
+  "rfloor",
+  "vert",
+  "Vert",
+  "uparrow",
+  "downarrow",
+  "updownarrow",
+  "Uparrow",
+  "Downarrow",
+  "Updownarrow"
+]);
+var DELIMITER_AUTO_REPAIR = {
+  "\u27E8": "\\langle",
+  "\u27E9": "\\rangle",
+  "\u2308": "\\lceil",
+  "\u2309": "\\rceil",
+  "\u230A": "\\lfloor",
+  "\u230B": "\\rfloor",
+  "\u2016": "\\|",
+  "\u23B8": "\\vert"
+};
+
+// src/custom_definitions.ts
+var USER_CUSTOM_DEFINITIONS = {
+  // Machine Learning & Signal Processing Functions
+  customFunctions: [
+    "sinc",
+    "relu",
+    "gelu",
+    "swish",
+    "silu",
+    "softmax",
+    "softplus",
+    "sigmoid",
+    "mish",
+    "loss"
+  ],
+  // Physical & Mathematical Constants
+  customConstants: [
+    "kB",
+    // Boltzmann constant
+    "muB",
+    // Bohr magneton
+    "epsZero",
+    // Vacuum permittivity \varepsilon_0
+    "NA"
+    // Avogadro's number
+  ],
+  // Vector Calculus & Differential Operators
+  customOperators: [
+    "\\grad",
+    "\\curl",
+    "\\div",
+    "\\laplacian",
+    "\\Box"
+  ],
+  // Quantum Mechanics Operators
+  customQuantumOperators: [
+    "\\hat{a}",
+    "\\hat{a}^\\dagger",
+    "\\hat{a}^{\\dagger}",
+    "\\hat{b}",
+    "\\hat{b}^\\dagger",
+    "\\hat{c}",
+    "\\hat{c}^\\dagger",
+    "\\hat{\\rho}",
+    "\\hat{H}",
+    "\\hat{p}",
+    "\\hat{x}",
+    "\\hat{L}",
+    "\\hat{S}",
+    "\\hat{J}"
+  ],
+  // Custom Relations and Assignment Operators
+  customRelations: [
+    "\\coloneqq",
+    // :=
+    "\\eqqcolon",
+    // =:
+    "\\triangleq"
+  ],
+  // Custom Parameters
+  customParameters: []
+};
+function sanitizeDefinition(raw) {
+  let cleaned = raw.trim();
+  cleaned = cleaned.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  if (cleaned.startsWith("\\")) {
+    const macro = cleaned;
+    const bare = cleaned.slice(1).trim();
+    return { macro, bare };
+  } else {
+    const macro = "\\" + cleaned;
+    const bare = cleaned;
+    return { macro, bare };
+  }
+}
+
 // src/config.ts
 var DEFAULT_COLORS = {
   main: "#7aa2f7",
@@ -38,12 +312,55 @@ var DEFAULT_COLORS = {
   set: "#bb9af7",
   spacing: "white",
   parameter: "#bb9af7",
-  unit: "#73daca"
+  unit: "#73daca",
+  energyOperator: "#2ac3de"
 };
 var DEFAULT_PALETTE = DEFAULT_COLORS;
 var COLORS = { ...DEFAULT_COLORS };
 function setPalette(palette) {
   Object.assign(COLORS, palette);
+}
+var CUSTOM_MACRO_FUNCTIONS = /* @__PURE__ */ new Set();
+var CUSTOM_BARE_FUNCTIONS = /* @__PURE__ */ new Set();
+for (const fn of USER_CUSTOM_DEFINITIONS.customFunctions || []) {
+  const { macro, bare } = sanitizeDefinition(fn);
+  if (macro)
+    CUSTOM_MACRO_FUNCTIONS.add(macro);
+  if (bare)
+    CUSTOM_BARE_FUNCTIONS.add(bare.toLowerCase());
+}
+var CUSTOM_CONSTANTS = /* @__PURE__ */ new Set();
+for (const c of USER_CUSTOM_DEFINITIONS.customConstants || []) {
+  const { macro, bare } = sanitizeDefinition(c);
+  if (macro)
+    CUSTOM_CONSTANTS.add(macro);
+  if (bare)
+    CUSTOM_CONSTANTS.add(bare);
+}
+var CUSTOM_OPERATORS = /* @__PURE__ */ new Set();
+for (const op of USER_CUSTOM_DEFINITIONS.customOperators || []) {
+  const { macro } = sanitizeDefinition(op);
+  if (macro)
+    CUSTOM_OPERATORS.add(macro);
+}
+var CUSTOM_QUANTUM_OPERATORS = new Set(
+  (USER_CUSTOM_DEFINITIONS.customQuantumOperators || []).map((q) => q.trim()).filter(Boolean)
+);
+var CUSTOM_RELATIONS = /* @__PURE__ */ new Set();
+for (const r of USER_CUSTOM_DEFINITIONS.customRelations || []) {
+  const { macro, bare } = sanitizeDefinition(r);
+  if (macro)
+    CUSTOM_RELATIONS.add(macro);
+  if (bare && !bare.startsWith("\\"))
+    CUSTOM_RELATIONS.add(bare);
+}
+var CUSTOM_PARAMETERS = /* @__PURE__ */ new Set();
+for (const p of USER_CUSTOM_DEFINITIONS.customParameters || []) {
+  const { macro, bare } = sanitizeDefinition(p);
+  if (macro)
+    CUSTOM_PARAMETERS.add(macro);
+  if (bare)
+    CUSTOM_PARAMETERS.add(bare);
 }
 var BIG_OPERATORS = /* @__PURE__ */ new Set([
   "\\sum",
@@ -55,13 +372,15 @@ var BIG_OPERATORS = /* @__PURE__ */ new Set([
   "\\bigvee",
   "\\bigwedge",
   "\\bigoplus",
-  "\\bigotimes"
+  "\\bigotimes",
+  ...Object.values(UNICODE_BIG_OPERATORS)
 ]);
 var INTEGRALS = /* @__PURE__ */ new Set([
   "\\int",
   "\\iint",
   "\\iiint",
-  "\\oint"
+  "\\oint",
+  ...Object.values(UNICODE_INTEGRALS)
 ]);
 var LIMIT_OPERATORS = /* @__PURE__ */ new Set([
   "\\lim",
@@ -83,7 +402,9 @@ var RELATIONS = /* @__PURE__ */ new Set([
   "\\propto",
   "=",
   "<",
-  ">"
+  ">",
+  ...Object.values(UNICODE_RELATIONS),
+  ...CUSTOM_RELATIONS
 ]);
 var ARROWS = /* @__PURE__ */ new Set([
   "\\longrightarrow",
@@ -95,7 +416,8 @@ var ARROWS = /* @__PURE__ */ new Set([
   "\\Leftarrow",
   "\\Leftrightarrow",
   "\\mapsto",
-  "\\to"
+  "\\to",
+  ...Object.values(UNICODE_ARROWS)
 ]);
 var SET_SYMBOLS = /* @__PURE__ */ new Set([
   "\\notin",
@@ -107,7 +429,8 @@ var SET_SYMBOLS = /* @__PURE__ */ new Set([
   "\\emptyset",
   "\\in",
   "\\cup",
-  "\\cap"
+  "\\cap",
+  ...Object.values(UNICODE_SETS)
 ]);
 var SPACING_COMMANDS = /* @__PURE__ */ new Set([
   "\\,",
@@ -122,7 +445,9 @@ var MULTIPLICATION_SYMBOLS = /* @__PURE__ */ new Set([
   "\\cdot",
   "\\times",
   "\xB7",
-  "*"
+  "*",
+  "\xD7",
+  "\u2715"
 ]);
 var COLOR_COMMANDS = /* @__PURE__ */ new Set([
   ...BIG_OPERATORS,
@@ -132,7 +457,8 @@ var COLOR_COMMANDS = /* @__PURE__ */ new Set([
   ...ARROWS,
   ...SET_SYMBOLS,
   ...SPACING_COMMANDS,
-  ...MULTIPLICATION_SYMBOLS
+  ...MULTIPLICATION_SYMBOLS,
+  ...CUSTOM_OPERATORS
 ]);
 var SORTED_COLOR_COMMANDS = Array.from(COLOR_COMMANDS).sort(
   (a, b) => b.length - a.length
@@ -152,7 +478,9 @@ var MATH_CONSTANTS = /* @__PURE__ */ new Set([
   "\\jmath",
   "\\mathrm{e}",
   "\\mathrm{i}",
-  "\\mathrm{j}"
+  "\\mathrm{j}",
+  ...Object.values(UNICODE_CONSTANTS),
+  ...CUSTOM_CONSTANTS
 ]);
 var MATH_ACCENTS = /* @__PURE__ */ new Set([
   "\\dot",
@@ -220,8 +548,21 @@ var MATH_PARAMETERS = /* @__PURE__ */ new Set([
   "\\Upsilon",
   "\\Phi",
   "\\Psi",
-  "\\Omega"
+  "\\Omega",
+  ...Object.values(UNICODE_GREEK_LOWER_STANDARD),
+  ...Object.values(UNICODE_GREEK_LOWER_PLANE1),
+  ...Object.values(UNICODE_GREEK_UPPER_STANDARD),
+  ...Object.values(UNICODE_GREEK_UPPER_PLANE1),
+  "\u{1D713}",
+  "\u{1D74D}",
+  ...CUSTOM_PARAMETERS
 ]);
+var NON_SLASH_MATH_CONSTANTS = new Set(
+  Array.from(MATH_CONSTANTS).filter((c) => !c.startsWith("\\"))
+);
+var NON_SLASH_MATH_PARAMETERS = new Set(
+  Array.from(MATH_PARAMETERS).filter((c) => !c.startsWith("\\"))
+);
 var MATH_FUNCTIONS = /* @__PURE__ */ new Set([
   "\\sin",
   "\\cos",
@@ -314,7 +655,8 @@ var MATH_FUNCTIONS = /* @__PURE__ */ new Set([
   "\\cn",
   "\\dn",
   "\\avg",
-  "\\len"
+  "\\len",
+  ...CUSTOM_MACRO_FUNCTIONS
 ]);
 var STANDARD_BARE_FUNCTIONS = /* @__PURE__ */ new Set([
   "sin",
@@ -423,12 +765,17 @@ var FULL_BARE_FUNCTIONS = /* @__PURE__ */ new Set([
   ...STANDARD_BARE_FUNCTIONS,
   ...EXTENDED_BARE_FUNCTIONS
 ]);
-var BARE_FUNCTIONS = FULL_BARE_FUNCTIONS;
+var ALL_BARE_FUNCTIONS = /* @__PURE__ */ new Set([
+  ...FULL_BARE_FUNCTIONS,
+  ...CUSTOM_BARE_FUNCTIONS
+]);
+var BARE_FUNCTIONS = ALL_BARE_FUNCTIONS;
 function getBareFunctions(options) {
-  if (options && options.extendedFunctions === false) {
-    return STANDARD_BARE_FUNCTIONS;
+  const base = options && options.extendedFunctions === false ? STANDARD_BARE_FUNCTIONS : FULL_BARE_FUNCTIONS;
+  if (CUSTOM_BARE_FUNCTIONS.size > 0) {
+    return /* @__PURE__ */ new Set([...base, ...CUSTOM_BARE_FUNCTIONS]);
   }
-  return FULL_BARE_FUNCTIONS;
+  return base;
 }
 var RAINBOW_DELIMITER_COLORS = [
   "#e0af68",
@@ -2621,10 +2968,10 @@ function compact(value) {
 }
 function isDerivativePrefix(value) {
   const c = compact(value);
-  return c.startsWith("\\frac{d}{d") || c.startsWith("\\dfrac{d}{d") || c.startsWith("\\tfrac{d}{d");
+  return c.startsWith("\\frac{d}{d") || c.startsWith("\\dfrac{d}{d") || c.startsWith("\\tfrac{d}{d") || c.startsWith("\\frac{\\mathrm{d}}{\\mathrm{d") || c.startsWith("\\dfrac{\\mathrm{d}}{\\mathrm{d") || c.startsWith("\\tfrac{\\mathrm{d}}{\\mathrm{d") || c.startsWith("\\frac{\\partial}{\\partial") || c.startsWith("\\dfrac{\\partial}{\\partial") || c.startsWith("\\tfrac{\\partial}{\\partial") || c.startsWith("\\frac{\u2202}{\u2202") || c.startsWith("\\dfrac{\u2202}{\u2202") || c.startsWith("\\tfrac{\u2202}{\u2202");
 }
 function isPrime(value) {
-  return /^(?:[A-Za-z]|\\[A-Za-z]+)'/.test(value.trimStart());
+  return /^(?:[A-Za-z]|\\[A-Za-z]+|[\u0370-\u03FF]|\uD835[\uDC00-\uDFFF])'/.test(value.trimStart());
 }
 function isNumeric(value) {
   const c = compact(value);
@@ -2781,6 +3128,9 @@ function convertDerivativeLine(source, palette = COLORS) {
   if (block === null) {
     return null;
   }
+  if (/\\(?:mathbf|mathcal|begin\s*\{(?:Bmatrix|Vmatrix|array|bmatrix|matrix|pmatrix|smallmatrix|vmatrix)\})/.test(block.body)) {
+    return null;
+  }
   const bodyStart = skipIgnorable(block.body, 0, block.body.length);
   const prefix = readOperand(block.body, bodyStart);
   if (prefix === null || !isDerivativePrefix(block.body.slice(prefix.start, prefix.end))) {
@@ -2864,7 +3214,7 @@ function isImaginaryUnit(body, index) {
     return true;
   if (body.slice(next).startsWith("^2") || body.slice(next).startsWith("^{2}"))
     return true;
-  if (body.slice(next).match(/^\\(?:pi|theta|omega|hbar|phi|psi)/))
+  if (body.slice(next).match(/^(?:\\(?:pi|theta|omega|hbar|phi|psi)|[ℏπθωϕψΨ]|𝜓|𝝍)/))
     return true;
   if (next < body.length && /[xyz\\]/.test(body[next])) {
     let p = index - 1;
@@ -3015,13 +3365,45 @@ function skipComment2(text, start) {
   }
   return Math.min(index + 1, text.length);
 }
-function findDelimiterPairs(text) {
+function getDelimiterType(str) {
+  if (str === "(" || str === ")")
+    return "paren";
+  if (str === "[" || str === "]")
+    return "bracket";
+  if (str === "\\{" || str === "\\}")
+    return "brace";
+  if (str === "{" || str === "}")
+    return "bare_brace";
+  if (str === "\\langle" || str === "\\rangle")
+    return "angle";
+  if (str === "|" || str === "\\|")
+    return "pipe";
+  return "other";
+}
+function findDelimiterScan(text, options) {
+  const includeBareBraces = options?.includeBareBraces ?? false;
   const pairs = [];
+  const unmatched = [];
   const stack = [];
   let index = 0;
   while (index < text.length) {
     if (text[index] === "%") {
       index = skipComment2(text, index);
+      continue;
+    }
+    if (text.startsWith("\\begin", index) || text.startsWith("\\end", index)) {
+      const isBegin = text.startsWith("\\begin", index);
+      const cmdName = isBegin ? "\\begin" : "\\end";
+      const cmdEnd = index + cmdName.length;
+      const envHeadEnd = skipEnvironmentHead(text, cmdName, cmdEnd);
+      if (envHeadEnd !== null) {
+        index = envHeadEnd;
+        continue;
+      }
+    }
+    const colorCmd = readColorCommand(text, index);
+    if (colorCmd !== null) {
+      index = colorCmd[1];
       continue;
     }
     if (text.startsWith("\\left", index)) {
@@ -3071,6 +3453,13 @@ function findDelimiterPairs(text) {
             },
             depth: matched.depth
           });
+        } else {
+          unmatched.push({
+            type,
+            start: index,
+            end: delimEnd,
+            isLeftRight: true
+          });
         }
         index = delimEnd;
         continue;
@@ -3118,6 +3507,13 @@ function findDelimiterPairs(text) {
           },
           depth: matched.depth
         });
+      } else {
+        unmatched.push({
+          type,
+          start: index,
+          end: index + fullStr.length,
+          isLeftRight: false
+        });
       }
       index += fullStr.length;
       continue;
@@ -3156,6 +3552,13 @@ function findDelimiterPairs(text) {
           },
           depth: matched.depth
         });
+      } else {
+        unmatched.push({
+          type: "brace",
+          start: index,
+          end: index + 2,
+          isLeftRight: false
+        });
       }
       index += 2;
       continue;
@@ -3193,6 +3596,13 @@ function findDelimiterPairs(text) {
             isLeftRight: false
           },
           depth: matched.depth
+        });
+      } else {
+        unmatched.push({
+          type: "angle",
+          start: index,
+          end: index + 7,
+          isLeftRight: false
         });
       }
       index += 7;
@@ -3234,6 +3644,58 @@ function findDelimiterPairs(text) {
           },
           depth: matched.depth
         });
+      } else {
+        unmatched.push({
+          type,
+          start: index,
+          end: index + 1,
+          isLeftRight: false
+        });
+      }
+      index += 1;
+      continue;
+    }
+    if (includeBareBraces && text[index] === "{") {
+      const depth = stack.length;
+      stack.push({
+        item: {
+          type: "bare_brace",
+          start: index,
+          end: index + 1,
+          isLeftRight: false
+        },
+        depth
+      });
+      index += 1;
+      continue;
+    }
+    if (includeBareBraces && text[index] === "}") {
+      let matchIdx = -1;
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (!stack[i].item.isLeftRight && stack[i].item.type === "bare_brace") {
+          matchIdx = i;
+          break;
+        }
+      }
+      if (matchIdx !== -1) {
+        const matched = stack.splice(matchIdx, 1)[0];
+        pairs.push({
+          open: matched.item,
+          close: {
+            type: "bare_brace",
+            start: index,
+            end: index + 1,
+            isLeftRight: false
+          },
+          depth: matched.depth
+        });
+      } else {
+        unmatched.push({
+          type: "bare_brace",
+          start: index,
+          end: index + 1,
+          isLeftRight: false
+        });
       }
       index += 1;
       continue;
@@ -3247,47 +3709,60 @@ function findDelimiterPairs(text) {
     }
     index++;
   }
-  return pairs;
-}
-function getDelimiterType(str) {
-  if (str === "(" || str === ")")
-    return "paren";
-  if (str === "[" || str === "]")
-    return "bracket";
-  if (str === "\\{" || str === "\\}")
-    return "brace";
-  if (str === "\\langle" || str === "\\rangle")
-    return "angle";
-  if (str === "|" || str === "\\|")
-    return "pipe";
-  return "other";
+  for (const remaining of stack) {
+    unmatched.push(remaining.item);
+  }
+  return { pairs, unmatched };
 }
 function collectDelimiterSpans(text, options) {
-  const pairs = findDelimiterPairs(text);
-  const palette = options?.palette || RAINBOW_DELIMITER_COLORS;
   const forLatexWrap = options?.forLatexWrap ?? false;
+  const includeBareBraces = forLatexWrap ? false : options?.includeBareBraces ?? false;
+  const scan = findDelimiterScan(text, { includeBareBraces: options?.includeBareBraces ?? false });
+  const palette = options?.palette || RAINBOW_DELIMITER_COLORS;
   const spans = [];
-  for (const pair of pairs) {
-    const color = palette[pair.depth % palette.length];
-    if (forLatexWrap && pair.open.isLeftRight) {
+  if (!options?.onlyUnmatched) {
+    for (const pair of scan.pairs) {
+      if (forLatexWrap && pair.open.type === "bare_brace") {
+        continue;
+      }
+      if (pair.open.type === "bare_brace" && !includeBareBraces) {
+        continue;
+      }
+      const color = palette[pair.depth % palette.length];
+      if (forLatexWrap && pair.open.isLeftRight) {
+        spans.push({
+          start: pair.open.start,
+          end: pair.close.end,
+          color,
+          priority: 24
+        });
+      } else {
+        spans.push({
+          start: pair.open.start,
+          end: pair.open.end,
+          color,
+          priority: 25
+        });
+        spans.push({
+          start: pair.close.start,
+          end: pair.close.end,
+          color,
+          priority: 25
+        });
+      }
+    }
+  }
+  if (options?.highlightUnmatched) {
+    const errColor = options?.errorColor || "#f7768e";
+    for (const item of scan.unmatched) {
+      if (item.type === "bare_brace" && !options?.includeBareBraces && !options?.onlyUnmatched) {
+        continue;
+      }
       spans.push({
-        start: pair.open.start,
-        end: pair.close.end,
-        color,
-        priority: 24
-      });
-    } else {
-      spans.push({
-        start: pair.open.start,
-        end: pair.open.end,
-        color,
-        priority: 25
-      });
-      spans.push({
-        start: pair.close.start,
-        end: pair.close.end,
-        color,
-        priority: 25
+        start: item.start,
+        end: item.end,
+        color: errColor,
+        priority: 99
       });
     }
   }
@@ -3295,9 +3770,16 @@ function collectDelimiterSpans(text, options) {
 }
 
 // src/parsers/differentials.ts
-var DERIV_FRAC_REGEX = /\\frac\s*\{\s*(?:d|\\partial|\\mathrm\{d\})(?:\^\{?\d+\}?)?\s*(?:[a-zA-Z\\]+)?\s*\}\s*\{\s*(?:d|\\partial|\\mathrm\{d\})\s*(?:[a-zA-Z]|\\\\[a-zA-Z]+)(?:\^\{?\d+\}?)?(?:\s*(?:d|\\partial|\\mathrm\{d\})\s*(?:[a-zA-Z]|\\\\[a-zA-Z]+))*\s*\}/g;
-var DIFF_REGEX = /(?:^|[\s+\-=*({]|\[|\\,|\\:|\\;|\\quad|\\qquad|~)(\s*(?:d|\\partial|\\mathrm\{d\}|\\delta)\s*(?:\\[a-zA-Z]+|[a-zA-Z])(?![a-zA-Z0-9_({])(?:\^\{?\d+\}?)?)/g;
-var D_OPERATOR_REGEX = /(?:d|\\partial|\\mathrm\{d\}|\\delta)/;
+var DIFF_VAR_PATTERN = "(?:\\\\[a-zA-Z]+|[a-zA-Z]|[\\u0370-\\u03FF]|\\uD835[\\uDC00-\\uDFFF])";
+var DERIV_FRAC_REGEX = new RegExp(
+  "\\\\(?:dfrac|tfrac|frac)\\s*\\{\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|\u2202)(?:\\^\\{?\\d+\\}?)?\\s*(?:" + DIFF_VAR_PATTERN + ")?\\s*\\}\\s*\\{\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|\u2202)\\s*" + DIFF_VAR_PATTERN + "(?:\\^\\{?\\d+\\}?)?(?:\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|\u2202)\\s*" + DIFF_VAR_PATTERN + ")*\\s*\\}",
+  "g"
+);
+var DIFF_REGEX = new RegExp(
+  "(?:^|[\\s+\\-=*({]|\\[|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)(\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|\\\\delta|\u2202)\\s*" + DIFF_VAR_PATTERN + "(?![a-zA-Z0-9_({])(?:\\^\\{?\\d+\\}?)?)",
+  "g"
+);
+var D_OPERATOR_REGEX = /(?:d|\\partial|\\mathrm\{d\}|\\delta|∂)/;
 function findDifferentialSpans(body) {
   const spans = [];
   function addSpan(start, end, text, kind) {
@@ -3325,9 +3807,18 @@ function findDifferentialSpans(body) {
   }
   return spans.sort((a, b) => a.start - b.start);
 }
-function collectDifferentialSpans(body, palette = COLORS, diffSpans) {
+function collectDifferentialSpans(body, palette = COLORS, diffSpans, options) {
   const diffs = diffSpans || findDifferentialSpans(body);
-  return diffs.map((d) => ({
+  const filtered = diffs.filter((d) => {
+    if (d.kind === "derivative_fraction" && options?.colorDerivativeFractions === false) {
+      return false;
+    }
+    if (d.kind === "differential" && options?.colorInfinitesimals === false) {
+      return false;
+    }
+    return true;
+  });
+  return filtered.map((d) => ({
     start: d.start,
     end: d.end,
     color: palette.derivative || "#bb9af7",
@@ -3809,7 +4300,7 @@ var SAFE_MICRO_REGEX = new RegExp(
 );
 var DEG_REGEX = /\^\s*\\circ\s*(?:\\(?:text|mathrm)\s*\{[A-Za-z]+\}|[A-Za-z]+)/g;
 var NUMBER_UNIT_REGEX = new RegExp(
-  `(?:^|[^A-Za-z0-9_])(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:\\s*(?:\\\\times|\\\\cdot|\xB7|\\*)\\s*10\\^\\{?[+-]?\\d+\\}?|\\s*[eE][+-]?\\d+)?(?:\\s*|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)*(\\\\(?:text|mathrm)\\s*\\{[^}]+\\}(?:\\^\\{?-?\\d+\\}?)?|\\\\mu\\s*(?:${SAFE_MICRO_UNITS}|${AMBIGUOUS_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?|(?:(?:(?!m[LK])(?:${PREFIXES}))?(?:${SI_UNITS}))(?:\\/(?:(?:${PREFIXES})?(?:${SI_UNITS})))*(?:\\^\\{?-?\\d+\\}?)?(?![A-Za-z0-9_({]))`,
+  `(?:^|[^A-Za-z0-9_])(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:\\s*(?:\\\\times|\\\\cdot|\xB7|\\*)\\s*10\\^\\{?[+-]?\\d+\\}?|\\s*[eE][+-]?\\d+)?(?:\\s*|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)*(\\\\(?:text|mathrm)\\s*\\{[A-Za-z\xB0\u2103%\u03A9\u03BC\xC5/^0-9\\s.\\-]+?\\}(?:\\^\\{?-?\\d+\\}?)?|\\\\mu\\s*(?:${SAFE_MICRO_UNITS}|${AMBIGUOUS_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?|(?:(?:(?!m[LK])(?:${PREFIXES}))?(?:${SI_UNITS}))(?:\\/(?:(?:${PREFIXES})?(?:${SI_UNITS})))*(?:\\^\\{?-?\\d+\\}?)?(?![A-Za-z0-9_({]))`,
   "g"
 );
 var TEXT_UNIT_REGEX = /\\(?:text|mathrm)\s*\{\s*([A-Za-z°℃%ΩμÅ/^0-9\s.\\-]+?)\s*\}(?:\^\{?-?\\d+\}?)?/g;
@@ -3843,6 +4334,12 @@ function findUnitSpans(body) {
   while ((match = NUMBER_UNIT_REGEX.exec(body)) !== null) {
     const fullMatch = match[0];
     const unitPart = match[1];
+    if (unitPart.startsWith("\\text") || unitPart.startsWith("\\mathrm")) {
+      const innerMatch = /\{([^}]+)\}/.exec(unitPart);
+      if (!innerMatch || !IS_UNIT_REGEX.test(innerMatch[1].trim())) {
+        continue;
+      }
+    }
     const unitOffset = fullMatch.lastIndexOf(unitPart);
     const unitStart = match.index + unitOffset;
     const unitEnd = unitStart + unitPart.length;
@@ -3879,27 +4376,29 @@ function skipComment4(text, start) {
   return Math.min(index + 1, text.length);
 }
 var INDEX_PATTERN = /(\\(?:sum|prod|coprod|bigcup|bigcap|lim|inf|sup))_\{?\s*([A-Za-z])\s*(?:=|\to|\\to)/g;
-function collectTaxonomySpans(body, palette = COLORS, unitSpans, diffSpans, dimSpans) {
+function collectTaxonomySpans(body, palette = COLORS, unitSpans, diffSpans, dimSpans, options) {
   const units = unitSpans || findUnitSpans(body);
   const diffs = diffSpans || findDifferentialSpans(body);
   const dims = dimSpans || findDimensionlessSpans(body);
   const spans = [];
   let index = 0;
-  INDEX_PATTERN.lastIndex = 0;
-  let match;
-  while ((match = INDEX_PATTERN.exec(body)) !== null) {
-    const operatorStr = match[1];
-    const varName = match[2];
-    const varOffset = match[0].indexOf(varName, operatorStr.length);
-    if (varOffset !== -1) {
-      const varStart = match.index + varOffset;
-      spans.push({
-        start: varStart,
-        end: varStart + varName.length,
-        color: palette.chain,
-        // Bound index color
-        priority: 23
-      });
+  if (options?.taxonomyIndices !== false) {
+    INDEX_PATTERN.lastIndex = 0;
+    let match;
+    while ((match = INDEX_PATTERN.exec(body)) !== null) {
+      const operatorStr = match[1];
+      const varName = match[2];
+      const varOffset = match[0].indexOf(varName, operatorStr.length);
+      if (varOffset !== -1) {
+        const varStart = match.index + varOffset;
+        spans.push({
+          start: varStart,
+          end: varStart + varName.length,
+          color: palette.chain,
+          // Bound index color
+          priority: 23
+        });
+      }
     }
   }
   while (index < body.length) {
@@ -3932,22 +4431,24 @@ function collectTaxonomySpans(body, palette = COLORS, unitSpans, diffSpans, dimS
       index = inDim.end;
       continue;
     }
-    const bareMatch = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
-    if (bareMatch && BARE_FUNCTIONS.has(bareMatch[1].toLowerCase())) {
-      const fnName = bareMatch[1];
-      spans.push({
-        start: index,
-        end: index + fnName.length,
-        color: palette.main,
-        priority: 22
-      });
-      index += fnName.length;
-      continue;
+    if (options?.taxonomyFunctions !== false) {
+      const bareMatch = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
+      if (bareMatch && BARE_FUNCTIONS.has(bareMatch[1].toLowerCase())) {
+        const fnName = bareMatch[1];
+        spans.push({
+          start: index,
+          end: index + fnName.length,
+          color: palette.main,
+          priority: 22
+        });
+        index += fnName.length;
+        continue;
+      }
     }
     if (body[index] === "\\") {
-      const match2 = body.slice(index).match(/^(\\[A-Za-z]+|\\.)/);
-      if (match2) {
-        const name = match2[0];
+      const match = body.slice(index).match(/^(\\[A-Za-z]+|\\.)/);
+      if (match) {
+        const name = match[0];
         const cmdEnd = index + name.length;
         const envEnd = skipEnvironmentHead(body, name, cmdEnd);
         if (envEnd !== null) {
@@ -3965,12 +4466,14 @@ function collectTaxonomySpans(body, palette = COLORS, unitSpans, diffSpans, dimS
           if (afterCmd < body.length && body[afterCmd] === "{") {
             const braced = readBraced(body, afterCmd);
             if (braced !== null) {
-              spans.push({
-                start: index,
-                end: braced[1],
-                color: palette.main,
-                priority: 22
-              });
+              if (options?.taxonomyFunctions !== false) {
+                spans.push({
+                  start: index,
+                  end: braced[1],
+                  color: palette.main,
+                  priority: 22
+                });
+              }
               index = braced[1];
               continue;
             }
@@ -4008,43 +4511,51 @@ function collectTaxonomySpans(body, palette = COLORS, unitSpans, diffSpans, dimS
                 targetEnd = targetStart + letMatch[0].length;
             }
             const isDot = name === "\\dot" || name === "\\ddot" || name === "\\dddot" || name === "\\ddddot";
-            spans.push({
-              start: index,
-              end: targetEnd,
-              color: isDot ? palette.derivative : palette.parameter || palette.main,
-              priority: 22
-            });
+            if (options?.taxonomyParameters !== false) {
+              spans.push({
+                start: index,
+                end: targetEnd,
+                color: isDot ? palette.derivative : palette.parameter || palette.main,
+                priority: 22
+              });
+            }
             index = targetEnd;
             continue;
           }
         }
         if (MATH_CONSTANTS.has(name)) {
-          spans.push({
-            start: index,
-            end: cmdEnd,
-            color: palette.orange,
-            priority: 22
-          });
+          if (options?.taxonomyConstants !== false) {
+            spans.push({
+              start: index,
+              end: cmdEnd,
+              color: palette.orange,
+              priority: 22
+            });
+          }
           index = cmdEnd;
           continue;
         }
         if (MATH_FUNCTIONS.has(name)) {
-          spans.push({
-            start: index,
-            end: cmdEnd,
-            color: palette.main,
-            priority: 22
-          });
+          if (options?.taxonomyFunctions !== false) {
+            spans.push({
+              start: index,
+              end: cmdEnd,
+              color: palette.main,
+              priority: 22
+            });
+          }
           index = cmdEnd;
           continue;
         }
         if (MATH_PARAMETERS.has(name)) {
-          spans.push({
-            start: index,
-            end: cmdEnd,
-            color: palette.parameter || palette.derivative,
-            priority: 20
-          });
+          if (options?.taxonomyParameters !== false) {
+            spans.push({
+              start: index,
+              end: cmdEnd,
+              color: palette.parameter || palette.derivative,
+              priority: 20
+            });
+          }
           index = cmdEnd;
           continue;
         }
@@ -4077,8 +4588,104 @@ function collectTaxonomySpans(body, palette = COLORS, unitSpans, diffSpans, dimS
         index = cmdEnd;
         continue;
       }
+    } else {
+      const char2 = index + 1 < body.length ? body.slice(index, index + 2) : "";
+      const char1 = body[index];
+      if (char2 && (NON_SLASH_MATH_CONSTANTS.has(char2) || NON_SLASH_MATH_PARAMETERS.has(char2))) {
+        const isConst = NON_SLASH_MATH_CONSTANTS.has(char2);
+        if (isConst && options?.taxonomyConstants !== false || !isConst && options?.taxonomyParameters !== false) {
+          spans.push({
+            start: index,
+            end: index + 2,
+            color: isConst ? palette.orange : palette.parameter || palette.derivative,
+            priority: isConst ? 22 : 20
+          });
+        }
+        index += 2;
+        continue;
+      } else if (NON_SLASH_MATH_CONSTANTS.has(char1) || NON_SLASH_MATH_PARAMETERS.has(char1)) {
+        const isConst = NON_SLASH_MATH_CONSTANTS.has(char1);
+        if (isConst && options?.taxonomyConstants !== false || !isConst && options?.taxonomyParameters !== false) {
+          spans.push({
+            start: index,
+            end: index + 1,
+            color: isConst ? palette.orange : palette.parameter || palette.derivative,
+            priority: isConst ? 22 : 20
+          });
+        }
+        index += 1;
+        continue;
+      }
     }
     index++;
+  }
+  return spans;
+}
+
+// src/parsers/physics.ts
+var ENERGY_OPERATOR_REGEX = /(?:\\mathrm\{i\}|i)\s*(?:\\hbar|\\hslash|ℏ)\s*(?:\\(?:d|t)?frac\{\s*(?:\\partial|∂)\s*\}\{\s*(?:\\partial|∂)\s*t\s*\}|\\partial_\{?t\}?|∂_\{?t\}?)/g;
+var MOMENTUM_OPERATOR_REGEX = /-\s*(?:\\mathrm\{i\}|i)\s*(?:\\hbar|\\hslash|ℏ)\s*(?:\\(?:d|t)?frac\{\s*(?:\\partial|∂)\s*\}\{\s*(?:\\partial|∂)\s*[xyz]\s*\}|\\partial_\{?[xyz]\}?|∂_\{?[xyz]\}?|\\nabla|\\vec\{\\nabla\}|∇)/g;
+var KINETIC_OPERATOR_REGEX = /-\s*\\(?:d|t)?frac\{\s*(?:\\hbar|\\hslash|ℏ)\^\{?2\}?\s*\}\{\s*2\s*m\s*\}\s*(?:\\nabla\^\{?2\}?|∇\^\{?2\}?|\\Delta|\\(?:d|t)?frac\{\s*(?:\\partial|∂)\^\{?2\}?\s*\}\{\s*(?:\\partial|∂)\s*[xyz]\^\{?2\}?\s*\})/g;
+var LADDER_OPERATOR_REGEX = /(?:\\hat\{a\}|a)\s*\^\s*\{?\\dagger\}?/g;
+function collectQuantumOperatorSpans(body, palette, _options) {
+  const spans = [];
+  const color = palette.energyOperator || "#2ac3de";
+  const priority = 45;
+  let match;
+  ENERGY_OPERATOR_REGEX.lastIndex = 0;
+  while ((match = ENERGY_OPERATOR_REGEX.exec(body)) !== null) {
+    spans.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      color,
+      priority
+    });
+  }
+  MOMENTUM_OPERATOR_REGEX.lastIndex = 0;
+  while ((match = MOMENTUM_OPERATOR_REGEX.exec(body)) !== null) {
+    spans.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      color,
+      priority
+    });
+  }
+  KINETIC_OPERATOR_REGEX.lastIndex = 0;
+  while ((match = KINETIC_OPERATOR_REGEX.exec(body)) !== null) {
+    spans.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      color,
+      priority
+    });
+  }
+  LADDER_OPERATOR_REGEX.lastIndex = 0;
+  while ((match = LADDER_OPERATOR_REGEX.exec(body)) !== null) {
+    spans.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      color,
+      priority
+    });
+  }
+  const sortedCustom = Array.from(CUSTOM_QUANTUM_OPERATORS).sort((a, b) => b.length - a.length);
+  for (const qOp of sortedCustom) {
+    if (!qOp)
+      continue;
+    let qIdx = body.indexOf(qOp);
+    while (qIdx !== -1) {
+      const qEnd = qIdx + qOp.length;
+      const overlaps = spans.some((s) => Math.max(s.start, qIdx) < Math.min(s.end, qEnd));
+      if (!overlaps) {
+        spans.push({
+          start: qIdx,
+          end: qEnd,
+          color,
+          priority
+        });
+      }
+      qIdx = body.indexOf(qOp, qEnd);
+    }
   }
   return spans;
 }
@@ -4188,7 +4795,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
               const braced = readBraced(body, targetStart);
               if (braced) {
                 const inner = braced[0];
-                const baseMatch = inner.match(/[a-zA-Z]/);
+                const baseMatch = inner.match(/[a-zA-Z]|[\u0370-\u03FF]|\uD835[\uDC00-\uDFFF]/);
                 const baseLetter = baseMatch ? baseMatch[0] : "x";
                 const color = hashStringToColor(baseLetter, palette);
                 spans.push({
@@ -4201,7 +4808,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
                 continue;
               }
             } else {
-              const letterMatch = body.slice(targetStart).match(/^[a-zA-Z](')*/);
+              const letterMatch = body.slice(targetStart).match(/^(?:[a-zA-Z]|[\u0370-\u03FF]|\uD835[\uDC00-\uDFFF])(')*/);
               if (letterMatch) {
                 const fullVar = letterMatch[0];
                 const baseLetter = fullVar.replace(/'/g, "");
@@ -4312,7 +4919,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
       index++;
       continue;
     }
-    const varMatch = body.slice(index).match(/^[a-zA-Z](')*/);
+    const varMatch = body.slice(index).match(/^(?:[a-zA-Z]|[\u0370-\u03FF]|\uD835[\uDC00-\uDFFF])(')*/);
     if (varMatch) {
       const fullVar = varMatch[0];
       const baseLetter = fullVar.replace(/'/g, "");
@@ -4338,14 +4945,18 @@ var FUNCTION_COLOR_NAMES = [
   "derivative",
   "chain"
 ];
-function collectFunctionSpans(body, palette = COLORS, bareFunctions) {
+function collectFunctionSpans(body, palette = COLORS, bareFunctions, options) {
   const [semantic] = findSemanticSpans(body, bareFunctions);
   const spans = [];
   for (const item of semantic) {
     let colorName;
     if (item.kind === "function") {
+      if (options?.taxonomyFunctions === false)
+        continue;
       colorName = FUNCTION_COLOR_NAMES[Math.min(item.depth, 2)];
     } else if (item.kind === "constant") {
+      if (options?.taxonomyConstants === false)
+        continue;
       colorName = "orange";
     } else {
       continue;
@@ -4370,14 +4981,14 @@ function colorLatexBody(body, palette = COLORS, options) {
   const dimSpans = needDims ? findDimensionlessSpans(normalized) : [];
   const bareFunctions = getBareFunctions(options);
   const spans = [
-    ...collectFunctionSpans(normalized, palette, bareFunctions),
+    ...collectFunctionSpans(normalized, palette, bareFunctions, options),
     ...collectScannerSpans(normalized, palette)
   ];
   if (options?.colorUnits !== false) {
     spans.push(...collectUnitSpans(normalized, palette, unitSpans));
   }
   if (options?.colorDifferentials !== false) {
-    spans.push(...collectDifferentialSpans(normalized, palette, diffSpans));
+    spans.push(...collectDifferentialSpans(normalized, palette, diffSpans, options));
   }
   if (options?.colorDimensionless !== false) {
     spans.push(...collectDimensionlessSpans(normalized, palette, dimSpans));
@@ -4389,19 +5000,36 @@ function colorLatexBody(body, palette = COLORS, options) {
     spans.push(...collectSingleConstantSpans(normalized, palette));
   }
   if (options?.rainbowDelimiters) {
-    spans.push(...collectDelimiterSpans(normalized, { forLatexWrap: true }));
+    spans.push(
+      ...collectDelimiterSpans(normalized, {
+        forLatexWrap: true,
+        palette: options?.rainbowColors
+      })
+    );
   }
   if (options?.enableTaxonomy) {
-    spans.push(...collectTaxonomySpans(normalized, palette, unitSpans, diffSpans, dimSpans));
+    spans.push(
+      ...collectTaxonomySpans(normalized, palette, unitSpans, diffSpans, dimSpans, options)
+    );
   }
   if (options?.variableDataFlow) {
     spans.push(...collectVariableSpans(normalized, void 0, unitSpans, diffSpans, dimSpans, bareFunctions));
+  }
+  if (options?.colorQuantumOperators || options?.field === "quantum" || options?.field === "physics") {
+    const quantumSpans = collectQuantumOperatorSpans(normalized, palette, options);
+    if (quantumSpans.length > 0) {
+      const filtered = spans.filter(
+        (s) => !quantumSpans.some((q) => q.start <= s.start && s.end <= q.end)
+      );
+      spans.length = 0;
+      spans.push(...filtered, ...quantumSpans);
+    }
   }
   return applyColorSpans(normalized, spans);
 }
 
 // src/converters/matrix.ts
-var MATRIX_COMMAND_RE = /\\(?:mathbf|mathcal|nabla|det|tr|Tr|trace|Vert|lVert)(?![A-Za-z])|\\\|(?![A-Za-z])|\\operatorname\s*\{\s*tr\s*\}/;
+var MATRIX_COMMAND_RE = /\\(?:mathbf|mathcal|nabla|det|tr|Tr|trace|Vert|lVert)(?![A-Za-z])|∇|\\\|(?![A-Za-z])|\\operatorname\s*\{\s*tr\s*\}/;
 var MATRIX_ENV_RE = /\\begin\s*\{\s*(?:Bmatrix|Vmatrix|array|bmatrix|matrix|pmatrix|smallmatrix|vmatrix)\s*\}/;
 var NUMBER_RE = /^[+-]?\d+(?:\.\d+)?$/;
 function structuralSource(body) {
@@ -4484,14 +5112,14 @@ function convertMatrixBlock(source, palette = COLORS) {
   let lhsColors;
   if (lhs.length === 1) {
     lhsColors = lhsFirst.startsWith("\\det") || lhsFirst.startsWith("\\operatorname{tr}") ? ["upper"] : ["main"];
-  } else if (lhsFirst.startsWith("\\frac{\\partial}") || lhsFirst.startsWith("\\nabla")) {
+  } else if (lhsFirst.startsWith("\\frac{\\partial}") || lhsFirst.startsWith("\\dfrac{\\partial}") || lhsFirst.startsWith("\\tfrac{\\partial}") || lhsFirst.startsWith("\\frac{\u2202}") || lhsFirst.startsWith("\\dfrac{\u2202}") || lhsFirst.startsWith("\\tfrac{\u2202}") || lhsFirst.startsWith("\\nabla") || lhsFirst.startsWith("\u2207")) {
     lhsColors = ["upper", "main"];
   } else {
     lhsColors = ["upper", "chain", "orange"];
   }
   const lhsText = block.body.slice(0, equality[0]).replace(/\s+/g, "");
   let rhsColors;
-  if (lhsFirst.startsWith("\\frac{\\partial}")) {
+  if (lhsFirst.startsWith("\\frac{\\partial}") || lhsFirst.startsWith("\\dfrac{\\partial}") || lhsFirst.startsWith("\\tfrac{\\partial}") || lhsFirst.startsWith("\\frac{\u2202}") || lhsFirst.startsWith("\\dfrac{\u2202}") || lhsFirst.startsWith("\\tfrac{\u2202}")) {
     rhsColors = ["chain", "main"];
   } else if (lhs.length > 1 && rhs.length === 1) {
     rhsColors = ["main"];
@@ -4534,7 +5162,7 @@ function tryConverters(text, converters, palette) {
   return null;
 }
 function hasSemanticOptions(options) {
-  return !!(options && (options.enableTaxonomy || options.variableDataFlow || options.rainbowDelimiters || options.colorUnits || options.colorDifferentials || options.colorBraKet || options.colorDimensionless));
+  return !!(options && (options.enableTaxonomy || options.variableDataFlow || options.rainbowDelimiters || options.colorUnits || options.colorDifferentials || options.colorBraKet || options.colorDimensionless || options.colorQuantumOperators || options.field === "quantum" || options.field === "physics"));
 }
 function convertMathBlock(block, palette = COLORS, options) {
   const match = block.match(/^(\s*#+\s*)?\$\$([\s\S]*)\$\$([\s]*)$/);
@@ -4671,7 +5299,10 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
           text = doc.toString();
         }
         const scan = scanMarkdown(text);
-        const allMath = [...scan.mathBlocks, ...scan.mathInlines];
+        const mathBlocks = options?.highlightDisplayMath !== false ? scan.mathBlocks : [];
+        const mathInlines = options?.highlightInlineMath !== false ? scan.mathInlines : [];
+        const allMath = [...mathBlocks, ...mathInlines].sort((a, b) => a.start - b.start);
+        const pendingDecorations = [];
         for (const block of allMath) {
           const blockStart = offset + block.contentStart;
           const blockEnd = offset + block.contentEnd;
@@ -4690,14 +5321,14 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
           const diffSpans = needDiffs ? findDifferentialSpans(body) : [];
           const dimSpans = needDims ? findDimensionlessSpans(body) : [];
           const allSpans = [
-            ...collectFunctionSpans(body, palette, bareFunctions),
+            ...collectFunctionSpans(body, palette, bareFunctions, options),
             ...collectScannerSpans(body, palette)
           ];
           if (options?.colorUnits !== false) {
             allSpans.push(...collectUnitSpans(body, palette, unitSpans));
           }
           if (options?.colorDifferentials !== false) {
-            allSpans.push(...collectDifferentialSpans(body, palette, diffSpans));
+            allSpans.push(...collectDifferentialSpans(body, palette, diffSpans, options));
           }
           if (options?.colorDimensionless !== false) {
             allSpans.push(...collectDimensionlessSpans(body, palette, dimSpans));
@@ -4712,13 +5343,41 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
             allSpans.push(...collectAlignmentSpans(body, palette));
           }
           if (options?.rainbowDelimiters) {
-            allSpans.push(...collectDelimiterSpans(body, { forLatexWrap: false }));
+            allSpans.push(
+              ...collectDelimiterSpans(body, {
+                forLatexWrap: false,
+                palette: options?.rainbowColors,
+                includeBareBraces: options?.rainbowBareBraces !== false,
+                highlightUnmatched: options?.highlightUnmatchedBraces !== false
+              })
+            );
+          } else if (options?.highlightUnmatchedBraces !== false) {
+            allSpans.push(
+              ...collectDelimiterSpans(body, {
+                forLatexWrap: false,
+                includeBareBraces: true,
+                onlyUnmatched: true,
+                highlightUnmatched: true
+              })
+            );
           }
           if (options?.enableTaxonomy) {
-            allSpans.push(...collectTaxonomySpans(body, palette, unitSpans, diffSpans, dimSpans));
+            allSpans.push(
+              ...collectTaxonomySpans(body, palette, unitSpans, diffSpans, dimSpans, options)
+            );
           }
           if (options?.variableDataFlow) {
             allSpans.push(...collectVariableSpans(body, void 0, unitSpans, diffSpans, dimSpans, bareFunctions));
+          }
+          if (options?.colorQuantumOperators || options?.field === "quantum" || options?.field === "physics") {
+            const quantumSpans = collectQuantumOperatorSpans(body, palette, options);
+            if (quantumSpans.length > 0) {
+              const filtered = allSpans.filter(
+                (s) => !quantumSpans.some((q) => q.start <= s.start && s.end <= q.end)
+              );
+              allSpans.length = 0;
+              allSpans.push(...filtered, ...quantumSpans);
+            }
           }
           const selected = selectColorSpans(body, allSpans);
           const nonOverlapping = [];
@@ -4733,17 +5392,26 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
             const from = blockStart + span.start;
             const to = blockStart + span.end;
             if (from < to && to <= doc.length) {
-              builder.add(
+              const isUnmatched = span.priority >= 90;
+              pendingDecorations.push({
                 from,
                 to,
-                import_view.Decoration.mark({
+                decoration: import_view.Decoration.mark({
                   attributes: {
-                    style: `color: ${span.color}; font-weight: 500;`
+                    style: isUnmatched ? `color: ${span.color}; font-weight: bold; text-decoration: underline wavy ${span.color}; background-color: rgba(247, 118, 142, 0.18); border-radius: 2px;` : `color: ${span.color}; font-weight: 500;`
                   },
-                  class: "color-math-live-token"
+                  class: isUnmatched ? "color-math-live-token color-math-unmatched-delimiter" : "color-math-live-token"
                 })
-              );
+              });
             }
+          }
+        }
+        pendingDecorations.sort((a, b) => a.from - b.from || a.to - b.to);
+        let lastEnd = -1;
+        for (const item of pendingDecorations) {
+          if (item.from >= lastEnd && item.from < item.to && item.to <= doc.length) {
+            builder.add(item.from, item.to, item.decoration);
+            lastEnd = item.to;
           }
         }
         return builder.finish();
@@ -4777,16 +5445,25 @@ var MathJaxInterceptor = class {
       new import_obsidian.Notice(`Color Math: LaTeX syntax issue \u2014 ${errorMsg}`, 5e3);
     }
   }
-  async install() {
+  installed = false;
+  retryTimer = null;
+  retryCount = 0;
+  isInstalled() {
+    return this.installed;
+  }
+  async install(onSuccess) {
+    if (this.installed) {
+      return true;
+    }
     try {
       await (0, import_obsidian.loadMathJax)();
     } catch (e) {
       console.error("Color Math: Failed to load MathJax", e);
     }
     const mathJax = window?.MathJax;
-    if (!mathJax) {
-      console.warn("Color Math: window.MathJax is not defined yet.");
-      return;
+    if (!mathJax || typeof mathJax.tex2chtml !== "function") {
+      this.scheduleRetry(onSuccess);
+      return false;
     }
     const transform2 = (latex) => {
       if (!this.isEnabled())
@@ -4882,6 +5559,27 @@ var MathJaxInterceptor = class {
         mathJax.tex2svgPromise = orig;
       });
     }
+    this.installed = true;
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+    this.retryCount = 0;
+    onSuccess?.();
+    return true;
+  }
+  scheduleRetry(onSuccess) {
+    if (this.installed || this.retryCount >= 10)
+      return;
+    const delays = [100, 250, 500, 1e3, 2e3, 3e3, 4e3];
+    const delay = delays[Math.min(this.retryCount, delays.length - 1)];
+    this.retryCount++;
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+    }
+    this.retryTimer = setTimeout(async () => {
+      await this.install(onSuccess);
+    }, delay);
   }
   formatSafeErrorLatex(msg) {
     const escaped = msg.replace(/\\/g, "/").replace(/[{}^_%$&#~]/g, " ");
@@ -5004,6 +5702,10 @@ Transformed: ${transformedLatex}`
     return result;
   }
   uninstall() {
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
     for (const unpatch of this.unpatchFns) {
       try {
         unpatch();
@@ -5011,6 +5713,7 @@ Transformed: ${transformedLatex}`
       }
     }
     this.unpatchFns = [];
+    this.installed = false;
   }
 };
 
@@ -24904,23 +25607,438 @@ function registerColorMathMcpTools(plugin) {
   }
 }
 
+// src/converters/unicode_converter.ts
+var DELIMITER_PREFIX_REGEX = /(?:\\(?:left|right|middle|bigl|bigr|Bigl|Bigr|biggl|biggr|Biggl|Biggr|bigm|Bigm))\s*$/;
+function isProtectedDelimiter(body, cmdStart) {
+  const prefixText = body.slice(0, cmdStart);
+  return DELIMITER_PREFIX_REGEX.test(prefixText);
+}
+function hasLimits(body, cmdEnd) {
+  let idx = cmdEnd;
+  while (idx < body.length && /\s/.test(body[idx])) {
+    idx++;
+  }
+  return idx < body.length && (body[idx] === "_" || body[idx] === "^");
+}
+function getLatexToUnicodeMap(options) {
+  const greekLower = options?.greekStyle === "standard" ? UNICODE_GREEK_LOWER_STANDARD : UNICODE_GREEK_LOWER_PLANE1;
+  const greekUpper = options?.greekStyle === "standard" ? UNICODE_GREEK_UPPER_STANDARD : UNICODE_GREEK_UPPER_PLANE1;
+  const rawMap = {
+    ...UNICODE_DIFFERENTIALS,
+    ...UNICODE_CONSTANTS,
+    ...UNICODE_VECTORS,
+    ...UNICODE_RELATIONS,
+    ...UNICODE_ARROWS,
+    ...UNICODE_SETS,
+    ...UNICODE_MULTIPLICATION,
+    ...UNICODE_ADDITIVE,
+    ...greekLower,
+    ...greekUpper
+  };
+  return Object.entries(rawMap).sort(([a], [b]) => b.length - a.length).map(([key, val]) => ({ key, val }));
+}
+function getUnicodeToLatexMap() {
+  const map2 = {};
+  const sources = [
+    UNICODE_DIFFERENTIALS,
+    UNICODE_CONSTANTS,
+    UNICODE_VECTORS,
+    UNICODE_INTEGRALS,
+    UNICODE_BIG_OPERATORS,
+    UNICODE_RELATIONS,
+    UNICODE_ARROWS,
+    UNICODE_SETS,
+    UNICODE_MULTIPLICATION,
+    UNICODE_ADDITIVE,
+    UNICODE_GREEK_LOWER_PLANE1,
+    UNICODE_GREEK_LOWER_STANDARD,
+    UNICODE_GREEK_UPPER_PLANE1,
+    UNICODE_GREEK_UPPER_STANDARD
+  ];
+  for (const src of sources) {
+    for (const [tex, uni] of Object.entries(src)) {
+      if (!map2[uni]) {
+        map2[uni] = tex;
+      }
+    }
+  }
+  if (!map2["\u{1D74D}"]) {
+    map2["\u{1D74D}"] = "\\psi";
+  }
+  return Object.entries(map2).sort(([a], [b]) => b.length - a.length).map(([char, latex]) => ({ char, latex }));
+}
+function convertLatexToUnicode(mathBody, options) {
+  const map2 = getLatexToUnicodeMap(options);
+  let result = "";
+  let idx = 0;
+  while (idx < mathBody.length) {
+    if (mathBody[idx] === "\\") {
+      const match = mathBody.slice(idx).match(/^(\\[A-Za-z]+)/);
+      if (match) {
+        const cmd = match[1];
+        const cmdName = cmd.slice(1);
+        const cmdEnd = idx + cmd.length;
+        if (PROTECTED_DELIMITER_MACROS.has(cmdName) && isProtectedDelimiter(mathBody, idx)) {
+          result += cmd;
+          idx = cmdEnd;
+          continue;
+        }
+        if (cmd in UNICODE_INTEGRALS) {
+          const bounded = hasLimits(mathBody, cmdEnd);
+          if (!bounded || options?.convertDefiniteIntegrals === true) {
+            result += UNICODE_INTEGRALS[cmd];
+            idx = cmdEnd;
+            continue;
+          } else {
+            result += cmd;
+            idx = cmdEnd;
+            continue;
+          }
+        }
+        if (cmd in UNICODE_BIG_OPERATORS) {
+          const bounded = hasLimits(mathBody, cmdEnd);
+          if (!bounded || options?.convertBoundedOperators === true) {
+            result += UNICODE_BIG_OPERATORS[cmd];
+            idx = cmdEnd;
+            continue;
+          } else {
+            result += cmd;
+            idx = cmdEnd;
+            continue;
+          }
+        }
+        const entry = map2.find((m) => m.key === cmd);
+        if (entry) {
+          result += entry.val;
+          if (cmd in UNICODE_DIFFERENTIALS && cmdEnd < mathBody.length && mathBody[cmdEnd] === " ") {
+            const nextChar = mathBody[cmdEnd + 1];
+            if (nextChar && /[A-Za-z0-9]/.test(nextChar)) {
+              idx = cmdEnd + 1;
+              continue;
+            }
+          }
+          idx = cmdEnd;
+          continue;
+        }
+        result += cmd;
+        idx = cmdEnd;
+        continue;
+      }
+    }
+    result += mathBody[idx];
+    idx++;
+  }
+  return result;
+}
+function convertUnicodeToLatex(mathBody) {
+  let repaired = mathBody.replace(
+    /(\\(?:left|right|middle|bigl|bigr|Bigl|Bigr|biggl|biggr|Biggl|Biggr|bigm|Bigm)\s*)([⟨⟩⌈⌉⌊⌋‖⎸])/g,
+    (_, prefix, delim) => {
+      const fixed = DELIMITER_AUTO_REPAIR[delim] || delim;
+      return `${prefix}${fixed}`;
+    }
+  );
+  const map2 = getUnicodeToLatexMap();
+  let result = "";
+  let idx = 0;
+  while (idx < repaired.length) {
+    const entry = map2.find((m) => repaired.startsWith(m.char, idx));
+    if (entry) {
+      const nextCharIdx = idx + entry.char.length;
+      const nextChar = nextCharIdx < repaired.length ? repaired[nextCharIdx] : "";
+      const needsTrailingSpace = /[a-zA-Z]/.test(nextChar);
+      result += entry.latex + (needsTrailingSpace ? " " : "");
+      idx += entry.char.length;
+      continue;
+    }
+    result += repaired[idx];
+    idx++;
+  }
+  return result;
+}
+function convertDocumentMath(text, direction, options) {
+  const scan = scanMarkdown(text);
+  const spansWithType = [
+    ...scan.mathBlocks.map((s) => ({ kind: "math", span: s })),
+    ...scan.mathInlines.map((s) => ({ kind: "math", span: s })),
+    ...scan.protected.map((s) => ({ kind: "protected", span: s }))
+  ];
+  spansWithType.sort((a, b) => a.span.start - b.span.start);
+  const convertProseToUnicode = options?.convertProseToUnicode ?? false;
+  const convertProseToLatex = options?.convertProseToLatex ?? false;
+  const convertProse = (chunk) => {
+    if (direction === "to-unicode" && convertProseToUnicode) {
+      return convertLatexToUnicode(chunk, options);
+    }
+    if (direction === "to-latex" && convertProseToLatex) {
+      return convertUnicodeToLatex(chunk);
+    }
+    return chunk;
+  };
+  let result = "";
+  let idx = 0;
+  for (const item of spansWithType) {
+    if (item.span.start > idx) {
+      result += convertProse(text.slice(idx, item.span.start));
+    }
+    if (item.kind === "protected") {
+      result += text.slice(item.span.start, item.span.end);
+    } else {
+      const mathSpan = item.span;
+      result += text.slice(mathSpan.start, mathSpan.contentStart);
+      const mathContent = text.slice(mathSpan.contentStart, mathSpan.contentEnd);
+      const converted = direction === "to-unicode" ? convertLatexToUnicode(mathContent, options) : convertUnicodeToLatex(mathContent);
+      result += converted;
+      result += text.slice(mathSpan.contentEnd, mathSpan.end);
+    }
+    idx = item.span.end;
+  }
+  if (idx < text.length) {
+    result += convertProse(text.slice(idx));
+  }
+  return result;
+}
+async function convertDocumentMathChunked(text, direction, options, chunkSize = 4, onProgress) {
+  const scan = scanMarkdown(text);
+  const spansWithType = [
+    ...scan.mathBlocks.map((s) => ({ kind: "math", span: s })),
+    ...scan.mathInlines.map((s) => ({ kind: "math", span: s })),
+    ...scan.protected.map((s) => ({ kind: "protected", span: s }))
+  ];
+  spansWithType.sort((a, b) => a.span.start - b.span.start);
+  const convertProseToUnicode = options?.convertProseToUnicode ?? false;
+  const convertProseToLatex = options?.convertProseToLatex ?? false;
+  const convertProse = (chunk) => {
+    if (direction === "to-unicode" && convertProseToUnicode) {
+      return convertLatexToUnicode(chunk, options);
+    }
+    if (direction === "to-latex" && convertProseToLatex) {
+      return convertUnicodeToLatex(chunk);
+    }
+    return chunk;
+  };
+  let result = "";
+  let idx = 0;
+  let mathBlockCount = 0;
+  const totalMathBlocks = scan.mathBlocks.length + scan.mathInlines.length;
+  for (let i = 0; i < spansWithType.length; i++) {
+    const item = spansWithType[i];
+    if (item.span.start > idx) {
+      result += convertProse(text.slice(idx, item.span.start));
+    }
+    if (item.kind === "protected") {
+      result += text.slice(item.span.start, item.span.end);
+    } else {
+      const mathSpan = item.span;
+      result += text.slice(mathSpan.start, mathSpan.contentStart);
+      const mathContent = text.slice(mathSpan.contentStart, mathSpan.contentEnd);
+      const converted = direction === "to-unicode" ? convertLatexToUnicode(mathContent, options) : convertUnicodeToLatex(mathContent);
+      result += converted;
+      result += text.slice(mathSpan.contentEnd, mathSpan.end);
+      mathBlockCount++;
+      if (mathBlockCount % chunkSize === 0) {
+        if (onProgress) {
+          onProgress(mathBlockCount, totalMathBlocks);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    }
+    idx = item.span.end;
+  }
+  if (idx < text.length) {
+    result += convertProse(text.slice(idx));
+  }
+  return result;
+}
+
+// src/parsers/frontmatter.ts
+var QUANTUM_TERM_REGEX = /\b(quantum|qm|physics|quantum[-_]mechanics)\b/i;
+var IN_BODY_TAG_REGEX = /(?:^|\s)#(quantum|physics|qm|quantum[-_]mechanics)\b/i;
+function parseFrontmatterText(content) {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!match) {
+    return {};
+  }
+  const lines = match[1].split(/\r?\n/);
+  const result = {};
+  let currentParent = null;
+  let parentObj = {};
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    if (!rawLine.trim() || rawLine.trim().startsWith("#")) {
+      continue;
+    }
+    const isIndented = /^\s{2,}|\t/.test(rawLine);
+    const line = rawLine.trim();
+    const inlineDictMatch = line.match(/^([A-Za-z0-9_-]+)\s*:\s*\{([^}]*)\}/);
+    if (inlineDictMatch) {
+      const parentKey = inlineDictMatch[1];
+      const innerPairs = inlineDictMatch[2].split(",");
+      const subObj = {};
+      for (const pair of innerPairs) {
+        const [k, ...vParts] = pair.split(":");
+        if (k && vParts.length > 0) {
+          subObj[k.trim()] = parseYamlValue(vParts.join(":").trim());
+        }
+      }
+      result[parentKey] = subObj;
+      currentParent = null;
+      continue;
+    }
+    const sectionMatch = line.match(/^([A-Za-z0-9_-]+)\s*:\s*$/);
+    if (!isIndented && sectionMatch) {
+      currentParent = sectionMatch[1];
+      parentObj = {};
+      result[currentParent] = parentObj;
+      continue;
+    }
+    if (isIndented && line.startsWith("- ")) {
+      const itemValue = parseYamlValue(line.slice(2).trim());
+      if (currentParent) {
+        if (!Array.isArray(result[currentParent])) {
+          result[currentParent] = [];
+        }
+        result[currentParent].push(itemValue);
+      }
+      continue;
+    }
+    const kvMatch = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
+    if (kvMatch) {
+      const key = kvMatch[1];
+      const valStr = kvMatch[2].trim();
+      const val = parseYamlValue(valStr);
+      if (isIndented && currentParent) {
+        parentObj[key] = val;
+      } else {
+        currentParent = null;
+        result[key] = val;
+      }
+    }
+  }
+  return result;
+}
+function parseYamlValue(valStr) {
+  if (!valStr)
+    return "";
+  if (valStr.startsWith("[") && valStr.endsWith("]")) {
+    return valStr.slice(1, -1).split(",").map((s) => s.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean);
+  }
+  if (valStr === "true")
+    return true;
+  if (valStr === "false")
+    return false;
+  if (valStr === "null")
+    return null;
+  if (/^-?\d+(\.\d+)?$/.test(valStr))
+    return Number(valStr);
+  return valStr.replace(/^['"]|['"]$/g, "");
+}
+function matchesQuantumTerm(value) {
+  if (typeof value === "string") {
+    return QUANTUM_TERM_REGEX.test(value);
+  }
+  if (Array.isArray(value)) {
+    return value.some((item) => typeof item === "string" && QUANTUM_TERM_REGEX.test(item));
+  }
+  return false;
+}
+function detectNoteField(content, frontmatterCache) {
+  const frontmatter = frontmatterCache && Object.keys(frontmatterCache).length > 0 ? frontmatterCache : parseFrontmatterText(content);
+  const overrides = {};
+  let isQuantum = false;
+  let theme = void 0;
+  const colorMathConfig = frontmatter["color-math"];
+  if (colorMathConfig && typeof colorMathConfig === "object") {
+    if (matchesQuantumTerm(colorMathConfig.field)) {
+      isQuantum = true;
+    }
+    if (colorMathConfig["energy-operator"] === true || colorMathConfig.energyOperator === true) {
+      isQuantum = true;
+    }
+    if (typeof colorMathConfig.theme === "string") {
+      theme = colorMathConfig.theme;
+    }
+    if (typeof colorMathConfig["rainbow-delimiters"] === "boolean") {
+      overrides.rainbowDelimiters = colorMathConfig["rainbow-delimiters"];
+    }
+    if (typeof colorMathConfig["variable-dataflow"] === "boolean") {
+      overrides.variableDataFlow = colorMathConfig["variable-dataflow"];
+    }
+  }
+  if (matchesQuantumTerm(frontmatter["color-math-field"])) {
+    isQuantum = true;
+  }
+  if (frontmatter["color-math-energy-operator"] === true) {
+    isQuantum = true;
+  }
+  if (typeof frontmatter["color-math-theme"] === "string") {
+    theme = frontmatter["color-math-theme"];
+  }
+  const targetKeys = ["field", "subject", "topic", "discipline", "category"];
+  for (const key of targetKeys) {
+    if (matchesQuantumTerm(frontmatter[key])) {
+      isQuantum = true;
+      break;
+    }
+  }
+  if (!isQuantum && frontmatter.tags) {
+    if (matchesQuantumTerm(frontmatter.tags)) {
+      isQuantum = true;
+    }
+  }
+  if (!isQuantum && IN_BODY_TAG_REGEX.test(content)) {
+    isQuantum = true;
+  }
+  if (isQuantum) {
+    overrides.colorQuantumOperators = true;
+    overrides.field = "quantum";
+  }
+  return {
+    isQuantum,
+    field: isQuantum ? "quantum" : void 0,
+    overrides,
+    theme
+  };
+}
+
 // src/main.ts
 var DEFAULT_SETTINGS = {
   palette: { ...DEFAULT_COLORS },
+  rainbowColors: [...RAINBOW_DELIMITER_COLORS],
   liveRendering: true,
   livePreviewHighlighting: false,
+  highlightInlineMath: true,
+  highlightDisplayMath: true,
+  colorAlignment: true,
   showRibbonIcon: true,
   autoSyncTheme: false,
   autoLightDark: true,
   enableTaxonomy: true,
+  taxonomyFunctions: true,
+  taxonomyParameters: true,
+  taxonomyConstants: true,
+  taxonomyIndices: true,
   rainbowDelimiters: true,
+  rainbowBareBraces: true,
+  highlightUnmatchedBraces: true,
   variableDataFlow: false,
   colorUnits: true,
   colorDifferentials: true,
+  colorDerivativeFractions: true,
+  colorInfinitesimals: true,
   colorBraKet: true,
   colorDimensionless: true,
+  colorSingleConstants: true,
   extendedFunctions: true,
-  errorDisplayMode: "inline"
+  errorDisplayMode: "inline",
+  convertDefiniteIntegrals: false,
+  convertBoundedOperators: false,
+  greekStyle: "plane1",
+  convertProseToUnicode: false,
+  convertProseToLatex: false,
+  autoDetectNoteField: true,
+  enableQuantumOperatorsGlobal: false,
+  collapsedSections: {}
 };
 var COLOR_ROLE_DESCRIPTIONS = {
   main: "Primary expression / function color",
@@ -24934,7 +26052,8 @@ var COLOR_ROLE_DESCRIPTIONS = {
   set: "Set theory symbols",
   spacing: "LaTeX spacing commands",
   parameter: "Parameters, angles, and Greek coefficients",
-  unit: "Physical units and metric prefixes (e.g. \u03BCm, m/s, nm)"
+  unit: "Physical units and metric prefixes (e.g. \u03BCm, m/s, nm)",
+  energyOperator: "Quantum operators (Energy: i\u210F\u2202/\u2202t, Momentum: -i\u210F\u2207, Kinetic: -\u210F\xB2/2m \u2207\xB2)"
 };
 var ColorMathPlugin = class extends import_obsidian3.Plugin {
   settings = DEFAULT_SETTINGS;
@@ -24950,7 +26069,7 @@ var ColorMathPlugin = class extends import_obsidian3.Plugin {
       () => this.settings.liveRendering,
       () => this.settings.errorDisplayMode
     );
-    await this.interceptor.install();
+    await this.interceptor.install(() => this.rerenderMath());
     this.registerEditorExtension([
       createColorMathLivePlugin(
         () => this.settings.palette,
@@ -25032,11 +26151,72 @@ var ColorMathPlugin = class extends import_obsidian3.Plugin {
         );
       }
     });
+    this.addCommand({
+      id: "convert-math-to-unicode-note",
+      name: "Convert math to Unicode in active note (Declutter LaTeX)",
+      checkCallback: (checking) => {
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+        if (view) {
+          if (!checking) {
+            void this.convertNoteMathToUnicode();
+          }
+          return true;
+        }
+        return false;
+      }
+    });
+    this.addCommand({
+      id: "convert-unicode-to-latex-note",
+      name: "Convert Unicode math to LaTeX in active note (Restore TeX)",
+      checkCallback: (checking) => {
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+        if (view) {
+          if (!checking) {
+            void this.convertNoteMathToLatex();
+          }
+          return true;
+        }
+        return false;
+      }
+    });
+    this.addCommand({
+      id: "convert-math-to-unicode-block",
+      name: "Convert current math block to Unicode",
+      editorCallback: (editor) => {
+        this.convertCurrentMathBlockToUnicode(editor);
+      }
+    });
+    this.addCommand({
+      id: "convert-unicode-to-latex-block",
+      name: "Convert current math block to LaTeX",
+      editorCallback: (editor) => {
+        this.convertCurrentMathBlockToLatex(editor);
+      }
+    });
+    this.addCommand({
+      id: "convert-math-to-unicode-selection",
+      name: "Convert selection to Unicode",
+      editorCallback: (editor) => {
+        this.convertSelectionToUnicode(editor);
+      }
+    });
+    this.addCommand({
+      id: "convert-unicode-to-latex-selection",
+      name: "Convert selection to LaTeX",
+      editorCallback: (editor) => {
+        this.convertSelectionToLatex(editor);
+      }
+    });
     this.addSettingTab(new ColorMathSettingTab(this.app, this));
     this.setupMcpTools();
     this.app.workspace.onLayoutReady(() => {
       if (!this.mcpCleanup) {
         this.setupMcpTools();
+      }
+      if (!this.interceptor?.isInstalled()) {
+        void this.interceptor?.install(() => this.rerenderMath());
+      } else {
+        this.rerenderMath();
       }
     });
     this.rerenderMath();
@@ -25155,17 +26335,54 @@ var ColorMathPlugin = class extends import_obsidian3.Plugin {
     );
     menu.showAtMouseEvent(evt);
   }
-  getMathOptions() {
-    return {
+  getActiveNoteDetection(content) {
+    if (!this.settings.autoDetectNoteField) {
+      return null;
+    }
+    const appWithMeta = this.app;
+    const file2 = appWithMeta.workspace?.getActiveFile?.();
+    const cache = file2 ? appWithMeta.metadataCache?.getFileCache?.(file2)?.frontmatter : void 0;
+    let text = content;
+    if (!text && !cache) {
+      const view = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+      if (view) {
+        text = view.editor.getValue();
+      }
+    }
+    return detectNoteField(text || "", cache);
+  }
+  getMathOptions(content) {
+    const base = {
       enableTaxonomy: this.settings.enableTaxonomy,
+      taxonomyFunctions: this.settings.taxonomyFunctions,
+      taxonomyParameters: this.settings.taxonomyParameters,
+      taxonomyConstants: this.settings.taxonomyConstants,
+      taxonomyIndices: this.settings.taxonomyIndices,
       rainbowDelimiters: this.settings.rainbowDelimiters,
+      rainbowColors: this.settings.rainbowColors,
+      rainbowBareBraces: this.settings.rainbowBareBraces,
+      highlightUnmatchedBraces: this.settings.highlightUnmatchedBraces,
       variableDataFlow: this.settings.variableDataFlow,
       colorUnits: this.settings.colorUnits,
       colorDifferentials: this.settings.colorDifferentials,
+      colorDerivativeFractions: this.settings.colorDerivativeFractions,
+      colorInfinitesimals: this.settings.colorInfinitesimals,
       colorBraKet: this.settings.colorBraKet,
       colorDimensionless: this.settings.colorDimensionless,
-      extendedFunctions: this.settings.extendedFunctions
+      colorAlignment: this.settings.colorAlignment,
+      colorSingleConstants: this.settings.colorSingleConstants,
+      extendedFunctions: this.settings.extendedFunctions,
+      colorQuantumOperators: this.settings.enableQuantumOperatorsGlobal,
+      highlightInlineMath: this.settings.highlightInlineMath,
+      highlightDisplayMath: this.settings.highlightDisplayMath
     };
+    if (this.settings.autoDetectNoteField) {
+      const detected = this.getActiveNoteDetection(content);
+      if (detected) {
+        Object.assign(base, detected.overrides);
+      }
+    }
+    return base;
   }
   colorizeCurrentMathBlock(editor) {
     const content = editor.getValue();
@@ -25183,7 +26400,7 @@ var ColorMathPlugin = class extends import_obsidian3.Plugin {
     const colored = convertMathBlock(
       rawBlock,
       this.settings.palette,
-      this.getMathOptions()
+      this.getMathOptions(content)
     );
     if (colored === rawBlock) {
       new import_obsidian3.Notice("Color Math: Math block is already colorized.");
@@ -25228,10 +26445,11 @@ var ColorMathPlugin = class extends import_obsidian3.Plugin {
   colorizeSelection(editor) {
     const selection = editor.getSelection();
     if (selection) {
+      const content = editor.getValue();
       const colored = convertText(
         selection,
         this.settings.palette,
-        this.getMathOptions()
+        this.getMathOptions(content)
       );
       editor.replaceSelection(colored);
       new import_obsidian3.Notice("Color Math: Colorized selection.");
@@ -25271,7 +26489,7 @@ var ColorMathPlugin = class extends import_obsidian3.Plugin {
     const colored = convertText(
       content,
       this.settings.palette,
-      this.getMathOptions()
+      this.getMathOptions(content)
     );
     if (colored === content) {
       new import_obsidian3.Notice("Color Math: All math blocks are already colored.");
@@ -25307,6 +26525,163 @@ var ColorMathPlugin = class extends import_obsidian3.Plugin {
       new import_obsidian3.Notice("Color Math: Successfully cleaned colors from note! \u{1F9F9}");
     }
   }
+  getUnicodeOptions() {
+    return {
+      convertDefiniteIntegrals: this.settings.convertDefiniteIntegrals,
+      convertBoundedOperators: this.settings.convertBoundedOperators,
+      greekStyle: this.settings.greekStyle,
+      convertProseToUnicode: this.settings.convertProseToUnicode,
+      convertProseToLatex: this.settings.convertProseToLatex
+    };
+  }
+  async convertNoteMathToUnicode() {
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+    if (!view) {
+      new import_obsidian3.Notice("Color Math: No active Markdown note.");
+      return;
+    }
+    const editor = view.editor;
+    const content = editor.getValue();
+    let progressNotice = null;
+    const converted = await convertDocumentMathChunked(
+      content,
+      "to-unicode",
+      this.getUnicodeOptions(),
+      4,
+      (processed, total) => {
+        if (total > 15) {
+          if (!progressNotice) {
+            progressNotice = new import_obsidian3.Notice(`Color Math: Converting math equations (${processed}/${total})...`, 0);
+          } else {
+            progressNotice.setMessage(`Color Math: Converting math equations (${processed}/${total})...`);
+          }
+        }
+      }
+    );
+    if (progressNotice) {
+      progressNotice.hide();
+    }
+    if (converted === content) {
+      new import_obsidian3.Notice("Color Math: No LaTeX math expressions needed conversion.");
+      return;
+    }
+    const cursor = editor.getCursor();
+    editor.setValue(converted);
+    editor.setCursor(cursor);
+    new import_obsidian3.Notice("Color Math: Converted note math equations to Unicode! \u2728");
+  }
+  async convertNoteMathToLatex() {
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+    if (!view) {
+      new import_obsidian3.Notice("Color Math: No active Markdown note.");
+      return;
+    }
+    const editor = view.editor;
+    const content = editor.getValue();
+    let progressNotice = null;
+    const converted = await convertDocumentMathChunked(
+      content,
+      "to-latex",
+      this.getUnicodeOptions(),
+      4,
+      (processed, total) => {
+        if (total > 15) {
+          if (!progressNotice) {
+            progressNotice = new import_obsidian3.Notice(`Color Math: Converting math to LaTeX (${processed}/${total})...`, 0);
+          } else {
+            progressNotice.setMessage(`Color Math: Converting math to LaTeX (${processed}/${total})...`);
+          }
+        }
+      }
+    );
+    if (progressNotice) {
+      progressNotice.hide();
+    }
+    if (converted === content) {
+      new import_obsidian3.Notice("Color Math: No Unicode math symbols found to convert.");
+      return;
+    }
+    const cursor = editor.getCursor();
+    editor.setValue(converted);
+    editor.setCursor(cursor);
+    new import_obsidian3.Notice("Color Math: Converted note Unicode math to LaTeX! \u{1F4D0}");
+  }
+  convertCurrentMathBlockToUnicode(editor) {
+    const content = editor.getValue();
+    const cursor = editor.getCursor();
+    const offset = editor.posToOffset(cursor);
+    const scan = scanMarkdown(content);
+    const allSpans = [...scan.mathBlocks, ...scan.mathInlines];
+    const currentSpan = allSpans.find(
+      (span) => span.start <= offset && offset <= span.end
+    );
+    if (!currentSpan) {
+      new import_obsidian3.Notice("Color Math: Cursor is not inside a math expression ($...$ or $$...$$).");
+      return;
+    }
+    const mathContent = content.slice(currentSpan.contentStart, currentSpan.contentEnd);
+    const converted = convertLatexToUnicode(mathContent, this.getUnicodeOptions());
+    if (converted === mathContent) {
+      new import_obsidian3.Notice("Color Math: Math expression already uses Unicode or has no convertible symbols.");
+      return;
+    }
+    const from = editor.offsetToPos(currentSpan.contentStart);
+    const to = editor.offsetToPos(currentSpan.contentEnd);
+    editor.replaceRange(converted, from, to);
+    new import_obsidian3.Notice("Color Math: Converted math expression to Unicode! \u2728");
+  }
+  convertCurrentMathBlockToLatex(editor) {
+    const content = editor.getValue();
+    const cursor = editor.getCursor();
+    const offset = editor.posToOffset(cursor);
+    const scan = scanMarkdown(content);
+    const allSpans = [...scan.mathBlocks, ...scan.mathInlines];
+    const currentSpan = allSpans.find(
+      (span) => span.start <= offset && offset <= span.end
+    );
+    if (!currentSpan) {
+      new import_obsidian3.Notice("Color Math: Cursor is not inside a math expression ($...$ or $$...$$).");
+      return;
+    }
+    const mathContent = content.slice(currentSpan.contentStart, currentSpan.contentEnd);
+    const converted = convertUnicodeToLatex(mathContent);
+    if (converted === mathContent) {
+      new import_obsidian3.Notice("Color Math: No Unicode symbols found to convert in this equation.");
+      return;
+    }
+    const from = editor.offsetToPos(currentSpan.contentStart);
+    const to = editor.offsetToPos(currentSpan.contentEnd);
+    editor.replaceRange(converted, from, to);
+    new import_obsidian3.Notice("Color Math: Converted math expression to canonical LaTeX! \u{1F4D0}");
+  }
+  convertSelectionToUnicode(editor) {
+    const selection = editor.getSelection();
+    if (!selection) {
+      new import_obsidian3.Notice("Color Math: Please select math text to convert.");
+      return;
+    }
+    const converted = selection.includes("$") ? convertDocumentMath(selection, "to-unicode", this.getUnicodeOptions()) : convertLatexToUnicode(selection, this.getUnicodeOptions());
+    if (converted === selection) {
+      new import_obsidian3.Notice("Color Math: Selection already in Unicode or has no convertible symbols.");
+      return;
+    }
+    editor.replaceSelection(converted);
+    new import_obsidian3.Notice("Color Math: Converted selection to Unicode! \u2728");
+  }
+  convertSelectionToLatex(editor) {
+    const selection = editor.getSelection();
+    if (!selection) {
+      new import_obsidian3.Notice("Color Math: Please select math text to convert.");
+      return;
+    }
+    const converted = selection.includes("$") ? convertDocumentMath(selection, "to-latex", this.getUnicodeOptions()) : convertUnicodeToLatex(selection);
+    if (converted === selection) {
+      new import_obsidian3.Notice("Color Math: No Unicode symbols found to convert in selection.");
+      return;
+    }
+    editor.replaceSelection(converted);
+    new import_obsidian3.Notice("Color Math: Converted selection to LaTeX! \u{1F4D0}");
+  }
   async handleThemeChange() {
     if (this.settings.autoSyncTheme) {
       this.settings.palette = extractThemePalette(this.settings.autoLightDark ? isVaultLightMode() : false);
@@ -25323,13 +26698,36 @@ var ColorMathPlugin = class extends import_obsidian3.Plugin {
     }
   }
   async loadSettings() {
-    const loadedData = await this.loadData();
+    let loadedData = null;
+    try {
+      loadedData = await this.loadData();
+    } catch (err) {
+      console.warn("Color Math: Error reading user settings data.json, falling back to default configuration:", err);
+      new import_obsidian3.Notice("Color Math: Error loading user settings. Safely fell back to default configuration.", 5e3);
+      loadedData = null;
+    }
     this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData || {});
-    if (!this.settings.palette) {
+    if (!this.settings.palette || typeof this.settings.palette !== "object") {
       this.settings.palette = { ...DEFAULT_COLORS };
     } else {
       this.settings.palette = Object.assign({}, DEFAULT_COLORS, this.settings.palette);
     }
+    if (!Array.isArray(this.settings.rainbowColors) || this.settings.rainbowColors.length === 0) {
+      this.settings.rainbowColors = [...RAINBOW_DELIMITER_COLORS];
+    }
+    if (!this.settings.collapsedSections || typeof this.settings.collapsedSections !== "object") {
+      this.settings.collapsedSections = {};
+    }
+  }
+  async resetSettingsToDefaults() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, {
+      palette: { ...DEFAULT_COLORS },
+      rainbowColors: [...RAINBOW_DELIMITER_COLORS],
+      collapsedSections: {}
+    });
+    await this.saveSettings();
+    this.rerenderMath();
+    new import_obsidian3.Notice("Color Math: Restored factory default settings from default.config.json! \u{1F504}");
   }
   async saveSettings() {
     await this.saveData(this.settings);
@@ -25343,226 +26741,48 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
     super(app, plugin);
     this.plugin = plugin;
   }
-  getControlValue(key) {
-    return this.plugin.settings[key];
-  }
-  async setControlValue(key, value) {
-    this.plugin.settings[key] = value;
-    await this.plugin.saveSettings();
-    if (key === "showRibbonIcon") {
-      this.plugin.refreshRibbonIcon();
-    } else if (key !== "livePreviewHighlighting") {
-      this.plugin.rerenderMath();
+  createCollapsible(containerEl, id, title, defaultOpen = false) {
+    const isCollapsed = this.plugin.settings.collapsedSections?.[id] ?? !defaultOpen;
+    const details = containerEl.createEl("details", {
+      cls: "color-math-collapsible-section"
+    });
+    if (!isCollapsed) {
+      details.setAttribute("open", "");
     }
-  }
-  getSettingDefinitions() {
-    return [
-      {
-        name: "Show ribbon icon",
-        desc: "Display the Color Math palette icon on the left ribbon bar. Note: you can reorder or move ribbon icons via Settings > Appearance > Ribbon menu.",
-        control: {
-          key: "showRibbonIcon",
-          type: "toggle",
-          defaultValue: true
-        }
-      },
-      {
-        name: "Live rendered math coloring",
-        desc: "Automatically colorize rendered MathJax equations in Reading View and Live Preview without modifying your raw Markdown notes.",
-        control: {
-          key: "liveRendering",
-          type: "toggle",
-          defaultValue: true
-        }
-      },
-      {
-        name: "Real-time editor syntax highlighting",
-        desc: "Highlight equations inside the editor in real-time as you type.",
-        control: {
-          key: "livePreviewHighlighting",
-          type: "toggle",
-          defaultValue: true
-        }
-      },
-      {
-        type: "group",
-        heading: "IDE Visual Enhancements",
-        items: [
-          {
-            name: "Rainbow delimiters",
-            desc: "Color nested parentheses, brackets, and braces by depth to prevent delimiter blindness.",
-            control: {
-              key: "rainbowDelimiters",
-              type: "toggle",
-              defaultValue: true
-            }
-          },
-          {
-            name: "Mathematical symbol taxonomy",
-            desc: "Semantically categorize and color constants, standard functions, parameters, and bound indices.",
-            control: {
-              key: "enableTaxonomy",
-              type: "toggle",
-              defaultValue: true
-            }
-          },
-          {
-            name: "Variable data-flow hashing",
-            desc: "Deterministically assign a unique color to each variable in an expression to trace its flow.",
-            control: {
-              key: "variableDataFlow",
-              type: "toggle",
-              defaultValue: true
-            }
-          },
-          {
-            name: "Color physical units",
-            desc: "Distinguish physical units and metric prefixes (e.g. \u03BCm, m/s, kg) from algebraic variables and parameters.",
-            control: {
-              key: "colorUnits",
-              type: "toggle",
-              defaultValue: true
-            }
-          },
-          {
-            name: "Calculus differentials & derivatives",
-            desc: "Color differentials (dx, dt, d\u03B8) and derivative fractions (df/dx, \u2202/\u2202t) with the derivative role to prevent misidentifying 'd' as a variable.",
-            control: {
-              key: "colorDifferentials",
-              type: "toggle",
-              defaultValue: true
-            }
-          },
-          {
-            name: "Quantum bra-ket notation",
-            desc: "Highlight Dirac bra-ket state vectors (|\u03C8\u27E9, \u27E8\u03D5|, \u27E8\u03D5|\u03C8\u27E9) with clean delimiter styling.",
-            control: {
-              key: "colorBraKet",
-              type: "toggle",
-              defaultValue: true
-            }
-          },
-          {
-            name: "Engineering dimensionless numbers",
-            desc: "Recognize contiguous dimensionless numbers (Re, Ma, Pr, Nu) as unified coefficients.",
-            control: {
-              key: "colorDimensionless",
-              type: "toggle",
-              defaultValue: true
-            }
-          },
-          {
-            name: "Extended 2\u20133 letter functions",
-            desc: "Recognize shorthand 2\u20133 letter math functions (adj, var, cov, im, sp, div, rot, sh, ch, etc.) before parentheses.",
-            control: {
-              key: "extendedFunctions",
-              type: "toggle",
-              defaultValue: true
-            }
-          }
-        ]
-      },
-      {
-        type: "group",
-        heading: "Error Handling & Diagnostics",
-        items: [
-          {
-            name: "Syntax error display mode",
-            desc: "Choose how to display errors when an equation has broken syntax.",
-            control: {
-              key: "errorDisplayMode",
-              type: "dropdown",
-              defaultValue: "inline",
-              options: {
-                inline: "Inline error message (e.g. \\text{LaTeX Error: ...})",
-                fallback: "Render original formula (Silent & clean with hover tooltip)",
-                notice: "Obsidian notice popup & original formula",
-                native: "Native MathJax error box (Default MathJax behavior)"
-              }
-            }
-          }
-        ]
-      },
-      {
-        type: "group",
-        heading: "Theme Integration",
-        items: [
-          {
-            name: "Sync with active theme",
-            desc: "Extract and apply matching colors from your currently active Obsidian theme.",
-            action: () => {
-              void (async () => {
-                this.plugin.settings.palette = extractThemePalette(
-                  this.plugin.settings.autoLightDark ? isVaultLightMode() : false
-                );
-                await this.plugin.saveSettings();
-                this.plugin.rerenderMath();
-                new import_obsidian3.Notice("Color Math: Synced colors with active Obsidian theme!");
-              })();
-            }
-          },
-          {
-            name: "Auto-match on theme change",
-            desc: "Automatically re-sync palette whenever you switch themes in Obsidian.",
-            control: {
-              key: "autoSyncTheme",
-              type: "toggle",
-              defaultValue: false
-            }
-          },
-          {
-            name: "Auto-adapt for light / dark mode",
-            desc: "Adjust operator contrast (e.g. '=' and '\\cdot') so math never washes out on light backgrounds.",
-            control: {
-              key: "autoLightDark",
-              type: "toggle",
-              defaultValue: true
-            }
-          },
-          {
-            name: "Restore default palette",
-            desc: "Revert all colors back to our signature Tokyo Night palette.",
-            action: () => {
-              void (async () => {
-                this.plugin.settings.palette = { ...DEFAULT_COLORS };
-                await this.plugin.saveSettings();
-                this.plugin.rerenderMath();
-                new import_obsidian3.Notice("Color Math: Restored default Tokyo Night palette.");
-              })();
-            }
-          }
-        ]
-      },
-      {
-        type: "group",
-        heading: "Color Palette Roles",
-        items: Object.keys(DEFAULT_COLORS).map((role) => ({
-          name: role.charAt(0).toUpperCase() + role.slice(1),
-          desc: COLOR_ROLE_DESCRIPTIONS[role] || role,
-          render: (setting) => {
-            const currentColor = this.plugin.settings.palette[role] || DEFAULT_COLORS[role];
-            if (currentColor.startsWith("#")) {
-              setting.addColorPicker((picker) => {
-                picker.setValue(currentColor).onChange(async (val) => {
-                  this.plugin.settings.palette[role] = val;
-                  await this.plugin.saveSettings();
-                  this.plugin.rerenderMath();
-                });
-              });
-            }
-            setting.addText((text) => {
-              text.setPlaceholder(DEFAULT_COLORS[role]).setValue(this.plugin.settings.palette[role]).onChange(async (val) => {
-                if (val.trim()) {
-                  this.plugin.settings.palette[role] = val.trim();
-                  await this.plugin.saveSettings();
-                  this.plugin.rerenderMath();
-                }
-              });
-            });
-          }
-        }))
+    const summary = details.createEl("summary", {
+      cls: "color-math-collapsible-header"
+    });
+    const titleSpan = summary.createSpan({ cls: "color-math-collapsible-title" });
+    titleSpan.setText(title);
+    details.addEventListener("toggle", () => {
+      if (!this.plugin.settings.collapsedSections) {
+        this.plugin.settings.collapsedSections = {};
       }
-    ];
+      this.plugin.settings.collapsedSections[id] = !details.open;
+      void this.plugin.saveSettings();
+    });
+    return details.createDiv({ cls: "color-math-collapsible-body" });
+  }
+  createSubCollapsible(containerEl, id, title, defaultOpen = false) {
+    const isCollapsed = this.plugin.settings.collapsedSections?.[id] ?? !defaultOpen;
+    const details = containerEl.createEl("details", {
+      cls: "color-math-sub-collapsible"
+    });
+    if (!isCollapsed) {
+      details.setAttribute("open", "");
+    }
+    const summary = details.createEl("summary", {
+      cls: "color-math-sub-header"
+    });
+    summary.createSpan({ text: title });
+    details.addEventListener("toggle", () => {
+      if (!this.plugin.settings.collapsedSections) {
+        this.plugin.settings.collapsedSections = {};
+      }
+      this.plugin.settings.collapsedSections[id] = !details.open;
+      void this.plugin.saveSettings();
+    });
+    return details.createDiv({ cls: "color-math-sub-body" });
   }
   display() {
     this.containerEl.empty();
@@ -25570,107 +26790,77 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
   }
   buildTab(containerEl) {
     containerEl.createEl("p", {
-      text: "Automatically apply semantic colors to LaTeX and MathJax equations in markdown notes."
+      text: "Automatically apply semantic colors to LaTeX and MathJax equations in markdown notes.",
+      cls: "color-math-section-desc"
     });
-    new import_obsidian3.Setting(containerEl).setName("Show ribbon icon").setDesc("Display the Color Math palette icon on the left ribbon bar. Note: you can reorder or move ribbon icons via Settings > Appearance > Ribbon menu.").addToggle(
+    const coreBody = this.createCollapsible(
+      containerEl,
+      "section-core",
+      "\u26A1 Core & Live Rendering",
+      true
+    );
+    new import_obsidian3.Setting(coreBody).setName("Show ribbon icon").setDesc("Display the Color Math palette icon in the left ribbon for quick bake/clean actions.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.showRibbonIcon).onChange(async (val) => {
         this.plugin.settings.showRibbonIcon = val;
         await this.plugin.saveSettings();
         this.plugin.refreshRibbonIcon();
       })
     );
-    new import_obsidian3.Setting(containerEl).setName("Live rendered math coloring").setDesc("Automatically colorize rendered MathJax equations in Reading View and Live Preview without modifying your raw Markdown notes.").addToggle(
+    new import_obsidian3.Setting(coreBody).setName("Live rendered math coloring").setDesc("Automatically colorize rendered MathJax equations in Reading View and Live Preview without modifying your raw Markdown notes.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.liveRendering).onChange(async (val) => {
         this.plugin.settings.liveRendering = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian3.Setting(containerEl).setName("Real-time editor syntax highlighting").setDesc("Highlight equations inside the editor in real-time as you type.").addToggle(
+    new import_obsidian3.Setting(coreBody).setName("Editor syntax highlighting (Live Preview)").setDesc("Live syntax highlighting inside the CodeMirror editor as you type.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.livePreviewHighlighting).onChange(async (val) => {
         this.plugin.settings.livePreviewHighlighting = val;
         await this.plugin.saveSettings();
+        this.display();
       })
     );
-    new import_obsidian3.Setting(containerEl).setName("IDE Visual Enhancements").setHeading();
-    new import_obsidian3.Setting(containerEl).setName("Rainbow delimiters").setDesc("Color nested parentheses, brackets, and braces by depth to prevent delimiter blindness.").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.rainbowDelimiters).onChange(async (val) => {
-        this.plugin.settings.rainbowDelimiters = val;
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-      })
+    if (this.plugin.settings.livePreviewHighlighting) {
+      new import_obsidian3.Setting(coreBody).setClass("color-math-sub-setting").setName("Highlight inline math ($...$)").setDesc("Apply real-time syntax coloring to inline math expressions inside the editor.").addToggle(
+        (toggle) => toggle.setValue(this.plugin.settings.highlightInlineMath).onChange(async (val) => {
+          this.plugin.settings.highlightInlineMath = val;
+          await this.plugin.saveSettings();
+          this.plugin.rerenderMath();
+        })
+      );
+      new import_obsidian3.Setting(coreBody).setClass("color-math-sub-setting").setName("Highlight display blocks ($$...$$)").setDesc("Apply real-time syntax coloring to multiline display math blocks inside the editor.").addToggle(
+        (toggle) => toggle.setValue(this.plugin.settings.highlightDisplayMath).onChange(async (val) => {
+          this.plugin.settings.highlightDisplayMath = val;
+          await this.plugin.saveSettings();
+          this.plugin.rerenderMath();
+        })
+      );
+      new import_obsidian3.Setting(coreBody).setClass("color-math-sub-setting").setName("Matrix & tabular alignment tabs (&, \\\\)").setDesc("Highlight column separator tabs (&) and row breaks (\\\\) inside tabular environments.").addToggle(
+        (toggle) => toggle.setValue(this.plugin.settings.colorAlignment).onChange(async (val) => {
+          this.plugin.settings.colorAlignment = val;
+          await this.plugin.saveSettings();
+          this.plugin.rerenderMath();
+        })
+      );
+    }
+    const themeBody = this.createCollapsible(
+      containerEl,
+      "section-theme-palettes",
+      "\u{1F3A8} Theme & Color Palettes",
+      true
     );
-    new import_obsidian3.Setting(containerEl).setName("Mathematical symbol taxonomy").setDesc("Semantically categorize and color constants, standard functions, parameters, and bound indices.").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.enableTaxonomy).onChange(async (val) => {
-        this.plugin.settings.enableTaxonomy = val;
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName("Variable data-flow hashing").setDesc("Deterministically assign a unique color to each variable in an expression to trace its flow.").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.variableDataFlow).onChange(async (val) => {
-        this.plugin.settings.variableDataFlow = val;
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName("Color physical units").setDesc("Distinguish physical units and metric prefixes (e.g. \u03BCm, m/s, kg) from algebraic variables and parameters. Turn off to keep units in natural text color.").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.colorUnits).onChange(async (val) => {
-        this.plugin.settings.colorUnits = val;
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName("Calculus differentials & derivatives").setDesc("Color differentials (dx, dt, d\u03B8) and derivative fractions (df/dx, \u2202/\u2202t) with the derivative role to prevent misidentifying 'd' as a variable.").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.colorDifferentials).onChange(async (val) => {
-        this.plugin.settings.colorDifferentials = val;
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName("Quantum bra-ket notation").setDesc("Highlight Dirac bra-ket state vectors (|\u03C8\u27E9, \u27E8\u03D5|, \u27E8\u03D5|\u03C8\u27E9) with clean delimiter styling.").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.colorBraKet).onChange(async (val) => {
-        this.plugin.settings.colorBraKet = val;
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName("Engineering dimensionless numbers").setDesc("Recognize contiguous dimensionless numbers (Re, Ma, Pr, Nu) as unified coefficients. Separate letters like 'R e' remain separate variables.").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.colorDimensionless).onChange(async (val) => {
-        this.plugin.settings.colorDimensionless = val;
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName("Extended 2\u20133 letter functions").setDesc("Recognize shorthand 2\u20133 letter math functions (adj, var, cov, im, sp, div, rot, sh, ch, etc.) before parentheses. Turn off if your formulas use 2\u20133 letter variable multiplications like ch(x) or sp(y).").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.extendedFunctions).onChange(async (val) => {
-        this.plugin.settings.extendedFunctions = val;
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName("Error Handling & Diagnostics").setHeading();
-    new import_obsidian3.Setting(containerEl).setName("Syntax error display mode").setDesc("Choose how to display errors when an equation has broken syntax.").addDropdown(
-      (dropdown) => dropdown.addOption("inline", "Inline error message (e.g. \\text{LaTeX Error: ...})").addOption("fallback", "Render original formula (Silent & clean with hover tooltip)").addOption("notice", "Obsidian notice popup & original formula").addOption("native", "Native MathJax error box (Default MathJax behavior)").setValue(this.plugin.settings.errorDisplayMode || "inline").onChange(async (val) => {
-        this.plugin.settings.errorDisplayMode = val;
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName("Theme Integration").setHeading();
-    new import_obsidian3.Setting(containerEl).setName("Sync with active theme").setDesc("Extract and apply matching colors from your currently active Obsidian theme.").addButton(
+    new import_obsidian3.Setting(themeBody).setName("Sync with active theme").setDesc("Extract and apply matching colors from your currently active Obsidian theme.").addButton(
       (button) => button.setButtonText("Sync with Theme").setCta().onClick(async () => {
         this.plugin.settings.palette = extractThemePalette(
           this.plugin.settings.autoLightDark ? isVaultLightMode() : false
         );
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
-        this.containerEl.empty();
-        this.buildTab(this.containerEl);
+        this.display();
         new import_obsidian3.Notice("Color Math: Synced colors with active Obsidian theme!");
       })
     );
-    new import_obsidian3.Setting(containerEl).setName("Auto-match on theme change").setDesc("Automatically re-sync palette whenever you switch themes in Obsidian.").addToggle(
+    new import_obsidian3.Setting(themeBody).setName("Auto-match on theme change").setDesc("Automatically re-sync palette whenever you switch themes in Obsidian.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.autoSyncTheme).onChange(async (val) => {
         this.plugin.settings.autoSyncTheme = val;
         if (val) {
@@ -25680,11 +26870,10 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
           this.plugin.rerenderMath();
         }
         await this.plugin.saveSettings();
-        this.containerEl.empty();
-        this.buildTab(this.containerEl);
+        this.display();
       })
     );
-    new import_obsidian3.Setting(containerEl).setName("Auto-adapt for light / dark mode").setDesc("Adjust operator contrast (e.g. '=' and '\\cdot') so math never washes out on light backgrounds.").addToggle(
+    new import_obsidian3.Setting(themeBody).setName("Auto-adapt for light / dark mode").setDesc("Adjust operator contrast (e.g. '=' and '\\cdot') so math never washes out on light backgrounds.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.autoLightDark).onChange(async (val) => {
         this.plugin.settings.autoLightDark = val;
         if (val) {
@@ -25695,24 +26884,28 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
           this.plugin.rerenderMath();
         }
         await this.plugin.saveSettings();
-        this.containerEl.empty();
-        this.buildTab(this.containerEl);
+        this.display();
       })
     );
-    new import_obsidian3.Setting(containerEl).setName("Restore default palette").setDesc("Revert all colors back to our signature Tokyo Night palette.").addButton(
+    new import_obsidian3.Setting(themeBody).setName("Restore default Tokyo Night palette").setDesc("Revert all colors back to our signature Tokyo Night palette.").addButton(
       (button) => button.setButtonText("Restore Defaults").onClick(async () => {
         this.plugin.settings.palette = { ...DEFAULT_COLORS };
+        this.plugin.settings.rainbowColors = [...RAINBOW_DELIMITER_COLORS];
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
-        this.containerEl.empty();
-        this.buildTab(this.containerEl);
+        this.display();
         new import_obsidian3.Notice("Color Math: Restored default Tokyo Night palette.");
       })
     );
-    new import_obsidian3.Setting(containerEl).setName("Color Palette Roles").setHeading();
+    const rolesBody = this.createSubCollapsible(
+      themeBody,
+      "sub-semantic-roles",
+      "Semantic Role Colors (13 Roles)",
+      true
+    );
     const roles = Object.keys(DEFAULT_COLORS);
     for (const role of roles) {
-      const setting = new import_obsidian3.Setting(containerEl).setName(role.charAt(0).toUpperCase() + role.slice(1)).setDesc(COLOR_ROLE_DESCRIPTIONS[role] || role);
+      const setting = new import_obsidian3.Setting(rolesBody).setName(role.charAt(0).toUpperCase() + role.slice(1)).setDesc(COLOR_ROLE_DESCRIPTIONS[role] || role);
       const currentColor = this.plugin.settings.palette[role] || DEFAULT_COLORS[role];
       if (currentColor.startsWith("#")) {
         setting.addColorPicker((picker) => {
@@ -25733,5 +26926,236 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
         });
       });
     }
+    const tiersBody = this.createSubCollapsible(
+      themeBody,
+      "sub-rainbow-tiers",
+      "Rainbow Delimiter Colors (Depth Tiers)",
+      false
+    );
+    const TIER_NAMES = [
+      "Tier 0: Outer Brackets (Depth 0)",
+      "Tier 1: Nested Brackets (Depth 1)",
+      "Tier 2: Deeply Nested (Depth 2)",
+      "Tier 3: Core Brackets (Depth 3)"
+    ];
+    for (let i = 0; i < 4; i++) {
+      const currentTierColor = this.plugin.settings.rainbowColors[i] || RAINBOW_DELIMITER_COLORS[i];
+      const setting = new import_obsidian3.Setting(tiersBody).setName(TIER_NAMES[i]).setDesc(`Color for delimiter nesting depth ${i}.`);
+      if (currentTierColor.startsWith("#")) {
+        setting.addColorPicker((picker) => {
+          picker.setValue(currentTierColor).onChange(async (val) => {
+            this.plugin.settings.rainbowColors[i] = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          });
+        });
+      }
+      setting.addText((text) => {
+        text.setPlaceholder(RAINBOW_DELIMITER_COLORS[i]).setValue(currentTierColor).onChange(async (val) => {
+          if (val.trim()) {
+            this.plugin.settings.rainbowColors[i] = val.trim();
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          }
+        });
+      });
+    }
+    const mathBody = this.createCollapsible(
+      containerEl,
+      "section-math-syntax",
+      "\u{1F9E0} Mathematical Syntax & Disambiguation",
+      false
+    );
+    new import_obsidian3.Setting(mathBody).setName("Calculus & Differentials").setHeading();
+    new import_obsidian3.Setting(mathBody).setName("Derivative fractions & partials").setDesc("Color derivative fractions (df/dx, \u2202\u03C8/\u2202t, \u2207) with the derivative role to protect 'd' from being mistaken for a variable.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.colorDerivativeFractions).onChange(async (val) => {
+        this.plugin.settings.colorDerivativeFractions = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian3.Setting(mathBody).setName("Infinitesimal differentials").setDesc("Highlight trailing differentials (dx, dt, d\u03B8) at the end of integrals and expressions.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.colorInfinitesimals).onChange(async (val) => {
+        this.plugin.settings.colorInfinitesimals = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian3.Setting(mathBody).setName("Enable quantum operators globally").setDesc("Always highlight quantum differential operators (Energy: i\u210F\u2202/\u2202t, Momentum: -i\u210F\u2207, Kinetic: -\u210F\xB2/2m \u2207\xB2) across all notes without requiring YAML frontmatter.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.enableQuantumOperatorsGlobal).onChange(async (val) => {
+        this.plugin.settings.enableQuantumOperatorsGlobal = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian3.Setting(mathBody).setName("Delimiters & Brackets").setHeading();
+    new import_obsidian3.Setting(mathBody).setName("Rainbow delimiters").setDesc("Color nested parentheses, brackets, and braces recursively by depth to prevent delimiter blindness.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.rainbowDelimiters).onChange(async (val) => {
+        this.plugin.settings.rainbowDelimiters = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+        this.display();
+      })
+    );
+    if (this.plugin.settings.rainbowDelimiters) {
+      new import_obsidian3.Setting(mathBody).setClass("color-math-sub-setting").setName("Rainbow grouping braces ({})").setDesc("Include LaTeX grouping braces { and } in rainbow depth coloring in Live Preview.").addToggle(
+        (toggle) => toggle.setValue(this.plugin.settings.rainbowBareBraces).onChange(async (val) => {
+          this.plugin.settings.rainbowBareBraces = val;
+          await this.plugin.saveSettings();
+          this.plugin.rerenderMath();
+        })
+      );
+    }
+    new import_obsidian3.Setting(mathBody).setName("Highlight unmatched delimiters & braces").setDesc("Highlight unclosed { or stray } with a high-visibility warning in Live Preview to catch MathJax syntax errors while typing.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.highlightUnmatchedBraces).onChange(async (val) => {
+        this.plugin.settings.highlightUnmatchedBraces = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian3.Setting(mathBody).setName("Quantum bra-ket notation").setDesc("Highlight Dirac bra-ket state vectors (|\u03C8\u27E9, \u27E8\u03D5|, \u27E8\u03D5|\u03C8\u27E9) with clean delimiter styling.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.colorBraKet).onChange(async (val) => {
+        this.plugin.settings.colorBraKet = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian3.Setting(mathBody).setName("Symbol Taxonomy & Constants").setHeading();
+    new import_obsidian3.Setting(mathBody).setName("Mathematical symbol taxonomy").setDesc("Semantically categorize and color constants, standard functions, parameters, and bound indices.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.enableTaxonomy).onChange(async (val) => {
+        this.plugin.settings.enableTaxonomy = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+        this.display();
+      })
+    );
+    if (this.plugin.settings.enableTaxonomy) {
+      new import_obsidian3.Setting(mathBody).setClass("color-math-sub-setting").setName("Standard math functions").setDesc("Color sin, cos, ln, exp, and operator functions with the main role.").addToggle(
+        (toggle) => toggle.setValue(this.plugin.settings.taxonomyFunctions).onChange(async (val) => {
+          this.plugin.settings.taxonomyFunctions = val;
+          await this.plugin.saveSettings();
+          this.plugin.rerenderMath();
+        })
+      );
+      new import_obsidian3.Setting(mathBody).setClass("color-math-sub-setting").setName("Greek parameters & coefficients").setDesc("Color Greek angles and coefficients (\u03B1, \u03B2, \u03B8, \u03BB, \u03C9) with the parameter role.").addToggle(
+        (toggle) => toggle.setValue(this.plugin.settings.taxonomyParameters).onChange(async (val) => {
+          this.plugin.settings.taxonomyParameters = val;
+          await this.plugin.saveSettings();
+          this.plugin.rerenderMath();
+        })
+      );
+      new import_obsidian3.Setting(mathBody).setClass("color-math-sub-setting").setName("Mathematical constants").setDesc("Color mathematical constants (\u03C0, \u210F, \u221E) with the orange role.").addToggle(
+        (toggle) => toggle.setValue(this.plugin.settings.taxonomyConstants).onChange(async (val) => {
+          this.plugin.settings.taxonomyConstants = val;
+          await this.plugin.saveSettings();
+          this.plugin.rerenderMath();
+        })
+      );
+      new import_obsidian3.Setting(mathBody).setClass("color-math-sub-setting").setName("Bound iteration indices").setDesc("Color summation/limit index variables (e.g. index i in \\sum_{i=1}^n or x in \\lim_{x\\to 0}) with the chain role.").addToggle(
+        (toggle) => toggle.setValue(this.plugin.settings.taxonomyIndices).onChange(async (val) => {
+          this.plugin.settings.taxonomyIndices = val;
+          await this.plugin.saveSettings();
+          this.plugin.rerenderMath();
+        })
+      );
+    }
+    new import_obsidian3.Setting(mathBody).setName("Euler's number (e) & Imaginary units (i, j)").setDesc("Intelligently recognize Euler's constant (e^x, e^{i\u03C0}) and imaginary numbers (i, j), while leaving indexed variables (e_1, x_i) distinct.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.colorSingleConstants).onChange(async (val) => {
+        this.plugin.settings.colorSingleConstants = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian3.Setting(mathBody).setName("Physics, Engineering & Variables").setHeading();
+    new import_obsidian3.Setting(mathBody).setName("Color physical units").setDesc("Distinguish physical units and metric prefixes (e.g. \u03BCm, m/s, kg) from algebraic variables. Turn off to keep units in natural text color.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.colorUnits).onChange(async (val) => {
+        this.plugin.settings.colorUnits = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian3.Setting(mathBody).setName("Engineering dimensionless numbers").setDesc("Recognize contiguous dimensionless numbers (Re, Ma, Pr, Nu) as unified coefficients. Separate letters like 'R e' remain separate variables.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.colorDimensionless).onChange(async (val) => {
+        this.plugin.settings.colorDimensionless = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian3.Setting(mathBody).setName("Extended 2\u20133 letter functions").setDesc("Recognize shorthand 2\u20133 letter math functions (adj, var, cov, im, sp, div, rot, sh, ch) before parentheses.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.extendedFunctions).onChange(async (val) => {
+        this.plugin.settings.extendedFunctions = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian3.Setting(mathBody).setName("Variable data-flow hashing").setDesc("Deterministically assign a unique color to each variable in an expression to visually trace its flow.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.variableDataFlow).onChange(async (val) => {
+        this.plugin.settings.variableDataFlow = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    const unicodeBody = this.createCollapsible(
+      containerEl,
+      "section-unicode-typography",
+      "\u{1F524} Unicode Math & Typography",
+      false
+    );
+    new import_obsidian3.Setting(unicodeBody).setName("Greek letter style").setDesc("Choose between Mathematical Italic (Plane 1, e.g. \u{1D74D}, \u{1D770}) and Standard Greek (e.g. \u03C8, \u03B1) when converting to Unicode.").addDropdown(
+      (dropdown) => dropdown.addOption("plane1", "Mathematical Italic (Plane 1: \u{1D74D}, \u{1D770}) \u2014 Recommended for math").addOption("standard", "Standard Greek (\u03C8, \u03B1) \u2014 Standard Unicode alphabet").setValue(this.plugin.settings.greekStyle || "plane1").onChange(async (val) => {
+        this.plugin.settings.greekStyle = val;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian3.Setting(unicodeBody).setName("Convert definite / bounded integrals").setDesc("Convert bounded integrals (e.g. \\int_a^b) to Unicode (\u222B_a^b). When OFF (recommended), bounded integrals remain LaTeX commands to preserve vertical limit placement in TeX engines.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.convertDefiniteIntegrals).onChange(async (val) => {
+        this.plugin.settings.convertDefiniteIntegrals = val;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian3.Setting(unicodeBody).setName("Convert bounded operators").setDesc("Convert bounded summation/product operators (e.g. \\sum_{i=1}^n) to Unicode (\u2211_{i=1}^n). When OFF (recommended), preserves LaTeX commands for proper displaystyle limits.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.convertBoundedOperators).onChange(async (val) => {
+        this.plugin.settings.convertBoundedOperators = val;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian3.Setting(unicodeBody).setName("Convert LaTeX in prose to Unicode").setDesc("Convert LaTeX math commands like \\psi to \u{1D713} in regular text outside math blocks and lines (default: OFF to protect prose). Code blocks and inline code are strictly protected.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.convertProseToUnicode).onChange(async (val) => {
+        this.plugin.settings.convertProseToUnicode = val;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian3.Setting(unicodeBody).setName("Convert Unicode in prose to LaTeX").setDesc("Convert Unicode symbols like \u{1D74D} back to \\psi in regular text outside math blocks (default: OFF). When OFF, Unicode symbols in your notes prose are preserved.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.convertProseToLatex).onChange(async (val) => {
+        this.plugin.settings.convertProseToLatex = val;
+        await this.plugin.saveSettings();
+      })
+    );
+    const domainBody = this.createCollapsible(
+      containerEl,
+      "section-domain-diagnostics",
+      "\u{1F6E0}\uFE0F Domain Presets & Diagnostics",
+      false
+    );
+    new import_obsidian3.Setting(domainBody).setName("Auto-detect note domain from YAML properties & tags").setDesc("Automatically activate Quantum mode when a note defines quantum properties (keys: field, subject, topic, discipline, category, or color-math.field) or tags (#quantum, #physics, #qm, #quantum-mechanics).").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.autoDetectNoteField).onChange(async (val) => {
+        this.plugin.settings.autoDetectNoteField = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian3.Setting(domainBody).setName("Syntax error display mode").setDesc("Choose how to display errors when an equation has broken syntax.").addDropdown(
+      (dropdown) => dropdown.addOption("inline", "Inline error message (e.g. \\text{LaTeX Error: ...})").addOption("fallback", "Render original formula (Silent & clean with hover tooltip)").addOption("notice", "Obsidian notice popup & original formula").addOption("native", "Native MathJax error box (Default MathJax behavior)").setValue(this.plugin.settings.errorDisplayMode || "inline").onChange(async (val) => {
+        this.plugin.settings.errorDisplayMode = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian3.Setting(domainBody).setName("Restore all factory defaults").setDesc("Reset all plugin settings, Unicode conversion rules, and palette back to default.config.json.").addButton(
+      (button) => button.setButtonText("Reset to Factory Defaults").setWarning().onClick(async () => {
+        await this.plugin.resetSettingsToDefaults();
+        this.display();
+      })
+    );
   }
 };

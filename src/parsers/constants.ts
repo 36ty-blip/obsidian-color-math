@@ -65,8 +65,8 @@ export function isImaginaryUnit(body: string, index: number): boolean {
   // Followed by ^2 or ^{2}: i^2 = -1
   if (body.slice(next).startsWith("^2") || body.slice(next).startsWith("^{2}")) return true;
 
-  // Followed by constant or greek: \pi, \theta, \omega, \hbar
-  if (body.slice(next).match(/^\\(?:pi|theta|omega|hbar|phi|psi)/)) return true;
+  // Followed by constant or greek: \pi, \theta, \omega, \hbar, ℏ, π, θ, ω, ϕ, ψ, 𝜓, 𝝍
+  if (body.slice(next).match(/^(?:\\(?:pi|theta|omega|hbar|phi|psi)|[ℏπθωϕψΨ]|𝜓|𝝍)/)) return true;
 
   // Followed by variable like y in x + iy, or in exponent
   if (next < body.length && /[xyz\\]/.test(body[next])) {

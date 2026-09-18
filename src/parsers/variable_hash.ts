@@ -146,7 +146,7 @@ export function collectVariableSpans(
               const braced = readBraced(body, targetStart);
               if (braced) {
                 const inner = braced[0];
-                const baseMatch = inner.match(/[a-zA-Z]/);
+                const baseMatch = inner.match(/[a-zA-Z]|[\u0370-\u03FF]|\uD835[\uDC00-\uDFFF]/);
                 const baseLetter = baseMatch ? baseMatch[0] : "x";
                 const color = hashStringToColor(baseLetter, palette);
                 spans.push({
@@ -159,7 +159,7 @@ export function collectVariableSpans(
                 continue;
               }
             } else {
-              const letterMatch = body.slice(targetStart).match(/^[a-zA-Z](')*/);
+              const letterMatch = body.slice(targetStart).match(/^(?:[a-zA-Z]|[\u0370-\u03FF]|\uD835[\uDC00-\uDFFF])(')*/);
               if (letterMatch) {
                 const fullVar = letterMatch[0];
                 const baseLetter = fullVar.replace(/'/g, "");
@@ -284,8 +284,8 @@ export function collectVariableSpans(
       continue;
     }
 
-    // Single letter variables (optionally with prime): e.g. x, y, z, t, x', y''
-    const varMatch = body.slice(index).match(/^[a-zA-Z](')*/);
+    // Single letter variables (optionally with prime): e.g. x, y, z, t, x', y'', 𝜓, ψ, θ
+    const varMatch = body.slice(index).match(/^(?:[a-zA-Z]|[\u0370-\u03FF]|\uD835[\uDC00-\uDFFF])(')*/);
     if (varMatch) {
       const fullVar = varMatch[0];
       const baseLetter = fullVar.replace(/'/g, "");

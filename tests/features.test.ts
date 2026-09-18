@@ -9,6 +9,7 @@ describe("Markdown Scanner & Fast-Path Features", () => {
     expect(res).toBe("Here is $a\\textcolor{white}{=}b$ in text.");
   });
 
+
   it("respects Obsidian and Pandoc whitespace flanking rules", () => {
     // 1. Leading space after opening $ is NOT math
     const leading = "Not math: $ a=b$ here.";
@@ -169,4 +170,30 @@ describe("Markdown Scanner & Fast-Path Features", () => {
     const uncolored = uncolorText(converted);
     expect(uncolored).toBe(combinedDoc);
   });
+
+  it("strictly limits \\textcolor to math environments and colors \\psi and 𝝍 inside math", () => {
+    const input = [
+      "Here is 𝝍 and \\psi outside math in prose.",
+      "",
+      "$$𝝍  \\psi$$",
+      "",
+      "Inline test: $𝝍  \\psi$ is inside math, but 𝝍 and \\psi are outside.",
+    ].join("\n");
+
+    const result = convertText(input, undefined, { enableTaxonomy: true });
+
+    // In math block: both 𝝍 and \\psi receive \\textcolor{#bb9af7}{...}
+    expect(result).toContain("$$\\textcolor{#bb9af7}{𝝍}  \\textcolor{#bb9af7}{\\psi}$$");
+
+    // In inline math: both 𝝍 and \\psi receive \\textcolor{#bb9af7}{...}
+    expect(result).toContain("$\\textcolor{#bb9af7}{𝝍}  \\textcolor{#bb9af7}{\\psi}$");
+
+    // Prose outside math: \\textcolor MUST NEVER appear
+    const lines = result.split("\n");
+    const proseLines = [lines[0], lines[4].split("$")[0], lines[4].split("$")[2]];
+    for (const prose of proseLines) {
+      expect(prose).not.toContain("\\textcolor");
+    }
+  });
 });
+

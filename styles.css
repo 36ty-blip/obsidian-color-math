@@ -14,3 +14,149 @@
   border-radius: 4px;
   background-color: var(--background-secondary);
 }
+
+/* Collapsible Settings Sections */
+.color-math-collapsible-section {
+  margin-bottom: 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background-color: var(--background-primary);
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+
+.color-math-collapsible-section[open] {
+  border-color: var(--background-modifier-border-focus);
+}
+
+.color-math-collapsible-section > summary {
+  list-style: none;
+}
+
+.color-math-collapsible-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.color-math-collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  font-size: var(--font-ui-medium);
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+  background-color: var(--background-secondary);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+.color-math-collapsible-header:hover {
+  background-color: var(--background-secondary-alt);
+}
+
+.color-math-collapsible-header::after {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  transform: rotate(-45deg);
+  transition: transform 0.2s ease;
+  margin-left: 12px;
+  flex-shrink: 0;
+}
+
+.color-math-collapsible-section[open] > .color-math-collapsible-header::after {
+  transform: rotate(45deg);
+}
+
+.color-math-collapsible-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-math-collapsible-body {
+  padding: 4px 16px 16px 16px;
+}
+
+.color-math-section-intro {
+  margin: 12px 0 8px 0;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* Indented sub-setting for hierarchical toggles */
+.color-math-sub-setting {
+  margin-left: 18px !important;
+  padding-left: 14px !important;
+  border-left: 2px solid var(--background-modifier-border);
+}
+
+/* Nested sub-collapsibles for palettes and tiers */
+.color-math-sub-collapsible {
+  margin-top: 14px;
+  margin-bottom: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background-color: var(--background-primary-alt);
+  overflow: hidden;
+}
+
+.color-math-sub-collapsible > summary {
+  list-style: none;
+}
+
+.color-math-sub-collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+
+.color-math-sub-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-medium);
+  color: var(--text-muted);
+  background-color: var(--background-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.color-math-sub-header:hover {
+  color: var(--text-normal);
+}
+
+.color-math-sub-header::after {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid var(--text-muted);
+  border-bottom: 1.5px solid var(--text-muted);
+  transform: rotate(-45deg);
+  transition: transform 0.2s ease;
+  margin-left: 8px;
+}
+
+.color-math-sub-collapsible[open] > .color-math-sub-header::after {
+  transform: rotate(45deg);
+}
+
+.color-math-sub-body {
+  padding: 4px 12px 8px 12px;
+}
+
+/* High-visibility warning for unmatched or unclosed delimiters and braces */
+.color-math-unmatched-delimiter {
+  color: #f7768e !important;
+  font-weight: 700 !important;
+  text-decoration: underline wavy #f7768e !important;
+  background-color: rgba(247, 118, 142, 0.18) !important;
+  border-radius: 2px !important;
+}
+

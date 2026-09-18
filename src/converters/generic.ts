@@ -9,6 +9,7 @@ import { collectDimensionlessSpans, findDimensionlessSpans } from "../parsers/di
 import { findSemanticSpans } from "../parsers/math_parser";
 import { collectScannerSpans } from "../parsers/scanner";
 import { collectTaxonomySpans } from "../parsers/taxonomy";
+import { collectQuantumOperatorSpans } from "../parsers/physics";
 import { collectUnitSpans, findUnitSpans } from "../parsers/units";
 import { collectVariableSpans } from "../parsers/variable_hash";
 import { containsColorWrapper, normalizeLatexBraces } from "../utils/latex_helpers";
@@ -24,15 +25,18 @@ const FUNCTION_COLOR_NAMES: ("main" | "derivative" | "chain")[] = [
 export function collectFunctionSpans(
   body: string,
   palette: ColorPalette = COLORS,
-  bareFunctions?: Set<string>
+  bareFunctions?: Set<string>,
+  options?: ColorMathOptions
 ): ColorSpan[] {
   const [semantic] = findSemanticSpans(body, bareFunctions);
   const spans: ColorSpan[] = [];
   for (const item of semantic) {
     let colorName: keyof ColorPalette;
     if (item.kind === "function") {
+      if (options?.taxonomyFunctions === false) continue;
       colorName = FUNCTION_COLOR_NAMES[Math.min(item.depth, 2)];
     } else if (item.kind === "constant") {
+      if (options?.taxonomyConstants === false) continue;
       colorName = "orange";
     } else {
       continue;
@@ -66,7 +70,7 @@ export function colorLatexBody(
   const bareFunctions = getBareFunctions(options);
 
   const spans: ColorSpan[] = [
-    ...collectFunctionSpans(normalized, palette, bareFunctions),
+    ...collectFunctionSpans(normalized, palette, bareFunctions, options),
     ...collectScannerSpans(normalized, palette),
   ];
 
@@ -75,7 +79,7 @@ export function colorLatexBody(
   }
 
   if (options?.colorDifferentials !== false) {
-    spans.push(...collectDifferentialSpans(normalized, palette, diffSpans));
+    spans.push(...collectDifferentialSpans(normalized, palette, diffSpans, options));
   }
 
   if (options?.colorDimensionless !== false) {
@@ -91,15 +95,34 @@ export function colorLatexBody(
   }
 
   if (options?.rainbowDelimiters) {
-    spans.push(...collectDelimiterSpans(normalized, { forLatexWrap: true }));
+    spans.push(
+      ...collectDelimiterSpans(normalized, {
+        forLatexWrap: true,
+        palette: options?.rainbowColors,
+      })
+    );
   }
 
   if (options?.enableTaxonomy) {
-    spans.push(...collectTaxonomySpans(normalized, palette, unitSpans, diffSpans, dimSpans));
+    spans.push(
+      ...collectTaxonomySpans(normalized, palette, unitSpans, diffSpans, dimSpans, options)
+    );
   }
 
   if (options?.variableDataFlow) {
     spans.push(...collectVariableSpans(normalized, undefined, unitSpans, diffSpans, dimSpans, bareFunctions));
+  }
+
+  if (options?.colorQuantumOperators || options?.field === "quantum" || options?.field === "physics") {
+    const quantumSpans = collectQuantumOperatorSpans(normalized, palette, options);
+    if (quantumSpans.length > 0) {
+      // Filter out any other spans strictly contained within quantum operators
+      const filtered = spans.filter(
+        (s) => !quantumSpans.some((q) => q.start <= s.start && s.end <= q.end)
+      );
+      spans.length = 0;
+      spans.push(...filtered, ...quantumSpans);
+    }
   }
 
   return applyColorSpans(normalized, spans);

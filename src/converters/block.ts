@@ -43,7 +43,10 @@ function hasSemanticOptions(options?: ColorMathOptions): boolean {
       options.colorUnits ||
       options.colorDifferentials ||
       options.colorBraKet ||
-      options.colorDimensionless)
+      options.colorDimensionless ||
+      options.colorQuantumOperators ||
+      options.field === "quantum" ||
+      options.field === "physics")
   );
 }
 

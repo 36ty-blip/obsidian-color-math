@@ -1,5 +1,47 @@
 # config.py
 
+from .custom_definitions import (
+    CUSTOM_FUNCTIONS,
+    CUSTOM_CONSTANTS,
+    CUSTOM_OPERATORS,
+    CUSTOM_QUANTUM_OPERATORS,
+    CUSTOM_RELATIONS,
+    sanitize_definition,
+)
+
+CUSTOM_MACRO_FUNCTIONS: set[str] = set()
+CUSTOM_BARE_FUNCTIONS: set[str] = set()
+for _fn in CUSTOM_FUNCTIONS:
+    _m, _b = sanitize_definition(_fn)
+    if _m:
+        CUSTOM_MACRO_FUNCTIONS.add(_m)
+    if _b:
+        CUSTOM_BARE_FUNCTIONS.add(_b.lower())
+
+CUSTOM_CONSTANTS_SET: set[str] = set()
+for _c in CUSTOM_CONSTANTS:
+    _m, _b = sanitize_definition(_c)
+    if _m:
+        CUSTOM_CONSTANTS_SET.add(_m)
+    if _b:
+        CUSTOM_CONSTANTS_SET.add(_b)
+
+CUSTOM_OPERATORS_SET: set[str] = set()
+for _op in CUSTOM_OPERATORS:
+    _m, _ = sanitize_definition(_op)
+    if _m:
+        CUSTOM_OPERATORS_SET.add(_m)
+
+CUSTOM_QUANTUM_OPERATORS_SET: set[str] = {q.strip() for q in CUSTOM_QUANTUM_OPERATORS if q.strip()}
+
+CUSTOM_RELATIONS_SET: set[str] = set()
+for _r in CUSTOM_RELATIONS:
+    _m, _b = sanitize_definition(_r)
+    if _m:
+        CUSTOM_RELATIONS_SET.add(_m)
+    if _b and not _b.startswith("\\"):
+        CUSTOM_RELATIONS_SET.add(_b)
+
 COLORS = {
     "main": "#7aa2f7",
     "orange": "#e0af68",
@@ -56,7 +98,7 @@ RELATIONS = {
     "=",
     "<",
     ">",
-}
+} | CUSTOM_RELATIONS_SET
 
 
 ARROWS = {
@@ -114,6 +156,7 @@ COLOR_COMMANDS = (
     | SET_SYMBOLS
     | SPACING_COMMANDS
     | MULTIPLICATION_SYMBOLS
+    | CUSTOM_OPERATORS_SET
 )
 
 

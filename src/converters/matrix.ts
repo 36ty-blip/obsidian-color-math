@@ -14,7 +14,7 @@ import { uncolorText } from "../undo";
 import { firstEquality, parseMathBlock, relationSpans } from "./semantic";
 
 const MATRIX_COMMAND_RE =
-  /\\(?:mathbf|mathcal|nabla|det|tr|Tr|trace|Vert|lVert)(?![A-Za-z])|\\\|(?![A-Za-z])|\\operatorname\s*\{\s*tr\s*\}/;
+  /\\(?:mathbf|mathcal|nabla|det|tr|Tr|trace|Vert|lVert)(?![A-Za-z])|∇|\\\|(?![A-Za-z])|\\operatorname\s*\{\s*tr\s*\}/;
 const MATRIX_ENV_RE =
   /\\begin\s*\{\s*(?:Bmatrix|Vmatrix|array|bmatrix|matrix|pmatrix|smallmatrix|vmatrix)\s*\}/;
 const NUMBER_RE = /^[+-]?\d+(?:\.\d+)?$/;
@@ -130,7 +130,13 @@ export function convertMatrixBlock(
         : ["main"];
   } else if (
     lhsFirst.startsWith("\\frac{\\partial}") ||
-    lhsFirst.startsWith("\\nabla")
+    lhsFirst.startsWith("\\dfrac{\\partial}") ||
+    lhsFirst.startsWith("\\tfrac{\\partial}") ||
+    lhsFirst.startsWith("\\frac{∂}") ||
+    lhsFirst.startsWith("\\dfrac{∂}") ||
+    lhsFirst.startsWith("\\tfrac{∂}") ||
+    lhsFirst.startsWith("\\nabla") ||
+    lhsFirst.startsWith("∇")
   ) {
     lhsColors = ["upper", "main"];
   } else {
@@ -139,7 +145,14 @@ export function convertMatrixBlock(
 
   const lhsText = block.body.slice(0, equality[0]).replace(/\s+/g, "");
   let rhsColors: (keyof ColorPalette)[];
-  if (lhsFirst.startsWith("\\frac{\\partial}")) {
+  if (
+    lhsFirst.startsWith("\\frac{\\partial}") ||
+    lhsFirst.startsWith("\\dfrac{\\partial}") ||
+    lhsFirst.startsWith("\\tfrac{\\partial}") ||
+    lhsFirst.startsWith("\\frac{∂}") ||
+    lhsFirst.startsWith("\\dfrac{∂}") ||
+    lhsFirst.startsWith("\\tfrac{∂}")
+  ) {
     rhsColors = ["chain", "main"];
   } else if (lhs.length > 1 && rhs.length === 1) {
     rhsColors = ["main"];

@@ -12,7 +12,8 @@ export type ColorRole =
   | "set"
   | "spacing"
   | "parameter"
-  | "unit";
+  | "unit"
+  | "energyOperator";
 
 export type ColorPalette = Record<ColorRole, string>;
 
@@ -29,6 +30,7 @@ export const DEFAULT_COLORS: ColorPalette = {
   spacing: "white",
   parameter: "#bb9af7",
   unit: "#73daca",
+  energyOperator: "#2ac3de",
 };
 
 export const DEFAULT_PALETTE = DEFAULT_COLORS;
@@ -43,6 +45,62 @@ export function resetPalette(): void {
   Object.assign(COLORS, DEFAULT_COLORS);
 }
 
+import {
+  UNICODE_BIG_OPERATORS,
+  UNICODE_INTEGRALS,
+  UNICODE_RELATIONS,
+  UNICODE_ARROWS,
+  UNICODE_SETS,
+  UNICODE_MULTIPLICATION,
+  UNICODE_CONSTANTS,
+  UNICODE_VECTORS,
+  UNICODE_GREEK_LOWER_STANDARD,
+  UNICODE_GREEK_LOWER_PLANE1,
+  UNICODE_GREEK_UPPER_STANDARD,
+  UNICODE_GREEK_UPPER_PLANE1,
+} from "./config/unicode";
+import { USER_CUSTOM_DEFINITIONS, sanitizeDefinition } from "./custom_definitions";
+
+// Process custom definitions safely
+export const CUSTOM_MACRO_FUNCTIONS = new Set<string>();
+export const CUSTOM_BARE_FUNCTIONS = new Set<string>();
+for (const fn of USER_CUSTOM_DEFINITIONS.customFunctions || []) {
+  const { macro, bare } = sanitizeDefinition(fn);
+  if (macro) CUSTOM_MACRO_FUNCTIONS.add(macro);
+  if (bare) CUSTOM_BARE_FUNCTIONS.add(bare.toLowerCase());
+}
+
+export const CUSTOM_CONSTANTS = new Set<string>();
+for (const c of USER_CUSTOM_DEFINITIONS.customConstants || []) {
+  const { macro, bare } = sanitizeDefinition(c);
+  if (macro) CUSTOM_CONSTANTS.add(macro);
+  if (bare) CUSTOM_CONSTANTS.add(bare);
+}
+
+export const CUSTOM_OPERATORS = new Set<string>();
+for (const op of USER_CUSTOM_DEFINITIONS.customOperators || []) {
+  const { macro } = sanitizeDefinition(op);
+  if (macro) CUSTOM_OPERATORS.add(macro);
+}
+
+export const CUSTOM_QUANTUM_OPERATORS = new Set<string>(
+  (USER_CUSTOM_DEFINITIONS.customQuantumOperators || []).map((q) => q.trim()).filter(Boolean)
+);
+
+export const CUSTOM_RELATIONS = new Set<string>();
+for (const r of USER_CUSTOM_DEFINITIONS.customRelations || []) {
+  const { macro, bare } = sanitizeDefinition(r);
+  if (macro) CUSTOM_RELATIONS.add(macro);
+  if (bare && !bare.startsWith("\\")) CUSTOM_RELATIONS.add(bare);
+}
+
+export const CUSTOM_PARAMETERS = new Set<string>();
+for (const p of USER_CUSTOM_DEFINITIONS.customParameters || []) {
+  const { macro, bare } = sanitizeDefinition(p);
+  if (macro) CUSTOM_PARAMETERS.add(macro);
+  if (bare) CUSTOM_PARAMETERS.add(bare);
+}
+
 export const BIG_OPERATORS = new Set([
   "\\sum",
   "\\prod",
@@ -54,6 +112,7 @@ export const BIG_OPERATORS = new Set([
   "\\bigwedge",
   "\\bigoplus",
   "\\bigotimes",
+  ...Object.values(UNICODE_BIG_OPERATORS),
 ]);
 
 export const INTEGRALS = new Set([
@@ -61,6 +120,7 @@ export const INTEGRALS = new Set([
   "\\iint",
   "\\iiint",
   "\\oint",
+  ...Object.values(UNICODE_INTEGRALS),
 ]);
 
 export const LIMIT_OPERATORS = new Set([
@@ -85,6 +145,8 @@ export const RELATIONS = new Set([
   "=",
   "<",
   ">",
+  ...Object.values(UNICODE_RELATIONS),
+  ...CUSTOM_RELATIONS,
 ]);
 
 export const ARROWS = new Set([
@@ -98,6 +160,7 @@ export const ARROWS = new Set([
   "\\Leftrightarrow",
   "\\mapsto",
   "\\to",
+  ...Object.values(UNICODE_ARROWS),
 ]);
 
 export const SET_SYMBOLS = new Set([
@@ -111,6 +174,7 @@ export const SET_SYMBOLS = new Set([
   "\\in",
   "\\cup",
   "\\cap",
+  ...Object.values(UNICODE_SETS),
 ]);
 
 export const SPACING_COMMANDS = new Set([
@@ -128,6 +192,8 @@ export const MULTIPLICATION_SYMBOLS = new Set([
   "\\times",
   "·",
   "*",
+  "×",
+  "✕",
 ]);
 
 export const COLOR_COMMANDS = new Set([
@@ -139,6 +205,7 @@ export const COLOR_COMMANDS = new Set([
   ...SET_SYMBOLS,
   ...SPACING_COMMANDS,
   ...MULTIPLICATION_SYMBOLS,
+  ...CUSTOM_OPERATORS,
 ]);
 
 export const SORTED_COLOR_COMMANDS: string[] = Array.from(COLOR_COMMANDS).sort(
@@ -161,6 +228,8 @@ export const MATH_CONSTANTS = new Set([
   "\\mathrm{e}",
   "\\mathrm{i}",
   "\\mathrm{j}",
+  ...Object.values(UNICODE_CONSTANTS),
+  ...CUSTOM_CONSTANTS,
 ]);
 
 export const MATH_ACCENTS = new Set([
@@ -232,7 +301,22 @@ export const MATH_PARAMETERS = new Set([
   "\\Phi",
   "\\Psi",
   "\\Omega",
+  ...Object.values(UNICODE_GREEK_LOWER_STANDARD),
+  ...Object.values(UNICODE_GREEK_LOWER_PLANE1),
+  ...Object.values(UNICODE_GREEK_UPPER_STANDARD),
+  ...Object.values(UNICODE_GREEK_UPPER_PLANE1),
+  "𝜓",
+  "𝝍",
+  ...CUSTOM_PARAMETERS,
 ]);
+
+export const NON_SLASH_MATH_CONSTANTS = new Set(
+  Array.from(MATH_CONSTANTS).filter((c) => !c.startsWith("\\"))
+);
+
+export const NON_SLASH_MATH_PARAMETERS = new Set(
+  Array.from(MATH_PARAMETERS).filter((c) => !c.startsWith("\\"))
+);
 
 export const MATH_FUNCTIONS = new Set([
   "\\sin",
@@ -327,6 +411,7 @@ export const MATH_FUNCTIONS = new Set([
   "\\dn",
   "\\avg",
   "\\len",
+  ...CUSTOM_MACRO_FUNCTIONS,
 ]);
 
 export const STANDARD_BARE_FUNCTIONS = new Set([
@@ -439,15 +524,22 @@ export const FULL_BARE_FUNCTIONS = new Set([
   ...EXTENDED_BARE_FUNCTIONS,
 ]);
 
-export const ALL_BARE_FUNCTIONS = FULL_BARE_FUNCTIONS;
+export const ALL_BARE_FUNCTIONS = new Set([
+  ...FULL_BARE_FUNCTIONS,
+  ...CUSTOM_BARE_FUNCTIONS,
+]);
 
-export const BARE_FUNCTIONS = FULL_BARE_FUNCTIONS;
+export const BARE_FUNCTIONS = ALL_BARE_FUNCTIONS;
 
 export function getBareFunctions(options?: ColorMathOptions): Set<string> {
-  if (options && options.extendedFunctions === false) {
-    return STANDARD_BARE_FUNCTIONS;
+  const base =
+    options && options.extendedFunctions === false
+      ? STANDARD_BARE_FUNCTIONS
+      : FULL_BARE_FUNCTIONS;
+  if (CUSTOM_BARE_FUNCTIONS.size > 0) {
+    return new Set([...base, ...CUSTOM_BARE_FUNCTIONS]);
   }
-  return FULL_BARE_FUNCTIONS;
+  return base;
 }
 
 export const RAINBOW_DELIMITER_COLORS: string[] = [
@@ -482,14 +574,27 @@ export function hashStringToColor(
 
 export interface ColorMathOptions {
   enableTaxonomy?: boolean;
+  taxonomyFunctions?: boolean;
+  taxonomyParameters?: boolean;
+  taxonomyConstants?: boolean;
+  taxonomyIndices?: boolean;
   rainbowDelimiters?: boolean;
+  rainbowColors?: string[];
+  rainbowBareBraces?: boolean;
+  highlightUnmatchedBraces?: boolean;
   variableDataFlow?: boolean;
   colorUnits?: boolean;
   colorDifferentials?: boolean;
+  colorDerivativeFractions?: boolean;
+  colorInfinitesimals?: boolean;
   colorBraKet?: boolean;
   colorDimensionless?: boolean;
   colorAlignment?: boolean;
   colorSingleConstants?: boolean;
   extendedFunctions?: boolean;
+  colorQuantumOperators?: boolean;
+  highlightInlineMath?: boolean;
+  highlightDisplayMath?: boolean;
+  field?: "quantum" | "physics" | "math" | string;
 }
 

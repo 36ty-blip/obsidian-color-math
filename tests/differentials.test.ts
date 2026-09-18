@@ -91,4 +91,35 @@ describe("Calculus Differentials & Derivatives Disambiguation", () => {
       expect(result).toContain("d");
     });
   });
+
+  describe("Unicode math support", () => {
+    it("detects Unicode partial derivative fractions", () => {
+      const spans = findDifferentialSpans("i\\hbar \\frac{∂}{∂t} \\Psi=\\hat{H}\\Psi");
+      expect(spans.length).toBe(1);
+      expect(spans[0].text).toBe("\\frac{∂}{∂t}");
+      expect(spans[0].kind).toBe("derivative_fraction");
+
+      const spansVar = findDifferentialSpans("\\frac{∂y}{∂t} = 0");
+      expect(spansVar.length).toBe(1);
+      expect(spansVar[0].text).toBe("\\frac{∂y}{∂t}");
+    });
+
+    it("colors Schrodinger equation with Unicode partial derivative and hbar", () => {
+      const result = colorLatexBody("i\\hbar \\frac{∂}{∂t} \\Psi=\\hat{H}\\Psi", DEFAULT_COLORS, {
+        colorDifferentials: true,
+        enableTaxonomy: true,
+      });
+      expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.derivative}}{\\frac{∂}{∂t}}`);
+      expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.orange}}{\\hbar}`);
+    });
+
+    it("colors Schrodinger equation with Unicode ℏ and ∂", () => {
+      const result = colorLatexBody("iℏ \\frac{∂}{∂t} \\Psi=\\hat{H}\\Psi", DEFAULT_COLORS, {
+        colorDifferentials: true,
+        enableTaxonomy: true,
+      });
+      expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.derivative}}{\\frac{∂}{∂t}}`);
+      expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.orange}}{ℏ}`);
+    });
+  });
 });

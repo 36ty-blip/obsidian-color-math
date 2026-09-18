@@ -33,7 +33,7 @@ const NUMBER_UNIT_REGEX = new RegExp(
   `(?:^|[^A-Za-z0-9_])(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:\\s*(?:\\\\times|\\\\cdot|·|\\*)\\s*10\\^\\{?[+-]?\\d+\\}?|\\s*[eE][+-]?\\d+)?(?:\\s*|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)*` +
     `(` +
     // Sub-case A: \text{...} or \mathrm{...}
-    `\\\\(?:text|mathrm)\\s*\\{[^}]+\\}(?:\\^\\{?-?\\d+\\}?)?` +
+    `\\\\(?:text|mathrm)\\s*\\{[A-Za-z°℃%ΩμÅ/^0-9\\s.\\-]+?\\}(?:\\^\\{?-?\\d+\\}?)?` +
     `|` +
     // Sub-case B: \mu followed by ambiguous or safe unit (e.g. 5 \mu N, 1.064 \mu m)
     `\\\\mu\\s*(?:${SAFE_MICRO_UNITS}|${AMBIGUOUS_MICRO_UNITS})(?![A-Za-z0-9_])(?:\\^\\{?-?\\d+\\}?)?` +
@@ -97,6 +97,12 @@ export function findUnitSpans(body: string): UnitSpan[] {
   while ((match = NUMBER_UNIT_REGEX.exec(body)) !== null) {
     const fullMatch = match[0];
     const unitPart = match[1];
+    if (unitPart.startsWith("\\text") || unitPart.startsWith("\\mathrm")) {
+      const innerMatch = /\{([^}]+)\}/.exec(unitPart);
+      if (!innerMatch || !IS_UNIT_REGEX.test(innerMatch[1].trim())) {
+        continue;
+      }
+    }
     const unitOffset = fullMatch.lastIndexOf(unitPart);
     const unitStart = match.index + unitOffset;
     const unitEnd = unitStart + unitPart.length;

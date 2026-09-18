@@ -1,6 +1,4 @@
-// src/parsers/differentials.ts
-
-import { COLORS, ColorPalette } from "../config";
+import { COLORS, ColorPalette, ColorMathOptions } from "../config";
 import { ColorSpan } from "../utils/spans";
 
 export interface DifferentialSpan {
@@ -10,13 +8,28 @@ export interface DifferentialSpan {
   kind: "differential" | "derivative_fraction";
 }
 
-const DERIV_FRAC_REGEX =
-  /\\frac\s*\{\s*(?:d|\\partial|\\mathrm\{d\})(?:\^\{?\d+\}?)?\s*(?:[a-zA-Z\\]+)?\s*\}\s*\{\s*(?:d|\\partial|\\mathrm\{d\})\s*(?:[a-zA-Z]|\\\\[a-zA-Z]+)(?:\^\{?\d+\}?)?(?:\s*(?:d|\\partial|\\mathrm\{d\})\s*(?:[a-zA-Z]|\\\\[a-zA-Z]+))*\s*\}/g;
+const DIFF_VAR_PATTERN =
+  "(?:\\\\[a-zA-Z]+|[a-zA-Z]|[\\u0370-\\u03FF]|\\uD835[\\uDC00-\\uDFFF])";
 
-const DIFF_REGEX =
-  /(?:^|[\s+\-=*({]|\[|\\,|\\:|\\;|\\quad|\\qquad|~)(\s*(?:d|\\partial|\\mathrm\{d\}|\\delta)\s*(?:\\[a-zA-Z]+|[a-zA-Z])(?![a-zA-Z0-9_({])(?:\^\{?\d+\}?)?)/g;
+const DERIV_FRAC_REGEX = new RegExp(
+  "\\\\(?:dfrac|tfrac|frac)\\s*\\{\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|∂)(?:\\^\\{?\\d+\\}?)?\\s*(?:" +
+    DIFF_VAR_PATTERN +
+    ")?\\s*\\}\\s*\\{\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|∂)\\s*" +
+    DIFF_VAR_PATTERN +
+    "(?:\\^\\{?\\d+\\}?)?(?:\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|∂)\\s*" +
+    DIFF_VAR_PATTERN +
+    ")*\\s*\\}",
+  "g"
+);
 
-const D_OPERATOR_REGEX = /(?:d|\\partial|\\mathrm\{d\}|\\delta)/;
+const DIFF_REGEX = new RegExp(
+  "(?:^|[\\s+\\-=*({]|\\[|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)(\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|\\\\delta|∂)\\s*" +
+    DIFF_VAR_PATTERN +
+    "(?![a-zA-Z0-9_({])(?:\\^\\{?\\d+\\}?)?)",
+  "g"
+);
+
+const D_OPERATOR_REGEX = /(?:d|\\partial|\\mathrm\{d\}|\\delta|∂)/;
 
 /**
  * Scans a LaTeX math body to identify differential spans and derivative fractions.
@@ -64,10 +77,20 @@ export function findDifferentialSpans(body: string): DifferentialSpan[] {
 export function collectDifferentialSpans(
   body: string,
   palette: ColorPalette = COLORS,
-  diffSpans?: DifferentialSpan[]
+  diffSpans?: DifferentialSpan[],
+  options?: ColorMathOptions
 ): ColorSpan[] {
   const diffs = diffSpans || findDifferentialSpans(body);
-  return diffs.map((d) => ({
+  const filtered = diffs.filter((d) => {
+    if (d.kind === "derivative_fraction" && options?.colorDerivativeFractions === false) {
+      return false;
+    }
+    if (d.kind === "differential" && options?.colorInfinitesimals === false) {
+      return false;
+    }
+    return true;
+  });
+  return filtered.map((d) => ({
     start: d.start,
     end: d.end,
     color: palette.derivative || "#bb9af7",

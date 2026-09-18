@@ -1,0 +1,81 @@
+# Obsidian Color Math Feature Checklist
+
+- [x] MathJax interceptor with exponential backoff retry scheduling
+- [x] MathJax interceptor workspace.onLayoutReady fallback
+- [x] CodeMirror 6 live-preview syntax highlighter ViewPlugin
+- [x] CodeMirror 6 stateful decoration provider
+- [x] Obsidian community-plugins ID alignment (`color-math`)
+- [x] Semantic color palette with full hex customizability in settings tab
+- [x] Preset themes: Default Tokyo Night
+- [x] Preset themes: Catppuccin
+- [x] Preset themes: Nord
+- [x] Preset themes: Light
+- [x] Rainbow delimiters: parentheses `()`
+- [x] Rainbow delimiters: square brackets `[]`
+- [x] Rainbow delimiters: escaped set braces `\{ \}`
+- [x] Rainbow delimiters: Dirac angle brackets `\langle \rangle`
+- [x] Rainbow delimiters: sized open delimiters (`\bigl`, `\Bigl`, `\biggl`, `\Biggl`)
+- [x] Rainbow delimiters: sized close delimiters (`\bigr`, `\Bigr`, `\biggr`, `\Biggr`)
+- [x] Rainbow delimiters: bare grouping braces `{}` depth counting in live-preview
+- [x] Unmatched delimiter & stray brace error detection (`#f7768e`)
+- [x] Environment header skipping (`\begin{matrix}`, `\end{matrix}`)
+- [x] Multi-argument environment skipping (`\begin{array}{cc|c}`)
+- [x] Permanent Bake Colors command (`forLatexWrap=true`)
+- [x] Bake protection: bare braces `{}` strictly excluded from `\textcolor` wrapping
+- [x] Bake protection: `\left...\right` expressions wrapped atomically to prevent group boundary errors
+- [x] Undo Colors command with clean regex uncoloring
+- [x] Selection colorizer (colorize highlighted math snippet only)
+- [x] Selection bake command (bake highlighted math snippet only)
+- [x] Copy colorized LaTeX command
+- [x] Boxed expression support (`\boxed{...}` preserved and contents colored)
+- [x] Matrix environments: `matrix`, `pmatrix`, `bmatrix`, `vmatrix`, `Vmatrix`
+- [x] Aligned math environments: `align`, `align*`, `aligned`, `alignedat`, `gather`, `gathered`
+- [x] Case environments: `cases`
+- [x] Matrix & table alignment tokens coloring (`&` and `\\`)
+- [x] Physical units parser (SI base units, derived units, compound units `m/s^2`)
+- [x] Unit prefix handling (`k`, `M`, `G`, `c`, `m`, `\mu`, `n`, `p`)
+- [x] Unit macro recognition (`\text{...}`, `\mathrm{...}`, `\pu{...}`, `\unit{...}`)
+- [x] Differentials parser: total differentials (`dx`, `dy`, `dt`)
+- [x] Differentials parser: partial differentials (`\partial x`, `\partial t`)
+- [x] Differentials parser: higher-order differentials (`d^2x`, `\partial^2 f`)
+- [x] Differentials parser: vector operators (`\nabla`, `\nabla \times`, `\nabla \cdot`)
+- [x] Derivatives: Lagrange prime notation (`f'(x)`, `f''(x)`, `y'''`)
+- [x] Derivatives: Newton dot notation (`\dot{x}`, `\ddot{x}`, `\dddot{x}`)
+- [x] Derivatives: Leibniz fraction notation (`\frac{df}{dx}`, `\frac{\partial u}{\partial t}`)
+- [x] Dirac bra-ket: kets `\ket{\psi}`
+- [x] Dirac bra-ket: bras `\bra{\phi}`
+- [x] Dirac bra-ket: inner products `\braket{\phi|\psi}` and `\langle \phi | \psi \rangle`
+- [x] Dirac bra-ket: projection operators `\ketbra{\psi}{\phi}` and `|\psi\rangle\langle\phi|`
+- [x] Dirac bra-ket: expectation values `\langle \psi | \hat{H} | \psi \rangle`
+- [x] Dimensionless numbers: integers and floating point numbers
+- [x] Dimensionless numbers: scientific notation (`1.23 \times 10^5`)
+- [x] Dimensionless numbers: standalone powers and exponents
+- [x] Mathematical constants: `\pi`, `\varpi`, `e`, `i`, `\hbar`, `\infty`, `\ell`, `\aleph`
+- [x] Variable data-flow consistent hash coloring (`variable_hash.ts`)
+- [x] Entity taxonomy classification engine (`taxonomy.ts`)
+- [x] Unbraced argument normalization (`\frac2L -> \frac{2}{L}`, `\sqrt V -> \sqrt{V}`)
+- [x] Script argument normalization (`x^2 -> x^{2}`, `a_1 -> a_{1}`)
+- [x] Verbatim block protection (`\verb|...|`)
+- [x] TeX comment protection (`% ...`)
+- [x] Currency protection (`$20 and $30` not misparsed as math delimiters)
+- [x] Inline math whitespace rules (`$ a$` and `$a $` ignored per CommonMark / Obsidian math rules)
+- [x] Markdown code block protection (```` ```math ```` and inline `` ` `` ignored)
+- [x] Multi-line math block support (`$$ ... $$`)
+- [x] YAML frontmatter per-note configuration overrides (`color-math: { ... }`)
+- [x] Bidirectional LaTeX <-> Unicode converter (Greek letters, symbols, sub/superscripts)
+- [x] Convert document to Unicode command
+- [x] Convert document to LaTeX command
+- [x] User custom definitions registry (`custom_definitions.ts`)
+- [x] Custom functions registration: `relu`, `sinc`, `gelu`, `swish`, `silu`, `softmax`, `sigmoid`, `mish`, `loss`
+- [x] Custom physical constants: `\kB`, `\muB`, `\epsZero`, `\NA`
+- [x] Custom vector calculus operators: `\grad`, `\curl`, `\div`, `\laplacian`, `\Box`
+- [x] Custom quantum operators: `\hat{H}`, `\hat{p}`, `\hat{x}`, `\hat{a}`, `\hat{a}^\dagger`, etc.
+- [x] Custom relations and assignment operators: `\coloneqq`, `\eqqcolon`, `\triangleq`
+- [x] Mathematical Plane 1 Greek Unicode support: `𝜓` (`U+1D713`), `𝝍` (`U+1D74D`)
+- [x] Settings tab: toggle switches for each parser module
+- [x] Settings tab: live interactive equation preview widget
+- [x] Context menu integration for right-clicked equations
+- [x] Ribbon icon quick action
+- [x] CodeMirror 6 RangeSetBuilder strictly sorted & monotonic decoration ordering for interleaved inline and block math
+- [x] Built-in diagnostic self-test suite (27 test suites, 264 tests passing)
+- [x] Version tracking (`1.0.23`)

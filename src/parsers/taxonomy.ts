@@ -3,12 +3,15 @@
 import {
   COLORS,
   ColorPalette,
+  ColorMathOptions,
   MATH_CONSTANTS,
   MATH_FUNCTIONS,
   BARE_FUNCTIONS,
   MATH_PARAMETERS,
   MATH_ACCENTS,
   FONT_STYLE_MACROS,
+  NON_SLASH_MATH_CONSTANTS,
+  NON_SLASH_MATH_PARAMETERS,
 } from "../config";
 import { readOperand, OPAQUE_MACROS } from "./latex_spans";
 import { readBraced, readColorCommand, skipEnvironmentHead } from "../utils/latex_helpers";
@@ -43,7 +46,8 @@ export function collectTaxonomySpans(
   palette: ColorPalette = COLORS,
   unitSpans?: UnitSpan[],
   diffSpans?: DifferentialSpan[],
-  dimSpans?: DimensionlessSpan[]
+  dimSpans?: DimensionlessSpan[],
+  options?: ColorMathOptions
 ): ColorSpan[] {
   const units = unitSpans || findUnitSpans(body);
   const diffs = diffSpans || findDifferentialSpans(body);
@@ -52,20 +56,22 @@ export function collectTaxonomySpans(
   let index = 0;
 
   // 1. Scan for bound index variables in sums, products, limits
-  INDEX_PATTERN.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = INDEX_PATTERN.exec(body)) !== null) {
-    const operatorStr = match[1];
-    const varName = match[2];
-    const varOffset = match[0].indexOf(varName, operatorStr.length);
-    if (varOffset !== -1) {
-      const varStart = match.index + varOffset;
-      spans.push({
-        start: varStart,
-        end: varStart + varName.length,
-        color: palette.chain, // Bound index color
-        priority: 23,
-      });
+  if (options?.taxonomyIndices !== false) {
+    INDEX_PATTERN.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = INDEX_PATTERN.exec(body)) !== null) {
+      const operatorStr = match[1];
+      const varName = match[2];
+      const varOffset = match[0].indexOf(varName, operatorStr.length);
+      if (varOffset !== -1) {
+        const varStart = match.index + varOffset;
+        spans.push({
+          start: varStart,
+          end: varStart + varName.length,
+          color: palette.chain, // Bound index color
+          priority: 23,
+        });
+      }
     }
   }
 
@@ -107,17 +113,19 @@ export function collectTaxonomySpans(
     }
 
     // Bare math functions (sin, cos, tan, ln, exp, etc.)
-    const bareMatch = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
-    if (bareMatch && BARE_FUNCTIONS.has(bareMatch[1].toLowerCase())) {
-      const fnName = bareMatch[1];
-      spans.push({
-        start: index,
-        end: index + fnName.length,
-        color: palette.main,
-        priority: 22,
-      });
-      index += fnName.length;
-      continue;
+    if (options?.taxonomyFunctions !== false) {
+      const bareMatch = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
+      if (bareMatch && BARE_FUNCTIONS.has(bareMatch[1].toLowerCase())) {
+        const fnName = bareMatch[1];
+        spans.push({
+          start: index,
+          end: index + fnName.length,
+          color: palette.main,
+          priority: 22,
+        });
+        index += fnName.length;
+        continue;
+      }
     }
 
     if (body[index] === "\\") {
@@ -145,12 +153,14 @@ export function collectTaxonomySpans(
           if (afterCmd < body.length && body[afterCmd] === "{") {
             const braced = readBraced(body, afterCmd);
             if (braced !== null) {
-              spans.push({
-                start: index,
-                end: braced[1],
-                color: palette.main,
-                priority: 22,
-              });
+              if (options?.taxonomyFunctions !== false) {
+                spans.push({
+                  start: index,
+                  end: braced[1],
+                  color: palette.main,
+                  priority: 22,
+                });
+              }
               index = braced[1];
               continue;
             }
@@ -192,46 +202,54 @@ export function collectTaxonomySpans(
               name === "\\ddot" ||
               name === "\\dddot" ||
               name === "\\ddddot";
-            spans.push({
-              start: index,
-              end: targetEnd,
-              color: isDot ? palette.derivative : (palette.parameter || palette.main),
-              priority: 22,
-            });
+            if (options?.taxonomyParameters !== false) {
+              spans.push({
+                start: index,
+                end: targetEnd,
+                color: isDot ? palette.derivative : (palette.parameter || palette.main),
+                priority: 22,
+              });
+            }
             index = targetEnd;
             continue;
           }
         }
 
         if (MATH_CONSTANTS.has(name)) {
-          spans.push({
-            start: index,
-            end: cmdEnd,
-            color: palette.orange,
-            priority: 22,
-          });
+          if (options?.taxonomyConstants !== false) {
+            spans.push({
+              start: index,
+              end: cmdEnd,
+              color: palette.orange,
+              priority: 22,
+            });
+          }
           index = cmdEnd;
           continue;
         }
 
         if (MATH_FUNCTIONS.has(name)) {
-          spans.push({
-            start: index,
-            end: cmdEnd,
-            color: palette.main,
-            priority: 22,
-          });
+          if (options?.taxonomyFunctions !== false) {
+            spans.push({
+              start: index,
+              end: cmdEnd,
+              color: palette.main,
+              priority: 22,
+            });
+          }
           index = cmdEnd;
           continue;
         }
 
         if (MATH_PARAMETERS.has(name)) {
-          spans.push({
-            start: index,
-            end: cmdEnd,
-            color: palette.parameter || palette.derivative,
-            priority: 20,
-          });
+          if (options?.taxonomyParameters !== false) {
+            spans.push({
+              start: index,
+              end: cmdEnd,
+              color: palette.parameter || palette.derivative,
+              priority: 20,
+            });
+          }
           index = cmdEnd;
           continue;
         }
@@ -262,6 +280,35 @@ export function collectTaxonomySpans(
         }
 
         index = cmdEnd;
+        continue;
+      }
+    } else {
+      const char2 = index + 1 < body.length ? body.slice(index, index + 2) : "";
+      const char1 = body[index];
+
+      if (char2 && (NON_SLASH_MATH_CONSTANTS.has(char2) || NON_SLASH_MATH_PARAMETERS.has(char2))) {
+        const isConst = NON_SLASH_MATH_CONSTANTS.has(char2);
+        if ((isConst && options?.taxonomyConstants !== false) || (!isConst && options?.taxonomyParameters !== false)) {
+          spans.push({
+            start: index,
+            end: index + 2,
+            color: isConst ? palette.orange : (palette.parameter || palette.derivative),
+            priority: isConst ? 22 : 20,
+          });
+        }
+        index += 2;
+        continue;
+      } else if (NON_SLASH_MATH_CONSTANTS.has(char1) || NON_SLASH_MATH_PARAMETERS.has(char1)) {
+        const isConst = NON_SLASH_MATH_CONSTANTS.has(char1);
+        if ((isConst && options?.taxonomyConstants !== false) || (!isConst && options?.taxonomyParameters !== false)) {
+          spans.push({
+            start: index,
+            end: index + 1,
+            color: isConst ? palette.orange : (palette.parameter || palette.derivative),
+            priority: isConst ? 22 : 20,
+          });
+        }
+        index += 1;
         continue;
       }
     }

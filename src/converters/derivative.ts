@@ -28,12 +28,21 @@ function isDerivativePrefix(value: string): boolean {
   return (
     c.startsWith("\\frac{d}{d") ||
     c.startsWith("\\dfrac{d}{d") ||
-    c.startsWith("\\tfrac{d}{d")
+    c.startsWith("\\tfrac{d}{d") ||
+    c.startsWith("\\frac{\\mathrm{d}}{\\mathrm{d") ||
+    c.startsWith("\\dfrac{\\mathrm{d}}{\\mathrm{d") ||
+    c.startsWith("\\tfrac{\\mathrm{d}}{\\mathrm{d") ||
+    c.startsWith("\\frac{\\partial}{\\partial") ||
+    c.startsWith("\\dfrac{\\partial}{\\partial") ||
+    c.startsWith("\\tfrac{\\partial}{\\partial") ||
+    c.startsWith("\\frac{∂}{∂") ||
+    c.startsWith("\\dfrac{∂}{∂") ||
+    c.startsWith("\\tfrac{∂}{∂")
   );
 }
 
 function isPrime(value: string): boolean {
-  return /^(?:[A-Za-z]|\\[A-Za-z]+)'/.test(value.trimStart());
+  return /^(?:[A-Za-z]|\\[A-Za-z]+|[\u0370-\u03FF]|\uD835[\uDC00-\uDFFF])'/.test(value.trimStart());
 }
 
 function isNumeric(value: string): boolean {
@@ -230,6 +239,11 @@ export function convertDerivativeLine(
   const cleanSource = containsColorWrapper(source) ? uncolorText(source) : source;
   const block = parseMathBlock(cleanSource);
   if (block === null) {
+    return null;
+  }
+
+  // Delegate matrix/tensor equations to convertMatrixBlock
+  if (/\\(?:mathbf|mathcal|begin\s*\{(?:Bmatrix|Vmatrix|array|bmatrix|matrix|pmatrix|smallmatrix|vmatrix)\})/.test(block.body)) {
     return null;
   }
 
