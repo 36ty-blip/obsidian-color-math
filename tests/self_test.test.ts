@@ -46,7 +46,7 @@ describe("Self Tests (from self_test.py)", () => {
     "\\end{array}\\right)$$";
   const nested_array_colored =
     "$$\\textcolor{#7aa2f7}{\\mathbf{M}}\\textcolor{white}{=}" +
-    "\\textcolor{#bb9af7}{\\left(\\begin{array}{cc}a&b\\\\c&d" +
+    "\\textcolor{#9d7cd8}{\\left(\\begin{array}{cc}a&b\\\\c&d" +
     "\\end{array}\\right)}$$";
 
   const grouped_command = "$$\\operatorname*{arg\\,max}_{x} f(x)$$";

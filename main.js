@@ -306,12 +306,12 @@ var DEFAULT_COLORS = {
   dot: "white",
   derivative: "#bb9af7",
   chain: "#9ece6a",
-  upper: "#bb9af7",
+  upper: "#9d7cd8",
   relation: "white",
   arrow: "#f7768e",
-  set: "#bb9af7",
+  set: "#7dcfff",
   spacing: "white",
-  parameter: "#bb9af7",
+  parameter: "#ff9e64",
   unit: "#73daca",
   energyOperator: "#2ac3de"
 };
@@ -27980,7 +27980,7 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
     const calculusBody = this.createSubCollapsible(
       mathBody,
       "sub-math-calculus",
-      "Calculus & Differentials",
+      "\u{1F4D0} Calculus & Differentials",
       false
     );
     new import_obsidian3.Setting(calculusBody).setName("Derivative fractions & partials").setDesc("Color derivative fractions (df/dx, \u2202\u03C8/\u2202t, \u2207) with the derivative role to protect 'd' from being mistaken for a variable.").addToggle(
@@ -28007,7 +28007,7 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
     const delimitersBody = this.createSubCollapsible(
       mathBody,
       "sub-math-delimiters",
-      "Delimiters & Brackets",
+      "\u{1F4E6} Delimiters & Brackets",
       false
     );
     new import_obsidian3.Setting(delimitersBody).setName("Rainbow delimiters").setDesc("Color nested parentheses, brackets, and braces recursively by depth to prevent delimiter blindness.").addToggle(
@@ -28044,7 +28044,7 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
     const taxonomyBody = this.createSubCollapsible(
       mathBody,
       "sub-math-taxonomy",
-      "Symbol Taxonomy & Constants",
+      "\u{1F3F7}\uFE0F Symbol Taxonomy & Constants",
       false
     );
     new import_obsidian3.Setting(taxonomyBody).setName("Mathematical symbol taxonomy").setDesc("Semantically categorize and color constants, standard functions, parameters, and bound indices.").addToggle(
@@ -28095,7 +28095,7 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
     const physicsBody = this.createSubCollapsible(
       mathBody,
       "sub-math-physics",
-      "Physics, Engineering & Variables",
+      "\u2699\uFE0F Physics, Engineering & Variables",
       false
     );
     new import_obsidian3.Setting(physicsBody).setName("Color physical units").setDesc("Distinguish physical units and metric prefixes (e.g. \u03BCm, m/s, kg) from algebraic variables. Turn off to keep units in natural text color.").addToggle(

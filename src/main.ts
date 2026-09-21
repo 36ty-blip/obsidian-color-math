@@ -1437,7 +1437,7 @@ class ColorMathSettingTab extends PluginSettingTab {
     const calculusBody = this.createSubCollapsible(
       mathBody,
       "sub-math-calculus",
-      "Calculus & Differentials",
+      "📐 Calculus & Differentials",
       false
     );
 
@@ -1484,7 +1484,7 @@ class ColorMathSettingTab extends PluginSettingTab {
     const delimitersBody = this.createSubCollapsible(
       mathBody,
       "sub-math-delimiters",
-      "Delimiters & Brackets",
+      "📦 Delimiters & Brackets",
       false
     );
 
@@ -1548,7 +1548,7 @@ class ColorMathSettingTab extends PluginSettingTab {
     const taxonomyBody = this.createSubCollapsible(
       mathBody,
       "sub-math-taxonomy",
-      "Symbol Taxonomy & Constants",
+      "🏷️ Symbol Taxonomy & Constants",
       false
     );
 
@@ -1641,7 +1641,7 @@ class ColorMathSettingTab extends PluginSettingTab {
     const physicsBody = this.createSubCollapsible(
       mathBody,
       "sub-math-physics",
-      "Physics, Engineering & Variables",
+      "⚙️ Physics, Engineering & Variables",
       false
     );
 

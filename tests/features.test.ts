@@ -182,11 +182,11 @@ describe("Markdown Scanner & Fast-Path Features", () => {
 
     const result = convertText(input, undefined, { enableTaxonomy: true });
 
-    // In math block: both 𝝍 and \\psi receive \\textcolor{#bb9af7}{...}
-    expect(result).toContain("$$\\textcolor{#bb9af7}{𝝍}  \\textcolor{#bb9af7}{\\psi}$$");
+    // In math block: both 𝝍 and \\psi receive parameter role color (#ff9e64)
+    expect(result).toContain("$$\\textcolor{#ff9e64}{𝝍}  \\textcolor{#ff9e64}{\\psi}$$");
 
-    // In inline math: both 𝝍 and \\psi receive \\textcolor{#bb9af7}{...}
-    expect(result).toContain("$\\textcolor{#bb9af7}{𝝍}  \\textcolor{#bb9af7}{\\psi}$");
+    // In inline math: both 𝝍 and \\psi receive parameter role color (#ff9e64)
+    expect(result).toContain("$\\textcolor{#ff9e64}{𝝍}  \\textcolor{#ff9e64}{\\psi}$");
 
     // Prose outside math: \\textcolor MUST NEVER appear
     const lines = result.split("\n");

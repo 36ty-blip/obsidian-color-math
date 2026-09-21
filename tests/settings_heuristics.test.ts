@@ -39,7 +39,7 @@ describe("Fine-grained Settings & Heuristics Splits", () => {
       // sin should not be wrapped with main color #7aa2f7
       expect(res).not.toContain("\\textcolor{#7aa2f7}{\\sin}");
       // theta parameter should be colored
-      expect(res).toContain("\\textcolor{#bb9af7}{\\theta}");
+      expect(res).toContain(`\\textcolor{${DEFAULT_COLORS.parameter}}{\\theta}`);
       // pi constant should be colored
       expect(res).toContain("\\textcolor{#e0af68}{\\pi}");
     });
@@ -53,7 +53,7 @@ describe("Fine-grained Settings & Heuristics Splits", () => {
         taxonomyConstants: false,
       });
       expect(res).toContain("\\textcolor{#7aa2f7}{\\cos}");
-      expect(res).toContain("\\textcolor{#bb9af7}{\\alpha}");
+      expect(res).toContain(`\\textcolor{${DEFAULT_COLORS.parameter}}{\\alpha}`);
       expect(res).not.toContain("\\textcolor{#e0af68}{\\pi}");
     });
 

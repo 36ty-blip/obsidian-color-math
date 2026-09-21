@@ -88,7 +88,8 @@
 - [x] Mode-aware derivative rendering: Tangent vector coordinates differentiation (`\partial_t`, `\partial_x`), PDE flux balance, ODE numerator target tracking (`\frac{dx}{dt}`)
 - [x] Domain-specific specialized operators: Christoffel symbols (`\Gamma^\mu_{\alpha\beta}`), Lie derivatives (`\mathcal{L}_X`), Material derivatives (`\frac{D\mathbf{u}}{Dt}`), Itô differentials (`dW_t`), Wirtinger derivatives (`\frac{\partial f}{\partial z}`)
 - [x] Settings tab: Mathematical mode controls under Section 6 Feature Previews (Default mathematical mode dropdown & note auto-detection toggle)
-- [x] Collapsible sub-sections under Section 3 (Calculus & Differentials, Delimiters & Brackets, Symbol Taxonomy & Constants, Physics, Engineering & Variables) to reduce clutter
+- [x] Collapsible sub-sections under Section 3 with emoji headings (📐 Calculus & Differentials, 📦 Delimiters & Brackets, 🏷️ Symbol Taxonomy & Constants, ⚙️ Physics, Engineering & Variables)
+- [x] Distinct 13-role palette eliminating duplicate purples (`set` -> Tokyo Sky Cyan, `parameter` -> Tokyo Coral, `upper` -> Tokyo Violet)
 - [x] Curated preset theme palettes (Tokyo Night, Catppuccin Mocha, Nord, Clean Light) with complete 13 semantic role styling and human-readable names
 - [x] Full unit test suite (30 test suites, 350 tests passing)
-- [x] Version tracking (`1.0.28`)
+- [x] Version tracking (`1.0.29`)
