@@ -50,7 +50,8 @@
     "set": "Set theory symbols (e.g. \\in, \\subset)",
     "spacing": "LaTeX spacing commands (e.g. \\quad, \\,)",
     "parameter": "Parameters, angles, and Greek coefficients",
-    "unit": "Physical units and metric prefixes (e.g. μm, m/s, kg)"
+    "unit": "Physical units and metric prefixes (e.g. μm, m/s, kg)",
+    "energyOperator": "Quantum differential operators (Energy: iℏ∂/∂t, Momentum: -iℏ∇, Kinetic: -ℏ²/2m ∇²)"
   },
   "_unicode_descriptions": {
     "greekStyle": "Greek letter typography: 'plane1' (Mathematical Italic: 𝝍, 𝝰) or 'standard' (ψ, α)",

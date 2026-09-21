@@ -120,19 +120,35 @@ const DEFAULT_SETTINGS: ColorMathSettings = {
   collapsedSections: {},
 };
 
+const ROLE_DISPLAY_NAMES: Record<ColorRole, string> = {
+  main: "Primary expression / function",
+  orange: "Constants & major operators",
+  dot: "Multiplication symbols",
+  derivative: "Derivatives & prime markers",
+  chain: "Inner functions & subscripts",
+  upper: "Superscripts & exponents",
+  relation: "Relations & equality",
+  arrow: "Arrows & mappings",
+  set: "Set & logic symbols",
+  spacing: "LaTeX spacing & layout",
+  parameter: "Parameters & Greek coefficients",
+  unit: "Physical units & dimensions",
+  energyOperator: "Quantum differential operators",
+};
+
 const COLOR_ROLE_DESCRIPTIONS: Record<ColorRole, string> = {
-  main: "Primary expression / function color",
-  orange: "Constants, coefficients, and major operators",
-  dot: "Multiplication dots and symbols",
-  derivative: "Outer derivatives and prime markers",
-  chain: "Chain rule factors and subscripts",
-  upper: "Superscripts and matrix outer wrappers",
-  relation: "Relations, equalities, and tensors",
-  arrow: "Arrows and mappings",
-  set: "Set theory symbols",
-  spacing: "LaTeX spacing commands",
-  parameter: "Parameters, angles, and Greek coefficients",
-  unit: "Physical units and metric prefixes (e.g. μm, m/s, nm)",
+  main: "Primary expression / function color (e.g. f(x))",
+  orange: "Constants, coefficients, and major operators (e.g. \\int, \\sum, \\lim)",
+  dot: "Multiplication dots and symbols (e.g. \\cdot, \\times)",
+  derivative: "Outer derivatives and prime markers (e.g. f'(x), \\frac{d}{dx}, \\frac{∂}{∂t})",
+  chain: "Chain rule factors and subscripts (e.g. g'(x), y_i)",
+  upper: "Superscripts and matrix outer wrappers (e.g. x^2, A^T)",
+  relation: "Relations, equalities, and tensors (e.g. =, \\approx, \\le)",
+  arrow: "Arrows and mappings (e.g. \\to, \\implies)",
+  set: "Set theory symbols (e.g. \\in, \\subset)",
+  spacing: "LaTeX spacing commands (e.g. \\quad, \\,)",
+  parameter: "Parameters, angles, and Greek coefficients (e.g. α, β, θ)",
+  unit: "Physical units and metric prefixes (e.g. μm, m/s, kg)",
   energyOperator: "Quantum operators (Energy: iℏ∂/∂t, Momentum: -iℏ∇, Kinetic: -ℏ²/2m ∇²)",
 };
 
@@ -1220,6 +1236,95 @@ class ColorMathSettingTab extends PluginSettingTab {
           })
       );
 
+    const PRESET_THEMES: Record<string, { name: string; palette: ColorPalette; rainbow: string[] }> = {
+      tokyo: {
+        name: "Tokyo Night (Signature)",
+        palette: { ...DEFAULT_COLORS },
+        rainbow: [...RAINBOW_DELIMITER_COLORS],
+      },
+      catppuccin: {
+        name: "Catppuccin Mocha",
+        palette: {
+          main: "#89b4fa",
+          orange: "#fab387",
+          dot: "#cdd6f4",
+          derivative: "#cba6f7",
+          chain: "#a6e3a1",
+          upper: "#cba6f7",
+          relation: "#cdd6f4",
+          arrow: "#f38ba8",
+          set: "#89dceb",
+          spacing: "#6c7086",
+          parameter: "#f5c2e7",
+          unit: "#94e2d5",
+          energyOperator: "#74c7ec",
+        },
+        rainbow: ["#fab387", "#89b4fa", "#cba6f7", "#f38ba8"],
+      },
+      nord: {
+        name: "Nord",
+        palette: {
+          main: "#88c0d0",
+          orange: "#ebcb8b",
+          dot: "#eceff4",
+          derivative: "#b48ead",
+          chain: "#a3be8c",
+          upper: "#b48ead",
+          relation: "#eceff4",
+          arrow: "#bf616a",
+          set: "#81a1c1",
+          spacing: "#d8dee9",
+          parameter: "#b48ead",
+          unit: "#8fbcbb",
+          energyOperator: "#88c0d0",
+        },
+        rainbow: ["#ebcb8b", "#88c0d0", "#b48ead", "#bf616a"],
+      },
+      light: {
+        name: "Clean Light (High Contrast)",
+        palette: {
+          main: "#2563eb",
+          orange: "#d97706",
+          dot: "#334155",
+          derivative: "#7c3aed",
+          chain: "#16a34a",
+          upper: "#9333ea",
+          relation: "#1e293b",
+          arrow: "#dc2626",
+          set: "#0284c7",
+          spacing: "#64748b",
+          parameter: "#7c3aed",
+          unit: "#0d9488",
+          energyOperator: "#0891b2",
+        },
+        rainbow: ["#d97706", "#2563eb", "#7c3aed", "#dc2626"],
+      },
+    };
+
+    new Setting(themeBody)
+      .setName("Preset theme palettes")
+      .setDesc("Apply a curated palette across all 13 semantic roles and rainbow delimiters.")
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("none", "Choose a preset theme...")
+          .addOption("tokyo", "Tokyo Night (Signature)")
+          .addOption("catppuccin", "Catppuccin Mocha")
+          .addOption("nord", "Nord")
+          .addOption("light", "Clean Light (High Contrast)")
+          .setValue("none")
+          .onChange(async (val) => {
+            if (val !== "none" && PRESET_THEMES[val]) {
+              const preset = PRESET_THEMES[val];
+              this.plugin.settings.palette = { ...preset.palette };
+              this.plugin.settings.rainbowColors = [...preset.rainbow];
+              await this.plugin.saveSettings();
+              this.plugin.rerenderMath();
+              this.display();
+              new Notice(`Color Math: Applied ${preset.name} palette!`);
+            }
+          });
+      });
+
     new Setting(themeBody)
       .setName("Restore default Tokyo Night palette")
       .setDesc("Revert all colors back to our signature Tokyo Night palette.")
@@ -1245,7 +1350,7 @@ class ColorMathSettingTab extends PluginSettingTab {
     const roles = Object.keys(DEFAULT_COLORS) as ColorRole[];
     for (const role of roles) {
       const setting = new Setting(rolesBody)
-        .setName(role.charAt(0).toUpperCase() + role.slice(1))
+        .setName(ROLE_DISPLAY_NAMES[role] || role.charAt(0).toUpperCase() + role.slice(1))
         .setDesc(COLOR_ROLE_DESCRIPTIONS[role] || role);
 
       const currentColor = this.plugin.settings.palette[role] || DEFAULT_COLORS[role];
@@ -1328,10 +1433,15 @@ class ColorMathSettingTab extends PluginSettingTab {
       false
     );
 
-    // Group A: Calculus & Differentials
-    new Setting(mathBody).setName("Calculus & Differentials").setHeading();
+    // Sub-collapsible 1: Calculus & Differentials
+    const calculusBody = this.createSubCollapsible(
+      mathBody,
+      "sub-math-calculus",
+      "Calculus & Differentials",
+      false
+    );
 
-    new Setting(mathBody)
+    new Setting(calculusBody)
       .setName("Derivative fractions & partials")
       .setDesc("Color derivative fractions (df/dx, ∂ψ/∂t, ∇) with the derivative role to protect 'd' from being mistaken for a variable.")
       .addToggle((toggle) =>
@@ -1344,7 +1454,7 @@ class ColorMathSettingTab extends PluginSettingTab {
           })
       );
 
-    new Setting(mathBody)
+    new Setting(calculusBody)
       .setName("Infinitesimal differentials")
       .setDesc("Highlight trailing differentials (dx, dt, dθ) at the end of integrals and expressions.")
       .addToggle((toggle) =>
@@ -1357,7 +1467,7 @@ class ColorMathSettingTab extends PluginSettingTab {
           })
       );
 
-    new Setting(mathBody)
+    new Setting(calculusBody)
       .setName("Enable quantum operators globally")
       .setDesc("Always highlight quantum differential operators (Energy: iℏ∂/∂t, Momentum: -iℏ∇, Kinetic: -ℏ²/2m ∇²) across all notes without requiring YAML frontmatter.")
       .addToggle((toggle) =>
@@ -1370,10 +1480,15 @@ class ColorMathSettingTab extends PluginSettingTab {
           })
       );
 
-    // Group B: Delimiters & Brackets
-    new Setting(mathBody).setName("Delimiters & Brackets").setHeading();
+    // Sub-collapsible 2: Delimiters & Brackets
+    const delimitersBody = this.createSubCollapsible(
+      mathBody,
+      "sub-math-delimiters",
+      "Delimiters & Brackets",
+      false
+    );
 
-    new Setting(mathBody)
+    new Setting(delimitersBody)
       .setName("Rainbow delimiters")
       .setDesc("Color nested parentheses, brackets, and braces recursively by depth to prevent delimiter blindness.")
       .addToggle((toggle) =>
@@ -1388,7 +1503,7 @@ class ColorMathSettingTab extends PluginSettingTab {
       );
 
     if (this.plugin.settings.rainbowDelimiters) {
-      new Setting(mathBody)
+      new Setting(delimitersBody)
         .setClass("color-math-sub-setting")
         .setName("Rainbow grouping braces ({})")
         .setDesc("Include LaTeX grouping braces { and } in rainbow depth coloring in Live Preview.")
@@ -1403,7 +1518,7 @@ class ColorMathSettingTab extends PluginSettingTab {
         );
     }
 
-    new Setting(mathBody)
+    new Setting(delimitersBody)
       .setName("Highlight unmatched delimiters & braces")
       .setDesc("Highlight unclosed { or stray } with a high-visibility warning in Live Preview to catch MathJax syntax errors while typing.")
       .addToggle((toggle) =>
@@ -1416,7 +1531,7 @@ class ColorMathSettingTab extends PluginSettingTab {
           })
       );
 
-    new Setting(mathBody)
+    new Setting(delimitersBody)
       .setName("Quantum bra-ket notation")
       .setDesc("Highlight Dirac bra-ket state vectors (|ψ⟩, ⟨ϕ|, ⟨ϕ|ψ⟩) with clean delimiter styling.")
       .addToggle((toggle) =>
@@ -1429,10 +1544,15 @@ class ColorMathSettingTab extends PluginSettingTab {
           })
       );
 
-    // Group C: Symbol Taxonomy & Constants
-    new Setting(mathBody).setName("Symbol Taxonomy & Constants").setHeading();
+    // Sub-collapsible 3: Symbol Taxonomy & Constants
+    const taxonomyBody = this.createSubCollapsible(
+      mathBody,
+      "sub-math-taxonomy",
+      "Symbol Taxonomy & Constants",
+      false
+    );
 
-    new Setting(mathBody)
+    new Setting(taxonomyBody)
       .setName("Mathematical symbol taxonomy")
       .setDesc("Semantically categorize and color constants, standard functions, parameters, and bound indices.")
       .addToggle((toggle) =>
@@ -1447,7 +1567,7 @@ class ColorMathSettingTab extends PluginSettingTab {
       );
 
     if (this.plugin.settings.enableTaxonomy) {
-      new Setting(mathBody)
+      new Setting(taxonomyBody)
         .setClass("color-math-sub-setting")
         .setName("Standard math functions")
         .setDesc("Color sin, cos, ln, exp, and operator functions with the main role.")
@@ -1461,7 +1581,7 @@ class ColorMathSettingTab extends PluginSettingTab {
             })
         );
 
-      new Setting(mathBody)
+      new Setting(taxonomyBody)
         .setClass("color-math-sub-setting")
         .setName("Greek parameters & coefficients")
         .setDesc("Color Greek angles and coefficients (α, β, θ, λ, ω) with the parameter role.")
@@ -1475,7 +1595,7 @@ class ColorMathSettingTab extends PluginSettingTab {
             })
         );
 
-      new Setting(mathBody)
+      new Setting(taxonomyBody)
         .setClass("color-math-sub-setting")
         .setName("Mathematical constants")
         .setDesc("Color mathematical constants (π, ℏ, ∞) with the orange role.")
@@ -1489,7 +1609,7 @@ class ColorMathSettingTab extends PluginSettingTab {
             })
         );
 
-      new Setting(mathBody)
+      new Setting(taxonomyBody)
         .setClass("color-math-sub-setting")
         .setName("Bound iteration indices")
         .setDesc("Color summation/limit index variables (e.g. index i in \\sum_{i=1}^n or x in \\lim_{x\\to 0}) with the chain role.")
@@ -1504,7 +1624,7 @@ class ColorMathSettingTab extends PluginSettingTab {
         );
     }
 
-    new Setting(mathBody)
+    new Setting(taxonomyBody)
       .setName("Euler's number (e) & Imaginary units (i, j)")
       .setDesc("Intelligently recognize Euler's constant (e^x, e^{iπ}) and imaginary numbers (i, j), while leaving indexed variables (e_1, x_i) distinct.")
       .addToggle((toggle) =>
@@ -1517,10 +1637,15 @@ class ColorMathSettingTab extends PluginSettingTab {
           })
       );
 
-    // Group D: Physics, Engineering & Variables
-    new Setting(mathBody).setName("Physics, Engineering & Variables").setHeading();
+    // Sub-collapsible 4: Physics, Engineering & Variables
+    const physicsBody = this.createSubCollapsible(
+      mathBody,
+      "sub-math-physics",
+      "Physics, Engineering & Variables",
+      false
+    );
 
-    new Setting(mathBody)
+    new Setting(physicsBody)
       .setName("Color physical units")
       .setDesc("Distinguish physical units and metric prefixes (e.g. μm, m/s, kg) from algebraic variables. Turn off to keep units in natural text color.")
       .addToggle((toggle) =>
@@ -1533,7 +1658,7 @@ class ColorMathSettingTab extends PluginSettingTab {
           })
       );
 
-    new Setting(mathBody)
+    new Setting(physicsBody)
       .setName("Engineering dimensionless numbers")
       .setDesc("Recognize contiguous dimensionless numbers (Re, Ma, Pr, Nu) as unified coefficients. Separate letters like 'R e' remain separate variables.")
       .addToggle((toggle) =>
@@ -1546,7 +1671,7 @@ class ColorMathSettingTab extends PluginSettingTab {
           })
       );
 
-    new Setting(mathBody)
+    new Setting(physicsBody)
       .setName("Extended 2–3 letter functions")
       .setDesc("Recognize shorthand 2–3 letter math functions (adj, var, cov, im, sp, div, rot, sh, ch) before parentheses.")
       .addToggle((toggle) =>
@@ -1559,7 +1684,7 @@ class ColorMathSettingTab extends PluginSettingTab {
           })
       );
 
-    new Setting(mathBody)
+    new Setting(physicsBody)
       .setName("Variable data-flow hashing")
       .setDesc("Deterministically assign a unique color to each variable in an expression to visually trace its flow.")
       .addToggle((toggle) =>
@@ -1653,19 +1778,6 @@ class ColorMathSettingTab extends PluginSettingTab {
       "🛠️ Domain Presets & Diagnostics",
       false
     );
-
-    new Setting(domainBody)
-      .setName("Auto-detect note domain from YAML properties & tags")
-      .setDesc("Automatically activate Quantum mode when a note defines quantum properties (keys: field, subject, topic, discipline, category, or color-math.field) or tags (#quantum, #physics, #qm, #quantum-mechanics).")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.autoDetectNoteField)
-          .onChange(async (val) => {
-            this.plugin.settings.autoDetectNoteField = val;
-            await this.plugin.saveSettings();
-            this.plugin.rerenderMath();
-          })
-      );
 
     new Setting(domainBody)
       .setName("Syntax error display mode")

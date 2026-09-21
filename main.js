@@ -26951,19 +26951,34 @@ var DEFAULT_SETTINGS = {
   previewLatexNormalization: true,
   collapsedSections: {}
 };
+var ROLE_DISPLAY_NAMES = {
+  main: "Primary expression / function",
+  orange: "Constants & major operators",
+  dot: "Multiplication symbols",
+  derivative: "Derivatives & prime markers",
+  chain: "Inner functions & subscripts",
+  upper: "Superscripts & exponents",
+  relation: "Relations & equality",
+  arrow: "Arrows & mappings",
+  set: "Set & logic symbols",
+  spacing: "LaTeX spacing & layout",
+  parameter: "Parameters & Greek coefficients",
+  unit: "Physical units & dimensions",
+  energyOperator: "Quantum differential operators"
+};
 var COLOR_ROLE_DESCRIPTIONS = {
-  main: "Primary expression / function color",
-  orange: "Constants, coefficients, and major operators",
-  dot: "Multiplication dots and symbols",
-  derivative: "Outer derivatives and prime markers",
-  chain: "Chain rule factors and subscripts",
-  upper: "Superscripts and matrix outer wrappers",
-  relation: "Relations, equalities, and tensors",
-  arrow: "Arrows and mappings",
-  set: "Set theory symbols",
-  spacing: "LaTeX spacing commands",
-  parameter: "Parameters, angles, and Greek coefficients",
-  unit: "Physical units and metric prefixes (e.g. \u03BCm, m/s, nm)",
+  main: "Primary expression / function color (e.g. f(x))",
+  orange: "Constants, coefficients, and major operators (e.g. \\int, \\sum, \\lim)",
+  dot: "Multiplication dots and symbols (e.g. \\cdot, \\times)",
+  derivative: "Outer derivatives and prime markers (e.g. f'(x), \\frac{d}{dx}, \\frac{\u2202}{\u2202t})",
+  chain: "Chain rule factors and subscripts (e.g. g'(x), y_i)",
+  upper: "Superscripts and matrix outer wrappers (e.g. x^2, A^T)",
+  relation: "Relations, equalities, and tensors (e.g. =, \\approx, \\le)",
+  arrow: "Arrows and mappings (e.g. \\to, \\implies)",
+  set: "Set theory symbols (e.g. \\in, \\subset)",
+  spacing: "LaTeX spacing commands (e.g. \\quad, \\,)",
+  parameter: "Parameters, angles, and Greek coefficients (e.g. \u03B1, \u03B2, \u03B8)",
+  unit: "Physical units and metric prefixes (e.g. \u03BCm, m/s, kg)",
   energyOperator: "Quantum operators (Energy: i\u210F\u2202/\u2202t, Momentum: -i\u210F\u2207, Kinetic: -\u210F\xB2/2m \u2207\xB2)"
 };
 var ColorMathPlugin = class extends import_obsidian3.Plugin {
@@ -27806,6 +27821,83 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
         this.display();
       })
     );
+    const PRESET_THEMES = {
+      tokyo: {
+        name: "Tokyo Night (Signature)",
+        palette: { ...DEFAULT_COLORS },
+        rainbow: [...RAINBOW_DELIMITER_COLORS]
+      },
+      catppuccin: {
+        name: "Catppuccin Mocha",
+        palette: {
+          main: "#89b4fa",
+          orange: "#fab387",
+          dot: "#cdd6f4",
+          derivative: "#cba6f7",
+          chain: "#a6e3a1",
+          upper: "#cba6f7",
+          relation: "#cdd6f4",
+          arrow: "#f38ba8",
+          set: "#89dceb",
+          spacing: "#6c7086",
+          parameter: "#f5c2e7",
+          unit: "#94e2d5",
+          energyOperator: "#74c7ec"
+        },
+        rainbow: ["#fab387", "#89b4fa", "#cba6f7", "#f38ba8"]
+      },
+      nord: {
+        name: "Nord",
+        palette: {
+          main: "#88c0d0",
+          orange: "#ebcb8b",
+          dot: "#eceff4",
+          derivative: "#b48ead",
+          chain: "#a3be8c",
+          upper: "#b48ead",
+          relation: "#eceff4",
+          arrow: "#bf616a",
+          set: "#81a1c1",
+          spacing: "#d8dee9",
+          parameter: "#b48ead",
+          unit: "#8fbcbb",
+          energyOperator: "#88c0d0"
+        },
+        rainbow: ["#ebcb8b", "#88c0d0", "#b48ead", "#bf616a"]
+      },
+      light: {
+        name: "Clean Light (High Contrast)",
+        palette: {
+          main: "#2563eb",
+          orange: "#d97706",
+          dot: "#334155",
+          derivative: "#7c3aed",
+          chain: "#16a34a",
+          upper: "#9333ea",
+          relation: "#1e293b",
+          arrow: "#dc2626",
+          set: "#0284c7",
+          spacing: "#64748b",
+          parameter: "#7c3aed",
+          unit: "#0d9488",
+          energyOperator: "#0891b2"
+        },
+        rainbow: ["#d97706", "#2563eb", "#7c3aed", "#dc2626"]
+      }
+    };
+    new import_obsidian3.Setting(themeBody).setName("Preset theme palettes").setDesc("Apply a curated palette across all 13 semantic roles and rainbow delimiters.").addDropdown((dropdown) => {
+      dropdown.addOption("none", "Choose a preset theme...").addOption("tokyo", "Tokyo Night (Signature)").addOption("catppuccin", "Catppuccin Mocha").addOption("nord", "Nord").addOption("light", "Clean Light (High Contrast)").setValue("none").onChange(async (val) => {
+        if (val !== "none" && PRESET_THEMES[val]) {
+          const preset = PRESET_THEMES[val];
+          this.plugin.settings.palette = { ...preset.palette };
+          this.plugin.settings.rainbowColors = [...preset.rainbow];
+          await this.plugin.saveSettings();
+          this.plugin.rerenderMath();
+          this.display();
+          new import_obsidian3.Notice(`Color Math: Applied ${preset.name} palette!`);
+        }
+      });
+    });
     new import_obsidian3.Setting(themeBody).setName("Restore default Tokyo Night palette").setDesc("Revert all colors back to our signature Tokyo Night palette.").addButton(
       (button) => button.setButtonText("Restore Defaults").onClick(async () => {
         this.plugin.settings.palette = { ...DEFAULT_COLORS };
@@ -27824,7 +27916,7 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
     );
     const roles = Object.keys(DEFAULT_COLORS);
     for (const role of roles) {
-      const setting = new import_obsidian3.Setting(rolesBody).setName(role.charAt(0).toUpperCase() + role.slice(1)).setDesc(COLOR_ROLE_DESCRIPTIONS[role] || role);
+      const setting = new import_obsidian3.Setting(rolesBody).setName(ROLE_DISPLAY_NAMES[role] || role.charAt(0).toUpperCase() + role.slice(1)).setDesc(COLOR_ROLE_DESCRIPTIONS[role] || role);
       const currentColor = this.plugin.settings.palette[role] || DEFAULT_COLORS[role];
       if (currentColor.startsWith("#")) {
         setting.addColorPicker((picker) => {
@@ -27885,30 +27977,40 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
       "\u{1F9E0} Mathematical Syntax & Disambiguation",
       false
     );
-    new import_obsidian3.Setting(mathBody).setName("Calculus & Differentials").setHeading();
-    new import_obsidian3.Setting(mathBody).setName("Derivative fractions & partials").setDesc("Color derivative fractions (df/dx, \u2202\u03C8/\u2202t, \u2207) with the derivative role to protect 'd' from being mistaken for a variable.").addToggle(
+    const calculusBody = this.createSubCollapsible(
+      mathBody,
+      "sub-math-calculus",
+      "Calculus & Differentials",
+      false
+    );
+    new import_obsidian3.Setting(calculusBody).setName("Derivative fractions & partials").setDesc("Color derivative fractions (df/dx, \u2202\u03C8/\u2202t, \u2207) with the derivative role to protect 'd' from being mistaken for a variable.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.colorDerivativeFractions).onChange(async (val) => {
         this.plugin.settings.colorDerivativeFractions = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian3.Setting(mathBody).setName("Infinitesimal differentials").setDesc("Highlight trailing differentials (dx, dt, d\u03B8) at the end of integrals and expressions.").addToggle(
+    new import_obsidian3.Setting(calculusBody).setName("Infinitesimal differentials").setDesc("Highlight trailing differentials (dx, dt, d\u03B8) at the end of integrals and expressions.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.colorInfinitesimals).onChange(async (val) => {
         this.plugin.settings.colorInfinitesimals = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian3.Setting(mathBody).setName("Enable quantum operators globally").setDesc("Always highlight quantum differential operators (Energy: i\u210F\u2202/\u2202t, Momentum: -i\u210F\u2207, Kinetic: -\u210F\xB2/2m \u2207\xB2) across all notes without requiring YAML frontmatter.").addToggle(
+    new import_obsidian3.Setting(calculusBody).setName("Enable quantum operators globally").setDesc("Always highlight quantum differential operators (Energy: i\u210F\u2202/\u2202t, Momentum: -i\u210F\u2207, Kinetic: -\u210F\xB2/2m \u2207\xB2) across all notes without requiring YAML frontmatter.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.enableQuantumOperatorsGlobal).onChange(async (val) => {
         this.plugin.settings.enableQuantumOperatorsGlobal = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian3.Setting(mathBody).setName("Delimiters & Brackets").setHeading();
-    new import_obsidian3.Setting(mathBody).setName("Rainbow delimiters").setDesc("Color nested parentheses, brackets, and braces recursively by depth to prevent delimiter blindness.").addToggle(
+    const delimitersBody = this.createSubCollapsible(
+      mathBody,
+      "sub-math-delimiters",
+      "Delimiters & Brackets",
+      false
+    );
+    new import_obsidian3.Setting(delimitersBody).setName("Rainbow delimiters").setDesc("Color nested parentheses, brackets, and braces recursively by depth to prevent delimiter blindness.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.rainbowDelimiters).onChange(async (val) => {
         this.plugin.settings.rainbowDelimiters = val;
         await this.plugin.saveSettings();
@@ -27917,7 +28019,7 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
       })
     );
     if (this.plugin.settings.rainbowDelimiters) {
-      new import_obsidian3.Setting(mathBody).setClass("color-math-sub-setting").setName("Rainbow grouping braces ({})").setDesc("Include LaTeX grouping braces { and } in rainbow depth coloring in Live Preview.").addToggle(
+      new import_obsidian3.Setting(delimitersBody).setClass("color-math-sub-setting").setName("Rainbow grouping braces ({})").setDesc("Include LaTeX grouping braces { and } in rainbow depth coloring in Live Preview.").addToggle(
         (toggle) => toggle.setValue(this.plugin.settings.rainbowBareBraces).onChange(async (val) => {
           this.plugin.settings.rainbowBareBraces = val;
           await this.plugin.saveSettings();
@@ -27925,22 +28027,27 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
         })
       );
     }
-    new import_obsidian3.Setting(mathBody).setName("Highlight unmatched delimiters & braces").setDesc("Highlight unclosed { or stray } with a high-visibility warning in Live Preview to catch MathJax syntax errors while typing.").addToggle(
+    new import_obsidian3.Setting(delimitersBody).setName("Highlight unmatched delimiters & braces").setDesc("Highlight unclosed { or stray } with a high-visibility warning in Live Preview to catch MathJax syntax errors while typing.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.highlightUnmatchedBraces).onChange(async (val) => {
         this.plugin.settings.highlightUnmatchedBraces = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian3.Setting(mathBody).setName("Quantum bra-ket notation").setDesc("Highlight Dirac bra-ket state vectors (|\u03C8\u27E9, \u27E8\u03D5|, \u27E8\u03D5|\u03C8\u27E9) with clean delimiter styling.").addToggle(
+    new import_obsidian3.Setting(delimitersBody).setName("Quantum bra-ket notation").setDesc("Highlight Dirac bra-ket state vectors (|\u03C8\u27E9, \u27E8\u03D5|, \u27E8\u03D5|\u03C8\u27E9) with clean delimiter styling.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.colorBraKet).onChange(async (val) => {
         this.plugin.settings.colorBraKet = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian3.Setting(mathBody).setName("Symbol Taxonomy & Constants").setHeading();
-    new import_obsidian3.Setting(mathBody).setName("Mathematical symbol taxonomy").setDesc("Semantically categorize and color constants, standard functions, parameters, and bound indices.").addToggle(
+    const taxonomyBody = this.createSubCollapsible(
+      mathBody,
+      "sub-math-taxonomy",
+      "Symbol Taxonomy & Constants",
+      false
+    );
+    new import_obsidian3.Setting(taxonomyBody).setName("Mathematical symbol taxonomy").setDesc("Semantically categorize and color constants, standard functions, parameters, and bound indices.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.enableTaxonomy).onChange(async (val) => {
         this.plugin.settings.enableTaxonomy = val;
         await this.plugin.saveSettings();
@@ -27949,28 +28056,28 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
       })
     );
     if (this.plugin.settings.enableTaxonomy) {
-      new import_obsidian3.Setting(mathBody).setClass("color-math-sub-setting").setName("Standard math functions").setDesc("Color sin, cos, ln, exp, and operator functions with the main role.").addToggle(
+      new import_obsidian3.Setting(taxonomyBody).setClass("color-math-sub-setting").setName("Standard math functions").setDesc("Color sin, cos, ln, exp, and operator functions with the main role.").addToggle(
         (toggle) => toggle.setValue(this.plugin.settings.taxonomyFunctions).onChange(async (val) => {
           this.plugin.settings.taxonomyFunctions = val;
           await this.plugin.saveSettings();
           this.plugin.rerenderMath();
         })
       );
-      new import_obsidian3.Setting(mathBody).setClass("color-math-sub-setting").setName("Greek parameters & coefficients").setDesc("Color Greek angles and coefficients (\u03B1, \u03B2, \u03B8, \u03BB, \u03C9) with the parameter role.").addToggle(
+      new import_obsidian3.Setting(taxonomyBody).setClass("color-math-sub-setting").setName("Greek parameters & coefficients").setDesc("Color Greek angles and coefficients (\u03B1, \u03B2, \u03B8, \u03BB, \u03C9) with the parameter role.").addToggle(
         (toggle) => toggle.setValue(this.plugin.settings.taxonomyParameters).onChange(async (val) => {
           this.plugin.settings.taxonomyParameters = val;
           await this.plugin.saveSettings();
           this.plugin.rerenderMath();
         })
       );
-      new import_obsidian3.Setting(mathBody).setClass("color-math-sub-setting").setName("Mathematical constants").setDesc("Color mathematical constants (\u03C0, \u210F, \u221E) with the orange role.").addToggle(
+      new import_obsidian3.Setting(taxonomyBody).setClass("color-math-sub-setting").setName("Mathematical constants").setDesc("Color mathematical constants (\u03C0, \u210F, \u221E) with the orange role.").addToggle(
         (toggle) => toggle.setValue(this.plugin.settings.taxonomyConstants).onChange(async (val) => {
           this.plugin.settings.taxonomyConstants = val;
           await this.plugin.saveSettings();
           this.plugin.rerenderMath();
         })
       );
-      new import_obsidian3.Setting(mathBody).setClass("color-math-sub-setting").setName("Bound iteration indices").setDesc("Color summation/limit index variables (e.g. index i in \\sum_{i=1}^n or x in \\lim_{x\\to 0}) with the chain role.").addToggle(
+      new import_obsidian3.Setting(taxonomyBody).setClass("color-math-sub-setting").setName("Bound iteration indices").setDesc("Color summation/limit index variables (e.g. index i in \\sum_{i=1}^n or x in \\lim_{x\\to 0}) with the chain role.").addToggle(
         (toggle) => toggle.setValue(this.plugin.settings.taxonomyIndices).onChange(async (val) => {
           this.plugin.settings.taxonomyIndices = val;
           await this.plugin.saveSettings();
@@ -27978,36 +28085,41 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
         })
       );
     }
-    new import_obsidian3.Setting(mathBody).setName("Euler's number (e) & Imaginary units (i, j)").setDesc("Intelligently recognize Euler's constant (e^x, e^{i\u03C0}) and imaginary numbers (i, j), while leaving indexed variables (e_1, x_i) distinct.").addToggle(
+    new import_obsidian3.Setting(taxonomyBody).setName("Euler's number (e) & Imaginary units (i, j)").setDesc("Intelligently recognize Euler's constant (e^x, e^{i\u03C0}) and imaginary numbers (i, j), while leaving indexed variables (e_1, x_i) distinct.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.colorSingleConstants).onChange(async (val) => {
         this.plugin.settings.colorSingleConstants = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian3.Setting(mathBody).setName("Physics, Engineering & Variables").setHeading();
-    new import_obsidian3.Setting(mathBody).setName("Color physical units").setDesc("Distinguish physical units and metric prefixes (e.g. \u03BCm, m/s, kg) from algebraic variables. Turn off to keep units in natural text color.").addToggle(
+    const physicsBody = this.createSubCollapsible(
+      mathBody,
+      "sub-math-physics",
+      "Physics, Engineering & Variables",
+      false
+    );
+    new import_obsidian3.Setting(physicsBody).setName("Color physical units").setDesc("Distinguish physical units and metric prefixes (e.g. \u03BCm, m/s, kg) from algebraic variables. Turn off to keep units in natural text color.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.colorUnits).onChange(async (val) => {
         this.plugin.settings.colorUnits = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian3.Setting(mathBody).setName("Engineering dimensionless numbers").setDesc("Recognize contiguous dimensionless numbers (Re, Ma, Pr, Nu) as unified coefficients. Separate letters like 'R e' remain separate variables.").addToggle(
+    new import_obsidian3.Setting(physicsBody).setName("Engineering dimensionless numbers").setDesc("Recognize contiguous dimensionless numbers (Re, Ma, Pr, Nu) as unified coefficients. Separate letters like 'R e' remain separate variables.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.colorDimensionless).onChange(async (val) => {
         this.plugin.settings.colorDimensionless = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian3.Setting(mathBody).setName("Extended 2\u20133 letter functions").setDesc("Recognize shorthand 2\u20133 letter math functions (adj, var, cov, im, sp, div, rot, sh, ch) before parentheses.").addToggle(
+    new import_obsidian3.Setting(physicsBody).setName("Extended 2\u20133 letter functions").setDesc("Recognize shorthand 2\u20133 letter math functions (adj, var, cov, im, sp, div, rot, sh, ch) before parentheses.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.extendedFunctions).onChange(async (val) => {
         this.plugin.settings.extendedFunctions = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian3.Setting(mathBody).setName("Variable data-flow hashing").setDesc("Deterministically assign a unique color to each variable in an expression to visually trace its flow.").addToggle(
+    new import_obsidian3.Setting(physicsBody).setName("Variable data-flow hashing").setDesc("Deterministically assign a unique color to each variable in an expression to visually trace its flow.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.variableDataFlow).onChange(async (val) => {
         this.plugin.settings.variableDataFlow = val;
         await this.plugin.saveSettings();
@@ -28055,13 +28167,6 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
       "section-domain-diagnostics",
       "\u{1F6E0}\uFE0F Domain Presets & Diagnostics",
       false
-    );
-    new import_obsidian3.Setting(domainBody).setName("Auto-detect note domain from YAML properties & tags").setDesc("Automatically activate Quantum mode when a note defines quantum properties (keys: field, subject, topic, discipline, category, or color-math.field) or tags (#quantum, #physics, #qm, #quantum-mechanics).").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.autoDetectNoteField).onChange(async (val) => {
-        this.plugin.settings.autoDetectNoteField = val;
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-      })
     );
     new import_obsidian3.Setting(domainBody).setName("Syntax error display mode").setDesc("Choose how to display errors when an equation has broken syntax.").addDropdown(
       (dropdown) => dropdown.addOption("inline", "Inline error message (e.g. \\text{LaTeX Error: ...})").addOption("fallback", "Render original formula (Silent & clean with hover tooltip)").addOption("notice", "Obsidian notice popup & original formula").addOption("native", "Native MathJax error box (Default MathJax behavior)").setValue(this.plugin.settings.errorDisplayMode || "inline").onChange(async (val) => {
