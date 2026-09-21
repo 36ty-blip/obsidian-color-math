@@ -88,6 +88,7 @@ export function extractThemePalette(isLight?: boolean): ColorPalette {
   const red = getVar("--color-red", getVar("--color-pink", DEFAULT_PALETTE.arrow));
   const cyan = getVar("--color-cyan", blue);
   const teal = getVar("--color-teal", cyan);
+  const energy = getVar("--color-cyan", DEFAULT_PALETTE.energyOperator);
 
   return {
     main: blue,
@@ -102,5 +103,6 @@ export function extractThemePalette(isLight?: boolean): ColorPalette {
     spacing: dotColor,
     parameter: purple,
     unit: teal,
+    energyOperator: energy,
   };
 }

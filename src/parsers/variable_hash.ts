@@ -158,6 +158,28 @@ export function collectVariableSpans(
                 index = braced[1];
                 continue;
               }
+            } else if (body[targetStart] === "\\") {
+              const nextCmd = body.slice(targetStart).match(/^(\\[A-Za-z]+|\\.)/);
+              if (nextCmd) {
+                let afterNext = targetStart + nextCmd[0].length;
+                while (afterNext < body.length && /\s/.test(body[afterNext])) {
+                  afterNext++;
+                }
+                if (afterNext < body.length && body[afterNext] === "{") {
+                  const innerBraced = readBraced(body, afterNext);
+                  if (innerBraced) afterNext = innerBraced[1];
+                }
+                const baseLetter = nextCmd[0].slice(1);
+                const color = hashStringToColor(baseLetter, palette);
+                spans.push({
+                  start: index,
+                  end: afterNext,
+                  color,
+                  priority: 15,
+                });
+                index = afterNext;
+                continue;
+              }
             } else {
               const letterMatch = body.slice(targetStart).match(/^(?:[a-zA-Z]|[\u0370-\u03FF]|\uD835[\uDC00-\uDFFF])(')*/);
               if (letterMatch) {

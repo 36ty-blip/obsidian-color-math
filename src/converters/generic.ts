@@ -57,7 +57,10 @@ export function colorLatexBody(
   options?: ColorMathOptions
 ): string {
   const cleanBody = containsColorWrapper(body) ? uncolorFragment(body) : body;
-  const normalized = normalizeLatexBraces(cleanBody);
+  const normalized =
+    options?.previewLatexNormalization !== false
+      ? normalizeLatexBraces(cleanBody)
+      : cleanBody;
 
   const needUnits = options?.colorUnits !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
   const needDiffs = options?.colorDifferentials !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);

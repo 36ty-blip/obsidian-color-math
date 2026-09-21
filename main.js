@@ -2073,7 +2073,7 @@ function readOperand(source, start, end) {
         if (optionalEnd === null) {
           return { kind: "opaque", start, end };
         }
-        layoutEnd = optionalEnd;
+        return { kind: "opaque", start, end: optionalEnd };
       }
       return { kind: "structural", start, end: layoutEnd };
     }
@@ -2114,6 +2114,16 @@ function readOperand(source, start, end) {
         start,
         end: argsEnd !== null ? argsEnd : end
       };
+    }
+    if (name === "rule") {
+      let cur = skipIgnorable(source, commandEnd, end);
+      if (cur < end && source[cur] === "[") {
+        const optEnd = readGroupEnd(source, cur, end);
+        if (optEnd !== null)
+          cur = optEnd;
+      }
+      const argsEnd = consumeArguments(source, cur, end, 2);
+      return { kind: "opaque", start, end: argsEnd ?? cur };
     }
     let argumentCount = 0;
     if (name === "frac" || name === "dfrac" || name === "tfrac") {
@@ -2589,39 +2599,134 @@ function skipIgnorableWhitespace(text, start) {
   }
   return index;
 }
-function readSingleMacroArg(text, start) {
+function readSingleMacroArg(text, start, allowPostfix = false) {
   const index = skipIgnorableWhitespace(text, start);
   if (index >= text.length)
     return null;
+  let base = null;
   if (text[index] === "{") {
     const braced = readBraced(text, index);
     if (braced) {
-      return {
+      base = {
         raw: braced[0],
         inner: braced[0].slice(1, -1),
         end: braced[1],
         braced: true
       };
+    } else {
+      return null;
     }
-    return null;
-  }
-  if (text[index] === "\\") {
+  } else if (text[index] === "\\") {
     const cmd = matchCommand(text, index);
     if (cmd) {
+      let afterCmd = index + cmd.length;
+      if (cmd === "\\sqrt") {
+        let cur = skipIgnorableWhitespace(text, afterCmd);
+        if (cur < text.length && text[cur] === "[") {
+          let depth = 1;
+          let j = cur + 1;
+          while (j < text.length && depth > 0) {
+            if (text[j] === "[")
+              depth++;
+            else if (text[j] === "]")
+              depth--;
+            j++;
+          }
+          if (depth === 0) {
+            cur = j;
+          }
+        }
+        const subArg = readSingleMacroArg(text, cur, true);
+        if (subArg) {
+          base = {
+            raw: text.slice(index, subArg.end),
+            inner: text.slice(index, subArg.end),
+            end: subArg.end,
+            braced: false
+          };
+        }
+      } else if (TWO_ARG_COMMANDS.has(cmd)) {
+        const arg1 = readSingleMacroArg(text, afterCmd, true);
+        if (arg1) {
+          const arg2 = readSingleMacroArg(text, arg1.end, true);
+          if (arg2) {
+            base = {
+              raw: text.slice(index, arg2.end),
+              inner: text.slice(index, arg2.end),
+              end: arg2.end,
+              braced: false
+            };
+          }
+        }
+      } else if (ONE_ARG_COMMANDS.has(cmd)) {
+        if (cmd === "\\operatorname" && text[afterCmd] === "*") {
+          afterCmd++;
+        }
+        const subArg = readSingleMacroArg(text, afterCmd, false);
+        if (subArg) {
+          base = {
+            raw: text.slice(index, subArg.end),
+            inner: text.slice(index, subArg.end),
+            end: subArg.end,
+            braced: false
+          };
+        }
+      }
+      if (!base) {
+        base = {
+          raw: cmd,
+          inner: cmd,
+          end: index + cmd.length,
+          braced: false
+        };
+      }
+    }
+  }
+  if (!base && index < text.length) {
+    base = {
+      raw: text[index],
+      inner: text[index],
+      end: index + 1,
+      braced: false
+    };
+  }
+  if (!base)
+    return null;
+  if (allowPostfix) {
+    let current = base.end;
+    while (current < text.length) {
+      let checkPos = current;
+      while (checkPos < text.length && /\s/.test(text[checkPos])) {
+        checkPos++;
+      }
+      if (checkPos >= text.length)
+        break;
+      const ch = text[checkPos];
+      if (ch === "_" || ch === "^") {
+        const scriptArg = readSingleMacroArg(text, checkPos + 1, false);
+        if (scriptArg) {
+          current = scriptArg.end;
+          continue;
+        }
+      } else if (ch === "'" || ch === "\u2019") {
+        current = checkPos + 1;
+        while (current < text.length && (text[current] === "'" || text[current] === "\u2019")) {
+          current++;
+        }
+        continue;
+      }
+      break;
+    }
+    if (current > base.end) {
       return {
-        raw: cmd,
-        inner: cmd,
-        end: index + cmd.length,
+        raw: text.slice(index, current),
+        inner: text.slice(index, current),
+        end: current,
         braced: false
       };
     }
   }
-  return {
-    raw: text[index],
-    inner: text[index],
-    end: index + 1,
-    braced: false
-  };
+  return base;
 }
 var TWO_ARG_COMMANDS = /* @__PURE__ */ new Set([
   "\\frac",
@@ -2634,6 +2739,36 @@ var TWO_ARG_COMMANDS = /* @__PURE__ */ new Set([
   "\\overset",
   "\\underset",
   "\\stackrel"
+]);
+var ONE_ARG_COMMANDS = /* @__PURE__ */ new Set([
+  "\\dot",
+  "\\ddot",
+  "\\dddot",
+  "\\ddddot",
+  "\\hat",
+  "\\widehat",
+  "\\tilde",
+  "\\widetilde",
+  "\\bar",
+  "\\vec",
+  "\\check",
+  "\\breve",
+  "\\acute",
+  "\\grave",
+  "\\mathring",
+  "\\overline",
+  "\\underline",
+  "\\mathbf",
+  "\\mathcal",
+  "\\mathbb",
+  "\\mathfrak",
+  "\\mathsf",
+  "\\mathtt",
+  "\\mathit",
+  "\\boldsymbol",
+  "\\pmb",
+  "\\boxed",
+  "\\operatorname"
 ]);
 var OPAQUE_TEXT_COMMANDS = /* @__PURE__ */ new Set([
   "\\text",
@@ -2686,9 +2821,9 @@ function normalizeLatexBraces(source) {
           }
         }
         if (TWO_ARG_COMMANDS.has(cmd)) {
-          const arg1 = readSingleMacroArg(source, index + cmd.length);
+          const arg1 = readSingleMacroArg(source, index + cmd.length, true);
           if (arg1) {
-            const arg2 = readSingleMacroArg(source, arg1.end);
+            const arg2 = readSingleMacroArg(source, arg1.end, true);
             if (arg2) {
               const norm1 = arg1.braced ? normalizeLatexBraces(arg1.inner) : normalizeLatexBraces(arg1.raw);
               const norm2 = arg2.braced ? normalizeLatexBraces(arg2.inner) : normalizeLatexBraces(arg2.raw);
@@ -2701,13 +2836,21 @@ function normalizeLatexBraces(source) {
           let cur = skipIgnorableWhitespace(source, index + cmd.length);
           let optional2 = "";
           if (cur < source.length && source[cur] === "[") {
-            const optClose = source.indexOf("]", cur);
-            if (optClose !== -1) {
-              optional2 = source.slice(cur, optClose + 1);
-              cur = optClose + 1;
+            let depth = 1;
+            let j = cur + 1;
+            while (j < source.length && depth > 0) {
+              if (source[j] === "[")
+                depth++;
+              else if (source[j] === "]")
+                depth--;
+              j++;
+            }
+            if (depth === 0) {
+              optional2 = source.slice(cur, j);
+              cur = j;
             }
           }
-          const arg = readSingleMacroArg(source, cur);
+          const arg = readSingleMacroArg(source, cur, true);
           if (arg) {
             const norm = arg.braced ? normalizeLatexBraces(arg.inner) : normalizeLatexBraces(arg.raw);
             result += `${cmd}${optional2}{${norm}}`;
@@ -3446,6 +3589,17 @@ function collectBraKetDelimiterSpans(body, palette = COLORS, delimColor = palett
 }
 
 // src/parsers/delimiters.ts
+var OPTIONAL_BRACKET_COMMANDS = /* @__PURE__ */ new Set([
+  "\\sqrt",
+  "\\\\",
+  "\\tag",
+  "\\xleftarrow",
+  "\\xrightarrow",
+  "\\rule",
+  "\\makebox",
+  "\\framebox",
+  "\\parbox"
+]);
 function skipWhitespace2(text, start) {
   while (start < text.length && /\s/.test(text[start])) {
     start++;
@@ -3482,6 +3636,7 @@ function findDelimiterScan(text, options) {
   const pairs = [];
   const unmatched = [];
   const stack = [];
+  const ignoredBracketIndices = /* @__PURE__ */ new Set();
   let index = 0;
   while (index < text.length) {
     if (text[index] === "%") {
@@ -3705,7 +3860,7 @@ function findDelimiterScan(text, options) {
       index += 7;
       continue;
     }
-    if (text[index] === "(" || text[index] === "[") {
+    if (text[index] === "(" || text[index] === "[" && !ignoredBracketIndices.has(index)) {
       const type = text[index] === "(" ? "paren" : "bracket";
       const depth = stack.length;
       stack.push({
@@ -3720,7 +3875,7 @@ function findDelimiterScan(text, options) {
       index += 1;
       continue;
     }
-    if (text[index] === ")" || text[index] === "]") {
+    if (text[index] === ")" || text[index] === "]" && !ignoredBracketIndices.has(index)) {
       const type = text[index] === ")" ? "paren" : "bracket";
       let matchIdx = -1;
       for (let i = stack.length - 1; i >= 0; i--) {
@@ -3800,7 +3955,26 @@ function findDelimiterScan(text, options) {
     if (text[index] === "\\") {
       const cmdMatch = text.slice(index).match(/^(\\[A-Za-z]+|\\.)/);
       if (cmdMatch) {
-        index += cmdMatch[0].length;
+        const cmd = cmdMatch[0];
+        index += cmd.length;
+        if (OPTIONAL_BRACKET_COMMANDS.has(cmd)) {
+          let cur = skipWhitespace2(text, index);
+          if (cur < text.length && text[cur] === "[") {
+            let depth = 1;
+            let j = cur + 1;
+            while (j < text.length && depth > 0) {
+              if (text[j] === "[")
+                depth++;
+              else if (text[j] === "]")
+                depth--;
+              j++;
+            }
+            if (depth === 0) {
+              ignoredBracketIndices.add(cur);
+              ignoredBracketIndices.add(j - 1);
+            }
+          }
+        }
         continue;
       }
     }
@@ -4297,6 +4471,39 @@ function collectSemanticSpansInternal(text, start, end, depth, spans, errors, ba
             continue;
           }
         }
+        if (MATH_ACCENTS.has(name) || FONT_STYLE_MACROS.has(name)) {
+          let targetStart = commandEnd;
+          while (targetStart < end && /\s/.test(text[targetStart])) {
+            targetStart++;
+          }
+          if (targetStart < end) {
+            if (text[targetStart] === "{") {
+              const braced = readBraced(text, targetStart);
+              if (braced !== null) {
+                index = braced[1];
+                continue;
+              }
+            } else if (text[targetStart] === "\\") {
+              const subCmd = readCommand2(text, targetStart, end);
+              if (subCmd !== null) {
+                let subAfter = subCmd[1];
+                while (subAfter < end && /\s/.test(text[subAfter])) {
+                  subAfter++;
+                }
+                if (subAfter < end && text[subAfter] === "{") {
+                  const subBraced = readBraced(text, subAfter);
+                  if (subBraced !== null)
+                    subAfter = subBraced[1];
+                }
+                index = subAfter;
+                continue;
+              }
+            } else {
+              index = targetStart + 1;
+              continue;
+            }
+          }
+        }
         index = commandEnd;
         continue;
       }
@@ -4597,15 +4804,33 @@ function collectTaxonomySpans(body, palette = COLORS, unitSpans, diffSpans, dimS
             targetStart++;
           }
           if (targetStart < body.length) {
-            let targetEnd = targetStart + 1;
+            let targetEnd = -1;
             if (body[targetStart] === "{") {
               const braced = readBraced(body, targetStart);
               if (braced)
                 targetEnd = braced[1];
+            } else if (body[targetStart] === "\\") {
+              const nextCmd = body.slice(targetStart).match(/^(\\[A-Za-z]+|\\.)/);
+              if (nextCmd) {
+                let afterNext = targetStart + nextCmd[0].length;
+                while (afterNext < body.length && /\s/.test(body[afterNext])) {
+                  afterNext++;
+                }
+                if (afterNext < body.length && body[afterNext] === "{") {
+                  const innerBraced = readBraced(body, afterNext);
+                  if (innerBraced)
+                    afterNext = innerBraced[1];
+                }
+                targetEnd = afterNext;
+              }
             } else {
               const letMatch = body.slice(targetStart).match(/^[a-zA-Z](')*/);
               if (letMatch)
                 targetEnd = targetStart + letMatch[0].length;
+            }
+            if (targetEnd === -1) {
+              index = cmdEnd;
+              continue;
             }
             const isDot = name === "\\dot" || name === "\\ddot" || name === "\\dddot" || name === "\\ddddot";
             if (options?.taxonomyParameters !== false) {
@@ -4904,6 +5129,29 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
                 index = braced[1];
                 continue;
               }
+            } else if (body[targetStart] === "\\") {
+              const nextCmd = body.slice(targetStart).match(/^(\\[A-Za-z]+|\\.)/);
+              if (nextCmd) {
+                let afterNext = targetStart + nextCmd[0].length;
+                while (afterNext < body.length && /\s/.test(body[afterNext])) {
+                  afterNext++;
+                }
+                if (afterNext < body.length && body[afterNext] === "{") {
+                  const innerBraced = readBraced(body, afterNext);
+                  if (innerBraced)
+                    afterNext = innerBraced[1];
+                }
+                const baseLetter = nextCmd[0].slice(1);
+                const color = hashStringToColor(baseLetter, palette);
+                spans.push({
+                  start: index,
+                  end: afterNext,
+                  color,
+                  priority: 15
+                });
+                index = afterNext;
+                continue;
+              }
             } else {
               const letterMatch = body.slice(targetStart).match(/^(?:[a-zA-Z]|[\u0370-\u03FF]|\uD835[\uDC00-\uDFFF])(')*/);
               if (letterMatch) {
@@ -5069,7 +5317,7 @@ function collectFunctionSpans(body, palette = COLORS, bareFunctions, options) {
 }
 function colorLatexBody(body, palette = COLORS, options) {
   const cleanBody = containsColorWrapper(body) ? uncolorFragment(body) : body;
-  const normalized = normalizeLatexBraces(cleanBody);
+  const normalized = options?.previewLatexNormalization !== false ? normalizeLatexBraces(cleanBody) : cleanBody;
   const needUnits = options?.colorUnits !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
   const needDiffs = options?.colorDifferentials !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
   const needDims = options?.colorDimensionless !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
@@ -5489,7 +5737,7 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
             const from = blockStart + span.start;
             const to = blockStart + span.end;
             if (from < to && to <= doc.length) {
-              const isUnmatched = span.priority >= 90;
+              const isUnmatched = (span.priority ?? 0) >= 90;
               pendingDecorations.push({
                 from,
                 to,
@@ -5879,6 +6127,7 @@ function extractThemePalette(isLight) {
   const red = getVar("--color-red", getVar("--color-pink", DEFAULT_PALETTE.arrow));
   const cyan = getVar("--color-cyan", blue);
   const teal = getVar("--color-teal", cyan);
+  const energy = getVar("--color-cyan", DEFAULT_PALETTE.energyOperator);
   return {
     main: blue,
     derivative: purple,
@@ -5891,7 +6140,8 @@ function extractThemePalette(isLight) {
     dot: dotColor,
     spacing: dotColor,
     parameter: purple,
-    unit: teal
+    unit: teal,
+    energyOperator: energy
   };
 }
 
@@ -26135,6 +26385,7 @@ var DEFAULT_SETTINGS = {
   convertProseToLatex: false,
   autoDetectNoteField: true,
   enableQuantumOperatorsGlobal: false,
+  previewLatexNormalization: true,
   collapsedSections: {}
 };
 var COLOR_ROLE_DESCRIPTIONS = {
@@ -26471,7 +26722,8 @@ var ColorMathPlugin = class extends import_obsidian3.Plugin {
       extendedFunctions: this.settings.extendedFunctions,
       colorQuantumOperators: this.settings.enableQuantumOperatorsGlobal,
       highlightInlineMath: this.settings.highlightInlineMath,
-      highlightDisplayMath: this.settings.highlightDisplayMath
+      highlightDisplayMath: this.settings.highlightDisplayMath,
+      previewLatexNormalization: this.settings.previewLatexNormalization
     };
     if (this.settings.autoDetectNoteField) {
       const detected = this.getActiveNoteDetection(content);
@@ -27252,6 +27504,19 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
       (button) => button.setButtonText("Reset to Factory Defaults").setWarning().onClick(async () => {
         await this.plugin.resetSettingsToDefaults();
         this.display();
+      })
+    );
+    const previewBody = this.createCollapsible(
+      containerEl,
+      "section-feature-previews",
+      "\u{1F9EA} Feature Previews",
+      false
+    );
+    new import_obsidian3.Setting(previewBody).setName("LaTeX syntax auto-normalization").setDesc("Pre-process and normalize unbraced macro arguments (e.g. \\frac a b \u2192 \\frac{a}{b}, \\frac \\vec F b \u2192 \\frac{\\vec F}{b}, x^2 \u2192 x^{2}) before coloring to prevent LaTeX syntax errors from casual or unbraced notation.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.previewLatexNormalization).onChange(async (val) => {
+        this.plugin.settings.previewLatexNormalization = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
       })
     );
   }

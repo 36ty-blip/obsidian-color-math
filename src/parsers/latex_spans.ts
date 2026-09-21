@@ -772,7 +772,7 @@ export function readOperand(
         if (optionalEnd === null) {
           return { kind: "opaque", start, end };
         }
-        layoutEnd = optionalEnd;
+        return { kind: "opaque", start, end: optionalEnd };
       }
       return { kind: "structural", start, end: layoutEnd };
     }
@@ -822,6 +822,16 @@ export function readOperand(
         start,
         end: argsEnd !== null ? argsEnd : end,
       };
+    }
+
+    if (name === "rule") {
+      let cur = skipIgnorable(source, commandEnd, end);
+      if (cur < end && source[cur] === "[") {
+        const optEnd = readGroupEnd(source, cur, end);
+        if (optEnd !== null) cur = optEnd;
+      }
+      const argsEnd = consumeArguments(source, cur, end, 2);
+      return { kind: "opaque", start, end: argsEnd ?? cur };
     }
 
     let argumentCount = 0;

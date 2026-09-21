@@ -654,6 +654,33 @@ export interface ColorMathOptions {
   colorQuantumOperators?: boolean;
   highlightInlineMath?: boolean;
   highlightDisplayMath?: boolean;
+  previewLatexNormalization?: boolean;
   field?: "quantum" | "physics" | "math" | string;
 }
+
+export const DEFAULT_OPTIONS: ColorMathOptions = {
+  enableTaxonomy: true,
+  taxonomyFunctions: true,
+  taxonomyParameters: true,
+  taxonomyConstants: true,
+  taxonomyIndices: true,
+  rainbowDelimiters: true,
+  rainbowColors: RAINBOW_DELIMITER_COLORS,
+  rainbowBareBraces: true,
+  highlightUnmatchedBraces: true,
+  variableDataFlow: true,
+  colorUnits: true,
+  colorDifferentials: true,
+  colorDerivativeFractions: true,
+  colorInfinitesimals: true,
+  colorBraKet: true,
+  colorDimensionless: true,
+  colorAlignment: true,
+  colorSingleConstants: true,
+  extendedFunctions: true,
+  colorQuantumOperators: false,
+  highlightInlineMath: true,
+  highlightDisplayMath: true,
+  previewLatexNormalization: true,
+};
 

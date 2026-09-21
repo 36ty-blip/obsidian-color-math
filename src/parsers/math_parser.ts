@@ -1,6 +1,6 @@
 // src/parsers/math_parser.ts
 
-import { BARE_FUNCTIONS, MATH_FUNCTIONS } from "../config";
+import { BARE_FUNCTIONS, MATH_FUNCTIONS, MATH_ACCENTS, FONT_STYLE_MACROS } from "../config";
 import { readBraced, skipEnvironmentHead } from "../utils/latex_helpers";
 import { readOperand, OPAQUE_MACROS } from "./latex_spans";
 import { scanMarkdown } from "./markdown_scanner";
@@ -364,6 +364,38 @@ function collectSemanticSpansInternal(
             });
             index = commandEnd;
             continue;
+          }
+        }
+        if (MATH_ACCENTS.has(name) || FONT_STYLE_MACROS.has(name)) {
+          let targetStart = commandEnd;
+          while (targetStart < end && /\s/.test(text[targetStart])) {
+            targetStart++;
+          }
+          if (targetStart < end) {
+            if (text[targetStart] === "{") {
+              const braced = readBraced(text, targetStart);
+              if (braced !== null) {
+                index = braced[1];
+                continue;
+              }
+            } else if (text[targetStart] === "\\") {
+              const subCmd = readCommand(text, targetStart, end);
+              if (subCmd !== null) {
+                let subAfter = subCmd[1];
+                while (subAfter < end && /\s/.test(text[subAfter])) {
+                  subAfter++;
+                }
+                if (subAfter < end && text[subAfter] === "{") {
+                  const subBraced = readBraced(text, subAfter);
+                  if (subBraced !== null) subAfter = subBraced[1];
+                }
+                index = subAfter;
+                continue;
+              }
+            } else {
+              index = targetStart + 1;
+              continue;
+            }
           }
         }
         index = commandEnd;

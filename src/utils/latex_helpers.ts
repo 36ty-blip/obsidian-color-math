@@ -255,41 +255,143 @@ function skipIgnorableWhitespace(text: string, start: number): number {
   return index;
 }
 
-function readSingleMacroArg(text: string, start: number): ParsedMacroArg | null {
+function readSingleMacroArg(
+  text: string,
+  start: number,
+  allowPostfix: boolean = false
+): ParsedMacroArg | null {
   const index = skipIgnorableWhitespace(text, start);
   if (index >= text.length) return null;
+
+  let base: ParsedMacroArg | null = null;
 
   if (text[index] === "{") {
     const braced = readBraced(text, index);
     if (braced) {
-      return {
+      base = {
         raw: braced[0],
         inner: braced[0].slice(1, -1),
         end: braced[1],
         braced: true,
       };
+    } else {
+      return null;
     }
-    return null;
-  }
-
-  if (text[index] === "\\") {
+  } else if (text[index] === "\\") {
     const cmd = matchCommand(text, index);
     if (cmd) {
+      let afterCmd = index + cmd.length;
+
+      if (cmd === "\\sqrt") {
+        let cur = skipIgnorableWhitespace(text, afterCmd);
+        if (cur < text.length && text[cur] === "[") {
+          let depth = 1;
+          let j = cur + 1;
+          while (j < text.length && depth > 0) {
+            if (text[j] === "[") depth++;
+            else if (text[j] === "]") depth--;
+            j++;
+          }
+          if (depth === 0) {
+            cur = j;
+          }
+        }
+        const subArg = readSingleMacroArg(text, cur, true);
+        if (subArg) {
+          base = {
+            raw: text.slice(index, subArg.end),
+            inner: text.slice(index, subArg.end),
+            end: subArg.end,
+            braced: false,
+          };
+        }
+      } else if (TWO_ARG_COMMANDS.has(cmd)) {
+        const arg1 = readSingleMacroArg(text, afterCmd, true);
+        if (arg1) {
+          const arg2 = readSingleMacroArg(text, arg1.end, true);
+          if (arg2) {
+            base = {
+              raw: text.slice(index, arg2.end),
+              inner: text.slice(index, arg2.end),
+              end: arg2.end,
+              braced: false,
+            };
+          }
+        }
+      } else if (ONE_ARG_COMMANDS.has(cmd)) {
+        if (cmd === "\\operatorname" && text[afterCmd] === "*") {
+          afterCmd++;
+        }
+        const subArg = readSingleMacroArg(text, afterCmd, false);
+        if (subArg) {
+          base = {
+            raw: text.slice(index, subArg.end),
+            inner: text.slice(index, subArg.end),
+            end: subArg.end,
+            braced: false,
+          };
+        }
+      }
+
+      if (!base) {
+        base = {
+          raw: cmd,
+          inner: cmd,
+          end: index + cmd.length,
+          braced: false,
+        };
+      }
+    }
+  }
+
+  if (!base && index < text.length) {
+    base = {
+      raw: text[index],
+      inner: text[index],
+      end: index + 1,
+      braced: false,
+    };
+  }
+
+  if (!base) return null;
+
+  if (allowPostfix) {
+    let current = base.end;
+    while (current < text.length) {
+      let checkPos = current;
+      while (checkPos < text.length && /\s/.test(text[checkPos])) {
+        checkPos++;
+      }
+      if (checkPos >= text.length) break;
+
+      const ch = text[checkPos];
+      if (ch === "_" || ch === "^") {
+        const scriptArg = readSingleMacroArg(text, checkPos + 1, false);
+        if (scriptArg) {
+          current = scriptArg.end;
+          continue;
+        }
+      } else if (ch === "'" || ch === "’") {
+        current = checkPos + 1;
+        while (current < text.length && (text[current] === "'" || text[current] === "’")) {
+          current++;
+        }
+        continue;
+      }
+      break;
+    }
+
+    if (current > base.end) {
       return {
-        raw: cmd,
-        inner: cmd,
-        end: index + cmd.length,
+        raw: text.slice(index, current),
+        inner: text.slice(index, current),
+        end: current,
         braced: false,
       };
     }
   }
 
-  return {
-    raw: text[index],
-    inner: text[index],
-    end: index + 1,
-    braced: false,
-  };
+  return base;
 }
 
 const TWO_ARG_COMMANDS = new Set([
@@ -303,6 +405,37 @@ const TWO_ARG_COMMANDS = new Set([
   "\\overset",
   "\\underset",
   "\\stackrel",
+]);
+
+const ONE_ARG_COMMANDS = new Set([
+  "\\dot",
+  "\\ddot",
+  "\\dddot",
+  "\\ddddot",
+  "\\hat",
+  "\\widehat",
+  "\\tilde",
+  "\\widetilde",
+  "\\bar",
+  "\\vec",
+  "\\check",
+  "\\breve",
+  "\\acute",
+  "\\grave",
+  "\\mathring",
+  "\\overline",
+  "\\underline",
+  "\\mathbf",
+  "\\mathcal",
+  "\\mathbb",
+  "\\mathfrak",
+  "\\mathsf",
+  "\\mathtt",
+  "\\mathit",
+  "\\boldsymbol",
+  "\\pmb",
+  "\\boxed",
+  "\\operatorname",
 ]);
 
 const OPAQUE_TEXT_COMMANDS = new Set([
@@ -370,9 +503,9 @@ export function normalizeLatexBraces(source: string): string {
         }
 
         if (TWO_ARG_COMMANDS.has(cmd)) {
-          const arg1 = readSingleMacroArg(source, index + cmd.length);
+          const arg1 = readSingleMacroArg(source, index + cmd.length, true);
           if (arg1) {
-            const arg2 = readSingleMacroArg(source, arg1.end);
+            const arg2 = readSingleMacroArg(source, arg1.end, true);
             if (arg2) {
               const norm1 = arg1.braced
                 ? normalizeLatexBraces(arg1.inner)
@@ -389,13 +522,19 @@ export function normalizeLatexBraces(source: string): string {
           let cur = skipIgnorableWhitespace(source, index + cmd.length);
           let optional = "";
           if (cur < source.length && source[cur] === "[") {
-            const optClose = source.indexOf("]", cur);
-            if (optClose !== -1) {
-              optional = source.slice(cur, optClose + 1);
-              cur = optClose + 1;
+            let depth = 1;
+            let j = cur + 1;
+            while (j < source.length && depth > 0) {
+              if (source[j] === "[") depth++;
+              else if (source[j] === "]") depth--;
+              j++;
+            }
+            if (depth === 0) {
+              optional = source.slice(cur, j);
+              cur = j;
             }
           }
-          const arg = readSingleMacroArg(source, cur);
+          const arg = readSingleMacroArg(source, cur, true);
           if (arg) {
             const norm = arg.braced
               ? normalizeLatexBraces(arg.inner)

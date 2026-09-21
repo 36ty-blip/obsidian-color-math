@@ -71,6 +71,7 @@ interface ColorMathSettings {
   convertProseToLatex: boolean;
   autoDetectNoteField: boolean;
   enableQuantumOperatorsGlobal: boolean;
+  previewLatexNormalization: boolean;
   collapsedSections: Record<string, boolean>;
 }
 
@@ -110,6 +111,7 @@ const DEFAULT_SETTINGS: ColorMathSettings = {
   convertProseToLatex: false,
   autoDetectNoteField: true,
   enableQuantumOperatorsGlobal: false,
+  previewLatexNormalization: true,
   collapsedSections: {},
 };
 
@@ -540,6 +542,7 @@ export default class ColorMathPlugin extends Plugin {
       colorQuantumOperators: this.settings.enableQuantumOperatorsGlobal,
       highlightInlineMath: this.settings.highlightInlineMath,
       highlightDisplayMath: this.settings.highlightDisplayMath,
+      previewLatexNormalization: this.settings.previewLatexNormalization,
     };
 
     if (this.settings.autoDetectNoteField) {
@@ -1677,6 +1680,29 @@ class ColorMathSettingTab extends PluginSettingTab {
           .onClick(async () => {
             await this.plugin.resetSettingsToDefaults();
             this.display();
+          })
+      );
+
+    // =========================================================================
+    // Section 6: 🧪 Feature Previews
+    // =========================================================================
+    const previewBody = this.createCollapsible(
+      containerEl,
+      "section-feature-previews",
+      "🧪 Feature Previews",
+      false
+    );
+
+    new Setting(previewBody)
+      .setName("LaTeX syntax auto-normalization")
+      .setDesc("Pre-process and normalize unbraced macro arguments (e.g. \\frac a b → \\frac{a}{b}, \\frac \\vec F b → \\frac{\\vec F}{b}, x^2 → x^{2}) before coloring to prevent LaTeX syntax errors from casual or unbraced notation.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.previewLatexNormalization)
+          .onChange(async (val) => {
+            this.plugin.settings.previewLatexNormalization = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
           })
       );
   }

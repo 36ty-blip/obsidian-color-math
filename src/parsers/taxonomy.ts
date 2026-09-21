@@ -189,13 +189,30 @@ export function collectTaxonomySpans(
             targetStart++;
           }
           if (targetStart < body.length) {
-            let targetEnd = targetStart + 1;
+            let targetEnd = -1;
             if (body[targetStart] === "{") {
               const braced = readBraced(body, targetStart);
               if (braced) targetEnd = braced[1];
+            } else if (body[targetStart] === "\\") {
+              const nextCmd = body.slice(targetStart).match(/^(\\[A-Za-z]+|\\.)/);
+              if (nextCmd) {
+                let afterNext = targetStart + nextCmd[0].length;
+                while (afterNext < body.length && /\s/.test(body[afterNext])) {
+                  afterNext++;
+                }
+                if (afterNext < body.length && body[afterNext] === "{") {
+                  const innerBraced = readBraced(body, afterNext);
+                  if (innerBraced) afterNext = innerBraced[1];
+                }
+                targetEnd = afterNext;
+              }
             } else {
               const letMatch = body.slice(targetStart).match(/^[a-zA-Z](')*/);
               if (letMatch) targetEnd = targetStart + letMatch[0].length;
+            }
+            if (targetEnd === -1) {
+              index = cmdEnd;
+              continue;
             }
             const isDot =
               name === "\\dot" ||

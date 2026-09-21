@@ -191,7 +191,7 @@ export function createColorMathLivePlugin(
             const from = blockStart + span.start;
             const to = blockStart + span.end;
             if (from < to && to <= doc.length) {
-              const isUnmatched = span.priority >= 90;
+              const isUnmatched = (span.priority ?? 0) >= 90;
               pendingDecorations.push({
                 from,
                 to,

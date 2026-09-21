@@ -31,6 +31,18 @@ export interface DelimiterCollectorOptions {
   errorColor?: string;
 }
 
+const OPTIONAL_BRACKET_COMMANDS = new Set([
+  "\\sqrt",
+  "\\\\",
+  "\\tag",
+  "\\xleftarrow",
+  "\\xrightarrow",
+  "\\rule",
+  "\\makebox",
+  "\\framebox",
+  "\\parbox",
+]);
+
 function skipWhitespace(text: string, start: number): number {
   while (start < text.length && /\s/.test(text[start])) {
     start++;
@@ -70,6 +82,7 @@ export function findDelimiterScan(
   const pairs: DelimiterPair[] = [];
   const unmatched: DelimiterItem[] = [];
   const stack: { item: DelimiterItem; depth: number }[] = [];
+  const ignoredBracketIndices = new Set<number>();
 
   let index = 0;
   while (index < text.length) {
@@ -316,7 +329,7 @@ export function findDelimiterScan(
     }
 
     // Standard brackets ( ... ) and [ ... ]
-    if (text[index] === "(" || text[index] === "[") {
+    if (text[index] === "(" || (text[index] === "[" && !ignoredBracketIndices.has(index))) {
       const type = text[index] === "(" ? "paren" : "bracket";
       const depth = stack.length;
       stack.push({
@@ -332,7 +345,7 @@ export function findDelimiterScan(
       continue;
     }
 
-    if (text[index] === ")" || text[index] === "]") {
+    if (text[index] === ")" || (text[index] === "]" && !ignoredBracketIndices.has(index))) {
       const type = text[index] === ")" ? "paren" : "bracket";
       let matchIdx = -1;
       for (let i = stack.length - 1; i >= 0; i--) {
@@ -417,7 +430,24 @@ export function findDelimiterScan(
     if (text[index] === "\\") {
       const cmdMatch = text.slice(index).match(/^(\\[A-Za-z]+|\\.)/);
       if (cmdMatch) {
-        index += cmdMatch[0].length;
+        const cmd = cmdMatch[0];
+        index += cmd.length;
+        if (OPTIONAL_BRACKET_COMMANDS.has(cmd)) {
+          let cur = skipWhitespace(text, index);
+          if (cur < text.length && text[cur] === "[") {
+            let depth = 1;
+            let j = cur + 1;
+            while (j < text.length && depth > 0) {
+              if (text[j] === "[") depth++;
+              else if (text[j] === "]") depth--;
+              j++;
+            }
+            if (depth === 0) {
+              ignoredBracketIndices.add(cur);
+              ignoredBracketIndices.add(j - 1);
+            }
+          }
+        }
         continue;
       }
     }
