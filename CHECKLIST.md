@@ -77,5 +77,11 @@
 - [x] Context menu integration for right-clicked equations
 - [x] Ribbon icon quick action
 - [x] CodeMirror 6 RangeSetBuilder strictly sorted & monotonic decoration ordering for interleaved inline and block math
-- [x] Built-in diagnostic self-test suite (27 test suites, 264 tests passing)
-- [x] Version tracking (`1.0.23`)
+- [x] Multi-token nested macro normalization (`\frac \vec F b`, `\frac \sqrt[3]{x} y`, `\frac \vec F_1 b`)
+- [x] Optional bracket command exemption (`\sqrt[...]`, `\\[...]`, `\tag[...]`, `\rule[...]`) from delimiter coloring
+- [x] Atomic math accent handling (`\vec \nabla`, `\vec \mu`, `\vec \omega`) in taxonomy and variable hashing
+- [x] Matrix newline dimension spacing (`\\[1em]`, `\\*[1em]`) cell layout isolation
+- [x] Collapsible "Feature Previews" settings section for experimental capabilities
+- [x] LaTeX Auto-Normalization toggle in Feature Previews (`previewLatexNormalization`)
+- [x] Full unit test suite (29 test suites, 339 tests passing)
+- [x] Version tracking (`1.0.26`)
