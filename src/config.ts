@@ -631,6 +631,33 @@ export function hashStringToColor(
   return palette[slot];
 }
 
+export type SuperFamilyMode =
+  | "analysis"
+  | "pde"
+  | "dynamics"
+  | "geometry"
+  | "algebra"
+  | "quantum_stochastic";
+
+export type GranularMathMode =
+  | "calculus"
+  | "complex"
+  | "pde_transport"
+  | "continuum"
+  | "ode_dynamics"
+  | "optimization"
+  | "geometry_tensors"
+  | "topology"
+  | "linear_algebra"
+  | "abstract_algebra"
+  | "number_theory"
+  | "logic_sets"
+  | "quantum"
+  | "probability"
+  | "stochastic";
+
+export type ActiveMathMode = SuperFamilyMode | GranularMathMode;
+
 export interface ColorMathOptions {
   enableTaxonomy?: boolean;
   taxonomyFunctions?: boolean;
@@ -656,6 +683,8 @@ export interface ColorMathOptions {
   highlightDisplayMath?: boolean;
   previewLatexNormalization?: boolean;
   field?: "quantum" | "physics" | "math" | string;
+  activeMode?: ActiveMathMode;
+  autoDetectNoteMode?: boolean;
 }
 
 export const DEFAULT_OPTIONS: ColorMathOptions = {
@@ -682,5 +711,7 @@ export const DEFAULT_OPTIONS: ColorMathOptions = {
   highlightInlineMath: true,
   highlightDisplayMath: true,
   previewLatexNormalization: true,
+  activeMode: "analysis",
+  autoDetectNoteMode: true,
 };
 

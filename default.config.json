@@ -35,6 +35,8 @@
   "convertProseToUnicode": false,
   "convertProseToLatex": false,
   "autoDetectNoteField": true,
+  "defaultMode": "analysis",
+  "autoDetectNoteMode": true,
   "enableQuantumOperatorsGlobal": false,
   "_role_descriptions": {
     "main": "Primary expression / function color (e.g. f(x))",

@@ -5012,6 +5012,388 @@ function collectQuantumOperatorSpans(body, palette, _options) {
   return spans;
 }
 
+// src/parsers/modes.ts
+var GEOMETRY_MACROS = [
+  "\\Gamma",
+  // Christoffel
+  "\\wedge",
+  "\\bigwedge",
+  // Exterior wedge
+  "\\star",
+  // Hodge star
+  "\\mathcal{L}",
+  "\\pounds"
+  // Lie derivative
+];
+var COVARIANT_DERIV_REGEX = /\\nabla_\{?[a-zA-Z\\]+\}?/g;
+var RIEMANN_CURVATURE_REGEX = /R\^\{?[a-zA-Z\\]+\}?_\{?[a-zA-Z\\]+\}?|R_\{?[a-zA-Z\\]+\}?|G_\{?[a-zA-Z\\]+\}?/g;
+var PDE_MACROS = [
+  "\\nabla",
+  "\\vec{\\nabla}",
+  "\\div",
+  "\\curl",
+  "\\rot",
+  "\\Delta",
+  "\\Box"
+];
+var MATERIAL_DERIV_REGEX = /\\(?:d|t)?frac\{\s*(?:D|\\mathrm\{D\})\s*(?:\\[a-zA-Z]+|\{[^{}]*\}|[a-zA-Z])*\s*\}\{\s*(?:D|\\mathrm\{D\})\s*t\s*\}/g;
+var BOUNDARY_DOMAIN_REGEX = /\\partial\s*(?:\\Omega|\\mathcal\{D\}|V|\Omega)/g;
+var POISSON_BRACKET_REGEX = /\\\{\s*[a-zA-Z]\s*,\s*[a-zA-Z]\s*\\\}(?:_\{?[a-zA-Z, ]*\}?)?/g;
+var STOCHASTIC_DIFF_REGEX = /\bd[WXB](?:_\{?[a-zA-Z0-9]+\}?|\([a-zA-Z0-9]+\))?/g;
+var PROBABILITY_MACROS = [
+  "\\mathbb{E}",
+  "\\operatorname{Var}",
+  "\\operatorname{Cov}",
+  "\\mathbb{P}"
+];
+var WIRTINGER_REGEX = /\\(?:d|t)?frac\{\s*(?:\\partial|∂)\s*([a-zA-Z\\]*)\s*\}\{\s*(?:\\partial|∂)\s*(?:z|\\bar\{z\}|\\bar\s*z)\s*\}|\\partial_\{?z\}?|\\partial_\{?\\bar\{z\}\}?/g;
+var RESIDUE_REGEX = /(?:\\operatorname\{Res\}|\\mathrm\{Res\}|\bRes\b)/g;
+var ALGEBRA_MACROS = [
+  "\\det",
+  "\\tr",
+  "\\ker",
+  "\\operatorname{im}",
+  "\\operatorname{rank}",
+  "\\otimes",
+  "\\oplus",
+  "\\cong",
+  "\\triangleleft",
+  "\\rtimes",
+  "\\operatorname{Hom}",
+  "\\operatorname{Aut}"
+];
+function resolveModeCategory(mode) {
+  if (!mode)
+    return "analysis";
+  if (mode === "geometry" || mode === "geometry_tensors" || mode === "topology")
+    return "geometry";
+  if (mode === "pde" || mode === "pde_transport" || mode === "continuum")
+    return "pde";
+  if (mode === "dynamics" || mode === "ode_dynamics" || mode === "optimization")
+    return "dynamics";
+  if (mode === "quantum_stochastic" || mode === "quantum" || mode === "stochastic" || mode === "probability")
+    return "quantum_stochastic";
+  if (mode === "algebra" || mode === "linear_algebra" || mode === "abstract_algebra" || mode === "number_theory" || mode === "logic_sets")
+    return "algebra";
+  return "analysis";
+}
+function collectDomainOperatorSpans(body, palette, mode = "analysis") {
+  const spans = [];
+  const category = resolveModeCategory(mode);
+  if (category === "geometry") {
+    const geoColor = palette.arrow || "#f7768e";
+    const connColor = palette.orange || "#e0af68";
+    for (const macro of GEOMETRY_MACROS) {
+      let idx = body.indexOf(macro);
+      while (idx !== -1) {
+        spans.push({
+          start: idx,
+          end: idx + macro.length,
+          color: macro === "\\Gamma" ? connColor : geoColor,
+          priority: 25
+        });
+        idx = body.indexOf(macro, idx + macro.length);
+      }
+    }
+    let match;
+    COVARIANT_DERIV_REGEX.lastIndex = 0;
+    while ((match = COVARIANT_DERIV_REGEX.exec(body)) !== null) {
+      spans.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        color: connColor,
+        priority: 26
+      });
+    }
+    RIEMANN_CURVATURE_REGEX.lastIndex = 0;
+    while ((match = RIEMANN_CURVATURE_REGEX.exec(body)) !== null) {
+      spans.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        color: palette.main || "#7aa2f7",
+        priority: 25
+      });
+    }
+  }
+  if (category === "pde") {
+    const pdeColor = palette.energyOperator || "#2ac3de";
+    for (const macro of PDE_MACROS) {
+      let idx = body.indexOf(macro);
+      while (idx !== -1) {
+        spans.push({
+          start: idx,
+          end: idx + macro.length,
+          color: pdeColor,
+          priority: 25
+        });
+        idx = body.indexOf(macro, idx + macro.length);
+      }
+    }
+    let match;
+    MATERIAL_DERIV_REGEX.lastIndex = 0;
+    while ((match = MATERIAL_DERIV_REGEX.exec(body)) !== null) {
+      spans.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        color: palette.orange || "#ff9e64",
+        priority: 28
+      });
+    }
+    BOUNDARY_DOMAIN_REGEX.lastIndex = 0;
+    while ((match = BOUNDARY_DOMAIN_REGEX.exec(body)) !== null) {
+      spans.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        color: palette.chain || "#9ece6a",
+        priority: 25
+      });
+    }
+  }
+  if (category === "dynamics") {
+    let match;
+    POISSON_BRACKET_REGEX.lastIndex = 0;
+    while ((match = POISSON_BRACKET_REGEX.exec(body)) !== null) {
+      spans.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        color: palette.orange || "#e0af68",
+        priority: 25
+      });
+    }
+  }
+  if (category === "quantum_stochastic" && (mode === "stochastic" || mode === "probability" || mode === "quantum_stochastic")) {
+    let match;
+    STOCHASTIC_DIFF_REGEX.lastIndex = 0;
+    while ((match = STOCHASTIC_DIFF_REGEX.exec(body)) !== null) {
+      spans.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        color: palette.unit || "#73daca",
+        priority: 26
+      });
+    }
+    for (const macro of PROBABILITY_MACROS) {
+      let idx = body.indexOf(macro);
+      while (idx !== -1) {
+        spans.push({
+          start: idx,
+          end: idx + macro.length,
+          color: palette.orange || "#e0af68",
+          priority: 25
+        });
+        idx = body.indexOf(macro, idx + macro.length);
+      }
+    }
+  }
+  if (mode === "complex" || category === "analysis" && body.includes("\\partial") && body.includes("z")) {
+    let match;
+    WIRTINGER_REGEX.lastIndex = 0;
+    while ((match = WIRTINGER_REGEX.exec(body)) !== null) {
+      spans.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        color: palette.main || "#7aa2f7",
+        priority: 28
+      });
+    }
+    RESIDUE_REGEX.lastIndex = 0;
+    while ((match = RESIDUE_REGEX.exec(body)) !== null) {
+      spans.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        color: palette.orange || "#e0af68",
+        priority: 25
+      });
+    }
+  }
+  if (category === "algebra") {
+    for (const macro of ALGEBRA_MACROS) {
+      let idx = body.indexOf(macro);
+      while (idx !== -1) {
+        spans.push({
+          start: idx,
+          end: idx + macro.length,
+          color: palette.orange || "#e0af68",
+          priority: 22
+        });
+        idx = body.indexOf(macro, idx + macro.length);
+      }
+    }
+  }
+  return spans;
+}
+function parseDerivativeFractionDetails(fracText) {
+  const match = fracText.match(
+    /^\\(?:dfrac|tfrac|frac)\s*\{(\s*(?:d|\\partial|\\mathrm\{d\}|∂)(?:\^\{?\d+\}?)?\s*([a-zA-Z\\]*)\s*)\}\s*\{(\s*(?:d|\\partial|\\mathrm\{d\}|∂)\s*([a-zA-Z\\]+)(?:\^\{?\d+\}?)?\s*)\}$/
+  );
+  if (!match)
+    return null;
+  const isPartial = match[0].includes("partial") || match[0].includes("\u2202");
+  const numInner = match[1];
+  const rawNumVar = match[2].trim();
+  const denomInner = match[3];
+  const rawDenomVar = match[4].trim();
+  const numStartOffset = fracText.indexOf("{") + 1;
+  const numEndOffset = numStartOffset + numInner.length;
+  const denomStartOffset = fracText.indexOf("{", numEndOffset) + 1;
+  const denomEndOffset = denomStartOffset + denomInner.length;
+  return {
+    numeratorVar: rawNumVar || void 0,
+    denominatorVar: rawDenomVar || void 0,
+    isPartial,
+    numStartOffset,
+    numEndOffset,
+    denomStartOffset,
+    denomEndOffset
+  };
+}
+function generateModeAwareDerivativeSpans(body, palette, diffSpans, mode = "analysis", options) {
+  const spans = [];
+  const category = resolveModeCategory(mode);
+  for (const span of diffSpans) {
+    if (span.kind !== "derivative_fraction") {
+      spans.push({
+        start: span.start,
+        end: span.end,
+        color: palette.derivative || "#bb9af7",
+        priority: 24
+      });
+      continue;
+    }
+    const details = parseDerivativeFractionDetails(span.text);
+    if (!details) {
+      spans.push({
+        start: span.start,
+        end: span.end,
+        color: palette.derivative || "#bb9af7",
+        priority: 24
+      });
+      continue;
+    }
+    const { numeratorVar, denominatorVar, numStartOffset, numEndOffset, denomStartOffset, denomEndOffset } = details;
+    if (category === "geometry") {
+      const coordColor = denominatorVar ? hashStringToColor(denominatorVar) : palette.derivative || "#bb9af7";
+      if (!numeratorVar) {
+        spans.push({
+          start: span.start,
+          end: span.end,
+          color: coordColor,
+          priority: 25
+        });
+      } else {
+        const numAbsStart = span.start + numStartOffset;
+        const numAbsEnd = span.start + numEndOffset;
+        const denomAbsStart = span.start + denomStartOffset;
+        const denomAbsEnd = span.start + denomEndOffset;
+        spans.push({
+          start: span.start,
+          end: span.end,
+          color: coordColor,
+          priority: 24
+        });
+        const numVarColor = hashStringToColor(numeratorVar);
+        const varIdx = span.text.indexOf(numeratorVar, numStartOffset);
+        if (varIdx !== -1) {
+          spans.push({
+            start: span.start + varIdx,
+            end: span.start + varIdx + numeratorVar.length,
+            color: numVarColor,
+            priority: 27
+          });
+        }
+      }
+      continue;
+    }
+    if (category === "pde") {
+      const isTimeDeriv = denominatorVar === "t" || denominatorVar === "\\tau";
+      const frameColor = isTimeDeriv ? palette.energyOperator || "#7dcfff" : palette.derivative || "#bb9af7";
+      if (!numeratorVar) {
+        spans.push({
+          start: span.start,
+          end: span.end,
+          color: frameColor,
+          priority: 25
+        });
+      } else {
+        spans.push({
+          start: span.start,
+          end: span.end,
+          color: frameColor,
+          priority: 24
+        });
+        const varIdx = span.text.indexOf(numeratorVar, numStartOffset);
+        if (varIdx !== -1) {
+          spans.push({
+            start: span.start + varIdx,
+            end: span.start + varIdx + numeratorVar.length,
+            color: hashStringToColor(numeratorVar),
+            priority: 27
+          });
+        }
+      }
+      continue;
+    }
+    if (category === "dynamics") {
+      const baseFrameColor = palette.derivative || "#bb9af7";
+      spans.push({
+        start: span.start,
+        end: span.end,
+        color: baseFrameColor,
+        priority: 24
+      });
+      if (numeratorVar) {
+        const varIdx = span.text.indexOf(numeratorVar, numStartOffset);
+        if (varIdx !== -1) {
+          spans.push({
+            start: span.start + varIdx,
+            end: span.start + varIdx + numeratorVar.length,
+            color: hashStringToColor(numeratorVar),
+            priority: 27
+          });
+        }
+      }
+      continue;
+    }
+    if (mode === "complex" && (span.text.includes("z") || span.text.includes("\\bar"))) {
+      spans.push({
+        start: span.start,
+        end: span.end,
+        color: palette.main || "#7aa2f7",
+        priority: 28
+      });
+      continue;
+    }
+    if (category === "analysis") {
+      const numAbsStart = span.start + numStartOffset;
+      const numAbsEnd = span.start + numEndOffset;
+      const denomAbsStart = span.start + denomStartOffset;
+      const denomAbsEnd = span.start + denomEndOffset;
+      const numColor = numeratorVar ? hashStringToColor(numeratorVar) : palette.main || "#7aa2f7";
+      const denomColor = denominatorVar ? hashStringToColor(denominatorVar) : palette.derivative || "#bb9af7";
+      spans.push({
+        start: numAbsStart,
+        end: numEndOffset <= denomStartOffset ? numAbsEnd : denomAbsStart - 1,
+        color: numColor,
+        priority: 25
+      });
+      spans.push({
+        start: denomAbsStart,
+        end: denomAbsEnd,
+        color: denomColor,
+        priority: 25
+      });
+      continue;
+    }
+    spans.push({
+      start: span.start,
+      end: span.end,
+      color: palette.derivative || "#bb9af7",
+      priority: 24
+    });
+  }
+  return spans;
+}
+
 // src/parsers/variable_hash.ts
 var VARIABLE_OPAQUE_MACROS = /* @__PURE__ */ new Set([
   "text",
@@ -5333,7 +5715,13 @@ function colorLatexBody(body, palette = COLORS, options) {
     spans.push(...collectUnitSpans(normalized, palette, unitSpans));
   }
   if (options?.colorDifferentials !== false) {
-    spans.push(...collectDifferentialSpans(normalized, palette, diffSpans, options));
+    if (options?.activeMode) {
+      spans.push(
+        ...generateModeAwareDerivativeSpans(normalized, palette, diffSpans, options.activeMode, options)
+      );
+    } else {
+      spans.push(...collectDifferentialSpans(normalized, palette, diffSpans, options));
+    }
   }
   if (options?.colorDimensionless !== false) {
     spans.push(...collectDimensionlessSpans(normalized, palette, dimSpans));
@@ -5360,7 +5748,18 @@ function colorLatexBody(body, palette = COLORS, options) {
   if (options?.variableDataFlow) {
     spans.push(...collectVariableSpans(normalized, void 0, unitSpans, diffSpans, dimSpans, bareFunctions));
   }
-  if (options?.colorQuantumOperators || options?.field === "quantum" || options?.field === "physics") {
+  if (options?.activeMode) {
+    const domainSpans = collectDomainOperatorSpans(normalized, palette, options.activeMode);
+    if (domainSpans.length > 0) {
+      const filtered = spans.filter(
+        (s) => !domainSpans.some((d) => d.start <= s.start && s.end <= d.end)
+      );
+      spans.length = 0;
+      spans.push(...filtered, ...domainSpans);
+    }
+  }
+  const isQuantumMode = options?.activeMode === "quantum" || options?.activeMode === "quantum_stochastic";
+  if (options?.colorQuantumOperators || options?.field === "quantum" || options?.field === "physics" || isQuantumMode) {
     const quantumSpans = collectQuantumOperatorSpans(normalized, palette, options);
     if (quantumSpans.length > 0) {
       const filtered = spans.filter(
@@ -5507,7 +5906,7 @@ function tryConverters(text, converters, palette) {
   return null;
 }
 function hasSemanticOptions(options) {
-  return !!(options && (options.enableTaxonomy || options.variableDataFlow || options.rainbowDelimiters || options.colorUnits || options.colorDifferentials || options.colorBraKet || options.colorDimensionless || options.colorQuantumOperators || options.field === "quantum" || options.field === "physics"));
+  return !!(options && (options.enableTaxonomy || options.variableDataFlow || options.rainbowDelimiters || options.colorUnits || options.colorDifferentials || options.colorBraKet || options.colorDimensionless || options.colorQuantumOperators || options.field === "quantum" || options.field === "physics" || options.activeMode));
 }
 function convertMathBlock(block, palette = COLORS, options) {
   const match = block.match(/^(\s*#+\s*)?\$\$([\s\S]*)\$\$([\s]*)$/);
@@ -5673,7 +6072,13 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
             allSpans.push(...collectUnitSpans(body, palette, unitSpans));
           }
           if (options?.colorDifferentials !== false) {
-            allSpans.push(...collectDifferentialSpans(body, palette, diffSpans, options));
+            if (options?.activeMode) {
+              allSpans.push(
+                ...generateModeAwareDerivativeSpans(body, palette, diffSpans, options.activeMode, options)
+              );
+            } else {
+              allSpans.push(...collectDifferentialSpans(body, palette, diffSpans, options));
+            }
           }
           if (options?.colorDimensionless !== false) {
             allSpans.push(...collectDimensionlessSpans(body, palette, dimSpans));
@@ -5714,7 +6119,18 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
           if (options?.variableDataFlow) {
             allSpans.push(...collectVariableSpans(body, void 0, unitSpans, diffSpans, dimSpans, bareFunctions));
           }
-          if (options?.colorQuantumOperators || options?.field === "quantum" || options?.field === "physics") {
+          if (options?.activeMode) {
+            const domainSpans = collectDomainOperatorSpans(body, palette, options.activeMode);
+            if (domainSpans.length > 0) {
+              const filtered = allSpans.filter(
+                (s) => !domainSpans.some((d) => d.start <= s.start && s.end <= d.end)
+              );
+              allSpans.length = 0;
+              allSpans.push(...filtered, ...domainSpans);
+            }
+          }
+          const isLiveQuantum = options?.activeMode === "quantum" || options?.activeMode === "quantum_stochastic";
+          if (options?.colorQuantumOperators || options?.field === "quantum" || options?.field === "physics" || isLiveQuantum) {
             const quantumSpans = collectQuantumOperatorSpans(body, palette, options);
             if (quantumSpans.length > 0) {
               const filtered = allSpans.filter(
@@ -26201,6 +26617,104 @@ async function convertDocumentMathChunked(text, direction, options, chunkSize = 
 // src/parsers/frontmatter.ts
 var QUANTUM_TERM_REGEX = /\b(quantum|qm|physics|quantum[-_]mechanics)\b/i;
 var IN_BODY_TAG_REGEX = /(?:^|\s)#(quantum|physics|qm|quantum[-_]mechanics)\b/i;
+var MODE_RULES = [
+  // 1. Quantum & Stochastic
+  {
+    mode: "quantum",
+    superFamily: "quantum_stochastic",
+    regex: /\b(quantum|qm|quantum[-_\s]mechanics|quantum[-_\s]physics|schrodinger|dirac|wavefunction|bra[-_\s]ket|qft|quantum[-_\s]information|qubits?)\b/i,
+    tagRegex: /(?:^|\s)#(quantum|qm|physics|schrodinger|dirac|qft)\b/i
+  },
+  {
+    mode: "stochastic",
+    superFamily: "quantum_stochastic",
+    regex: /\b(stochastic|ito[-_\s]calculus|stratonovich|brownian[-_\s]motion|wiener[-_\s]process|martingales?|financial[-_\s]math(ematics)?|black[-_\s]scholes)\b/i,
+    tagRegex: /(?:^|\s)#(stochastic|ito|brownian|martingale)\b/i
+  },
+  {
+    mode: "probability",
+    superFamily: "quantum_stochastic",
+    regex: /\b(probability|statistics|stats|random[-_\s]variables?|markov|bayes(ian)?|distributions?)\b/i,
+    tagRegex: /(?:^|\s)#(probability|statistics|stats|bayes)\b/i
+  },
+  // 2. Geometry & Tensors
+  {
+    mode: "geometry_tensors",
+    superFamily: "geometry",
+    regex: /\b(geometry|differential[-_\s]geometry|diffgeo|tensors?|general[-_\s]relativity|gr|riemannian|curved[-_\s]spacetime|christoffel|manifold|minkowski)\b/i,
+    tagRegex: /(?:^|\s)#(geometry|diffgeo|tensor|gr|relativity|riemannian|manifold)\b/i
+  },
+  {
+    mode: "topology",
+    superFamily: "geometry",
+    regex: /\b(topology|algebraic[-_\s]topology|homology|cohomology|homotopy|homeomorphism|simplicial)\b/i,
+    tagRegex: /(?:^|\s)#(topology|homology|homotopy)\b/i
+  },
+  // 3. Fields & PDEs
+  {
+    mode: "pde_transport",
+    superFamily: "pde",
+    regex: /\b(pdes?|partial[-_\s]differential[-_\s]equations?|fluids?|fluid[-_\s]dynamics|navier[-_\s]stokes|heat[-_\s]equation|wave[-_\s]equation|advection|convection|conservation[-_\s]laws?|transport)\b/i,
+    tagRegex: /(?:^|\s)#(pde|fluids?|heat|wave|navier[-_]stokes|transport)\b/i
+  },
+  {
+    mode: "continuum",
+    superFamily: "pde",
+    regex: /\b(continuum|elasticity|solid[-_\s]mechanics|viscoelasticity|stress[-_\s]strain|aerodynamics|hydrodynamics)\b/i,
+    tagRegex: /(?:^|\s)#(continuum|elasticity|aerodynamics|hydrodynamics)\b/i
+  },
+  // 4. Dynamics & ODEs
+  {
+    mode: "ode_dynamics",
+    superFamily: "dynamics",
+    regex: /\b(odes?|ordinary[-_\s]differential[-_\s]equations?|dynamical[-_\s]systems?|phase[-_\s]portrait|phase[-_\s]space|bifurcation|chaos|lorenz|attractor|limit[-_\s]cycle|kinematics)\b/i,
+    tagRegex: /(?:^|\s)#(ode|dynamics|chaos|lorenz|kinematics)\b/i
+  },
+  {
+    mode: "optimization",
+    superFamily: "dynamics",
+    regex: /\b(optimization|calculus[-_\s]of[-_\s]variations|variational|euler[-_\s]lagrange|convex[-_\s]optimization|lagrangian[-_\s]multiplier|kkt|gradient[-_\s]descent)\b/i,
+    tagRegex: /(?:^|\s)#(optimization|variational|convex)\b/i
+  },
+  // 5. Algebra & Discrete
+  {
+    mode: "linear_algebra",
+    superFamily: "algebra",
+    regex: /\b(linear[-_\s]algebra|matrices|matrix[-_\s]theory|eigenvalues?|eigenvectors?|spectral[-_\s]theory|inner[-_\s]product[-_\s]space)\b/i,
+    tagRegex: /(?:^|\s)#(linear[-_]algebra|matrices|matrix)\b/i
+  },
+  {
+    mode: "abstract_algebra",
+    superFamily: "algebra",
+    regex: /\b(abstract[-_\s]algebra|group[-_\s]theory|rings?|fields?|galois|category[-_\s]theory|morphisms?|homomorphisms?)\b/i,
+    tagRegex: /(?:^|\s)#(algebra|groups?|category[-_]theory)\b/i
+  },
+  {
+    mode: "number_theory",
+    superFamily: "algebra",
+    regex: /\b(number[-_\s]theory|arithmetic|modular[-_\s]arithmetic|divisibility|prime[-_\s]numbers?|diophantine|cryptography)\b/i,
+    tagRegex: /(?:^|\s)#(number[-_]theory|modular|primes?)\b/i
+  },
+  {
+    mode: "logic_sets",
+    superFamily: "algebra",
+    regex: /\b(logic|set[-_\s]theory|model[-_\s]theory|proof[-_\s]theory|boolean[-_\s]algebra|axiomatic)\b/i,
+    tagRegex: /(?:^|\s)#(logic|sets?)\b/i
+  },
+  // 6. Analysis & Calculus
+  {
+    mode: "complex",
+    superFamily: "analysis",
+    regex: /\b(complex[-_\s]?analysis|holomorphic|meromorphic|cauchy[-_\s]?riemann|wirtinger|contour[-_\s]?integration?)\b/i,
+    tagRegex: /(?:^|\s)#(complex[-_]analysis|holomorphic)\b/i
+  },
+  {
+    mode: "calculus",
+    superFamily: "analysis",
+    regex: /\b(calculus|real[-_\s]?analysis|differentiation|integration|leibniz|multivariable[-_\s]?calculus)\b/i,
+    tagRegex: /(?:^|\s)#(calculus|analysis|math)\b/i
+  }
+];
 function parseFrontmatterText(content) {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!match) {
@@ -26280,14 +26794,58 @@ function parseYamlValue(valStr) {
     return Number(valStr);
   return valStr.replace(/^['"]|['"]$/g, "");
 }
-function matchesQuantumTerm(value) {
-  if (typeof value === "string") {
-    return QUANTUM_TERM_REGEX.test(value);
+function matchValueAgainstRegex(val, regex) {
+  if (typeof val === "string") {
+    return regex.test(val);
   }
-  if (Array.isArray(value)) {
-    return value.some((item) => typeof item === "string" && QUANTUM_TERM_REGEX.test(item));
+  if (Array.isArray(val)) {
+    return val.some((item) => typeof item === "string" && regex.test(item));
   }
   return false;
+}
+function matchesQuantumTerm(value) {
+  return matchValueAgainstRegex(value, QUANTUM_TERM_REGEX);
+}
+function detectNoteMode(content, frontmatterCache, fallbackMode = "analysis") {
+  const frontmatter = frontmatterCache && Object.keys(frontmatterCache).length > 0 ? frontmatterCache : parseFrontmatterText(content);
+  const colorMathConfig = frontmatter["color-math"];
+  if (colorMathConfig && typeof colorMathConfig === "object" && typeof colorMathConfig.mode === "string") {
+    const rawMode = colorMathConfig.mode.toLowerCase().trim();
+    for (const rule of MODE_RULES) {
+      if (rawMode === rule.mode || rawMode === rule.superFamily) {
+        return rule.mode;
+      }
+    }
+  }
+  if (typeof frontmatter.mode === "string") {
+    const rawMode = frontmatter.mode.toLowerCase().trim();
+    for (const rule of MODE_RULES) {
+      if (rawMode === rule.mode || rawMode === rule.superFamily) {
+        return rule.mode;
+      }
+    }
+  }
+  const targetKeys = ["field", "subject", "topic", "discipline", "category", "color-math-field"];
+  for (const rule of MODE_RULES) {
+    for (const key of targetKeys) {
+      if (matchValueAgainstRegex(frontmatter[key], rule.regex)) {
+        return rule.mode;
+      }
+    }
+  }
+  if (frontmatter.tags) {
+    for (const rule of MODE_RULES) {
+      if (matchValueAgainstRegex(frontmatter.tags, rule.regex)) {
+        return rule.mode;
+      }
+    }
+  }
+  for (const rule of MODE_RULES) {
+    if (rule.tagRegex.test(content)) {
+      return rule.mode;
+    }
+  }
+  return fallbackMode;
 }
 function detectNoteField(content, frontmatterCache) {
   const frontmatter = frontmatterCache && Object.keys(frontmatterCache).length > 0 ? frontmatterCache : parseFrontmatterText(content);
@@ -26336,7 +26894,9 @@ function detectNoteField(content, frontmatterCache) {
   if (!isQuantum && IN_BODY_TAG_REGEX.test(content)) {
     isQuantum = true;
   }
-  if (isQuantum) {
+  const detectedMode = detectNoteMode(content, frontmatterCache);
+  if (isQuantum || detectedMode === "quantum") {
+    isQuantum = true;
     overrides.colorQuantumOperators = true;
     overrides.field = "quantum";
   }
@@ -26344,7 +26904,8 @@ function detectNoteField(content, frontmatterCache) {
     isQuantum,
     field: isQuantum ? "quantum" : void 0,
     overrides,
-    theme
+    theme,
+    detectedMode
   };
 }
 
@@ -26384,6 +26945,8 @@ var DEFAULT_SETTINGS = {
   convertProseToUnicode: false,
   convertProseToLatex: false,
   autoDetectNoteField: true,
+  defaultMode: "analysis",
+  autoDetectNoteMode: true,
   enableQuantumOperatorsGlobal: false,
   previewLatexNormalization: true,
   collapsedSections: {}
@@ -26723,14 +27286,21 @@ var ColorMathPlugin = class extends import_obsidian3.Plugin {
       colorQuantumOperators: this.settings.enableQuantumOperatorsGlobal,
       highlightInlineMath: this.settings.highlightInlineMath,
       highlightDisplayMath: this.settings.highlightDisplayMath,
-      previewLatexNormalization: this.settings.previewLatexNormalization
+      previewLatexNormalization: this.settings.previewLatexNormalization,
+      defaultMode: this.settings.defaultMode,
+      autoDetectNoteMode: this.settings.autoDetectNoteMode
     };
-    if (this.settings.autoDetectNoteField) {
+    let activeMode = this.settings.defaultMode || "analysis";
+    if (this.settings.autoDetectNoteMode !== false || this.settings.autoDetectNoteField) {
       const detected = this.getActiveNoteDetection(content);
       if (detected) {
         Object.assign(base, detected.overrides);
+        if (detected.detectedMode && this.settings.autoDetectNoteMode !== false) {
+          activeMode = detected.detectedMode;
+        }
       }
     }
+    base.activeMode = activeMode;
     return base;
   }
   colorizeCurrentMathBlock(editor) {
@@ -27515,6 +28085,20 @@ var ColorMathSettingTab = class extends import_obsidian3.PluginSettingTab {
     new import_obsidian3.Setting(previewBody).setName("LaTeX syntax auto-normalization").setDesc("Pre-process and normalize unbraced macro arguments (e.g. \\frac a b \u2192 \\frac{a}{b}, \\frac \\vec F b \u2192 \\frac{\\vec F}{b}, x^2 \u2192 x^{2}) before coloring to prevent LaTeX syntax errors from casual or unbraced notation.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.previewLatexNormalization).onChange(async (val) => {
         this.plugin.settings.previewLatexNormalization = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian3.Setting(previewBody).setName("Default mathematical mode").setDesc("Select the global mathematical discipline mode. Notes without specific tags or frontmatter properties will use this mode.").addDropdown(
+      (dropdown) => dropdown.addOption("analysis", "\u{1F4D0} Analysis & Calculus (Super-Family)").addOption("pde", "\u{1F30A} Fields & PDEs (Super-Family)").addOption("dynamics", "\u23F1\uFE0F Dynamics & Optimization (Super-Family)").addOption("geometry", "\u{1F310} Geometry & Tensors (Super-Family)").addOption("algebra", "\u{1F523} Algebra & Discrete (Super-Family)").addOption("quantum_stochastic", "\u269B\uFE0F Quantum & Stochastics (Super-Family)").addOption("calculus", "\u2014 Classical Calculus & Real Analysis").addOption("complex", "\u2014 Complex Analysis & Residues").addOption("pde_transport", "\u2014 Transport & Fluid PDEs").addOption("continuum", "\u2014 Continuum & Wave Mechanics").addOption("ode_dynamics", "\u2014 Dynamical Systems & State-Space ODEs").addOption("optimization", "\u2014 Optimization & Variational Calculus").addOption("geometry_tensors", "\u2014 Differential Geometry & Tensors").addOption("topology", "\u2014 Topology & Invariants").addOption("linear_algebra", "\u2014 Linear Algebra & Matrix Theory").addOption("abstract_algebra", "\u2014 Abstract Algebra & Category Theory").addOption("number_theory", "\u2014 Discrete Math & Number Theory").addOption("logic_sets", "\u2014 Logic & Set Theory").addOption("quantum", "\u2014 Quantum Mechanics & Information").addOption("probability", "\u2014 Probability & Statistics").addOption("stochastic", "\u2014 Stochastic Calculus (It\xF4 / Finance)").setValue(this.plugin.settings.defaultMode || "analysis").onChange(async (val) => {
+        this.plugin.settings.defaultMode = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian3.Setting(previewBody).setName("Auto-detect note mode from tags & YAML").setDesc("Automatically switch mathematical mode per note when native tags (e.g. #pde, #geometry, #ode, #quantum, #stochastic) or metadata (topic, subject, field, category) are present.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.autoDetectNoteMode !== false).onChange(async (val) => {
+        this.plugin.settings.autoDetectNoteMode = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })

@@ -46,7 +46,8 @@ function hasSemanticOptions(options?: ColorMathOptions): boolean {
       options.colorDimensionless ||
       options.colorQuantumOperators ||
       options.field === "quantum" ||
-      options.field === "physics")
+      options.field === "physics" ||
+      options.activeMode)
   );
 }
 

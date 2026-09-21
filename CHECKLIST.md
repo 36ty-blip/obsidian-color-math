@@ -83,5 +83,10 @@
 - [x] Matrix newline dimension spacing (`\\[1em]`, `\\*[1em]`) cell layout isolation
 - [x] Collapsible "Feature Previews" settings section for experimental capabilities
 - [x] LaTeX Auto-Normalization toggle in Feature Previews (`previewLatexNormalization`)
-- [x] Full unit test suite (29 test suites, 339 tests passing)
-- [x] Version tracking (`1.0.26`)
+- [x] Hierarchical mathematical modes engine (6 Super-Families & 14 Granular Disciplines)
+- [x] Zero-friction note mode auto-detection via Obsidian tags (e.g. `#math/pde`, `#quantum`), YAML metadata (`topic:`, `subject:`, `field:`), and in-body hashtags
+- [x] Mode-aware derivative rendering: Tangent vector coordinates differentiation (`\partial_t`, `\partial_x`), PDE flux balance, ODE numerator target tracking (`\frac{dx}{dt}`)
+- [x] Domain-specific specialized operators: Christoffel symbols (`\Gamma^\mu_{\alpha\beta}`), Lie derivatives (`\mathcal{L}_X`), Material derivatives (`\frac{D\mathbf{u}}{Dt}`), Itô differentials (`dW_t`), Wirtinger derivatives (`\frac{\partial f}{\partial z}`)
+- [x] Settings tab: Mathematical mode controls under Section 6 Feature Previews (Default mathematical mode dropdown & note auto-detection toggle)
+- [x] Full unit test suite (30 test suites, 350 tests passing)
+- [x] Version tracking (`1.0.27`)

@@ -10,6 +10,7 @@ import { findSemanticSpans } from "../parsers/math_parser";
 import { collectScannerSpans } from "../parsers/scanner";
 import { collectTaxonomySpans } from "../parsers/taxonomy";
 import { collectQuantumOperatorSpans } from "../parsers/physics";
+import { collectDomainOperatorSpans, generateModeAwareDerivativeSpans } from "../parsers/modes";
 import { collectUnitSpans, findUnitSpans } from "../parsers/units";
 import { collectVariableSpans } from "../parsers/variable_hash";
 import { containsColorWrapper, normalizeLatexBraces } from "../utils/latex_helpers";
@@ -82,7 +83,13 @@ export function colorLatexBody(
   }
 
   if (options?.colorDifferentials !== false) {
-    spans.push(...collectDifferentialSpans(normalized, palette, diffSpans, options));
+    if (options?.activeMode) {
+      spans.push(
+        ...generateModeAwareDerivativeSpans(normalized, palette, diffSpans, options.activeMode, options)
+      );
+    } else {
+      spans.push(...collectDifferentialSpans(normalized, palette, diffSpans, options));
+    }
   }
 
   if (options?.colorDimensionless !== false) {
@@ -116,7 +123,19 @@ export function colorLatexBody(
     spans.push(...collectVariableSpans(normalized, undefined, unitSpans, diffSpans, dimSpans, bareFunctions));
   }
 
-  if (options?.colorQuantumOperators || options?.field === "quantum" || options?.field === "physics") {
+  if (options?.activeMode) {
+    const domainSpans = collectDomainOperatorSpans(normalized, palette, options.activeMode);
+    if (domainSpans.length > 0) {
+      const filtered = spans.filter(
+        (s) => !domainSpans.some((d) => d.start <= s.start && s.end <= d.end)
+      );
+      spans.length = 0;
+      spans.push(...filtered, ...domainSpans);
+    }
+  }
+
+  const isQuantumMode = options?.activeMode === "quantum" || options?.activeMode === "quantum_stochastic";
+  if (options?.colorQuantumOperators || options?.field === "quantum" || options?.field === "physics" || isQuantumMode) {
     const quantumSpans = collectQuantumOperatorSpans(normalized, palette, options);
     if (quantumSpans.length > 0) {
       // Filter out any other spans strictly contained within quantum operators

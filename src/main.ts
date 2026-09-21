@@ -15,6 +15,7 @@ import {
   ColorPalette,
   ColorRole,
   ColorMathOptions,
+  ActiveMathMode,
   DEFAULT_COLORS,
   setPalette,
   RAINBOW_DELIMITER_COLORS,
@@ -70,6 +71,8 @@ interface ColorMathSettings {
   convertProseToUnicode: boolean;
   convertProseToLatex: boolean;
   autoDetectNoteField: boolean;
+  defaultMode: ActiveMathMode;
+  autoDetectNoteMode: boolean;
   enableQuantumOperatorsGlobal: boolean;
   previewLatexNormalization: boolean;
   collapsedSections: Record<string, boolean>;
@@ -110,6 +113,8 @@ const DEFAULT_SETTINGS: ColorMathSettings = {
   convertProseToUnicode: false,
   convertProseToLatex: false,
   autoDetectNoteField: true,
+  defaultMode: "analysis",
+  autoDetectNoteMode: true,
   enableQuantumOperatorsGlobal: false,
   previewLatexNormalization: true,
   collapsedSections: {},
@@ -543,14 +548,23 @@ export default class ColorMathPlugin extends Plugin {
       highlightInlineMath: this.settings.highlightInlineMath,
       highlightDisplayMath: this.settings.highlightDisplayMath,
       previewLatexNormalization: this.settings.previewLatexNormalization,
+      defaultMode: this.settings.defaultMode,
+      autoDetectNoteMode: this.settings.autoDetectNoteMode,
     };
 
-    if (this.settings.autoDetectNoteField) {
+    let activeMode: ActiveMathMode = this.settings.defaultMode || "analysis";
+
+    if (this.settings.autoDetectNoteMode !== false || this.settings.autoDetectNoteField) {
       const detected = this.getActiveNoteDetection(content);
       if (detected) {
         Object.assign(base, detected.overrides);
+        if (detected.detectedMode && this.settings.autoDetectNoteMode !== false) {
+          activeMode = detected.detectedMode;
+        }
       }
     }
+
+    base.activeMode = activeMode;
 
     return base;
   }
@@ -1701,6 +1715,55 @@ class ColorMathSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.previewLatexNormalization)
           .onChange(async (val) => {
             this.plugin.settings.previewLatexNormalization = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    new Setting(previewBody)
+      .setName("Default mathematical mode")
+      .setDesc("Select the global mathematical discipline mode. Notes without specific tags or frontmatter properties will use this mode.")
+      .addDropdown((dropdown) =>
+        dropdown
+          // 6 Super-Families
+          .addOption("analysis", "📐 Analysis & Calculus (Super-Family)")
+          .addOption("pde", "🌊 Fields & PDEs (Super-Family)")
+          .addOption("dynamics", "⏱️ Dynamics & Optimization (Super-Family)")
+          .addOption("geometry", "🌐 Geometry & Tensors (Super-Family)")
+          .addOption("algebra", "🔣 Algebra & Discrete (Super-Family)")
+          .addOption("quantum_stochastic", "⚛️ Quantum & Stochastics (Super-Family)")
+          // 14 Granular Disciplines
+          .addOption("calculus", "— Classical Calculus & Real Analysis")
+          .addOption("complex", "— Complex Analysis & Residues")
+          .addOption("pde_transport", "— Transport & Fluid PDEs")
+          .addOption("continuum", "— Continuum & Wave Mechanics")
+          .addOption("ode_dynamics", "— Dynamical Systems & State-Space ODEs")
+          .addOption("optimization", "— Optimization & Variational Calculus")
+          .addOption("geometry_tensors", "— Differential Geometry & Tensors")
+          .addOption("topology", "— Topology & Invariants")
+          .addOption("linear_algebra", "— Linear Algebra & Matrix Theory")
+          .addOption("abstract_algebra", "— Abstract Algebra & Category Theory")
+          .addOption("number_theory", "— Discrete Math & Number Theory")
+          .addOption("logic_sets", "— Logic & Set Theory")
+          .addOption("quantum", "— Quantum Mechanics & Information")
+          .addOption("probability", "— Probability & Statistics")
+          .addOption("stochastic", "— Stochastic Calculus (Itô / Finance)")
+          .setValue(this.plugin.settings.defaultMode || "analysis")
+          .onChange(async (val) => {
+            this.plugin.settings.defaultMode = val as ActiveMathMode;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    new Setting(previewBody)
+      .setName("Auto-detect note mode from tags & YAML")
+      .setDesc("Automatically switch mathematical mode per note when native tags (e.g. #pde, #geometry, #ode, #quantum, #stochastic) or metadata (topic, subject, field, category) are present.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.autoDetectNoteMode !== false)
+          .onChange(async (val) => {
+            this.plugin.settings.autoDetectNoteMode = val;
             await this.plugin.saveSettings();
             this.plugin.rerenderMath();
           })

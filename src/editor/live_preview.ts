@@ -20,6 +20,7 @@ import { scanMarkdown } from "../parsers/markdown_scanner";
 import { collectScannerSpans } from "../parsers/scanner";
 import { collectTaxonomySpans } from "../parsers/taxonomy";
 import { collectQuantumOperatorSpans } from "../parsers/physics";
+import { collectDomainOperatorSpans, generateModeAwareDerivativeSpans } from "../parsers/modes";
 import { collectUnitSpans, findUnitSpans } from "../parsers/units";
 import { collectVariableSpans } from "../parsers/variable_hash";
 import { containsColorWrapper } from "../utils/latex_helpers";
@@ -115,7 +116,13 @@ export function createColorMathLivePlugin(
           }
 
           if (options?.colorDifferentials !== false) {
-            allSpans.push(...collectDifferentialSpans(body, palette, diffSpans, options));
+            if (options?.activeMode) {
+              allSpans.push(
+                ...generateModeAwareDerivativeSpans(body, palette, diffSpans, options.activeMode, options)
+              );
+            } else {
+              allSpans.push(...collectDifferentialSpans(body, palette, diffSpans, options));
+            }
           }
 
           if (options?.colorDimensionless !== false) {
@@ -164,7 +171,19 @@ export function createColorMathLivePlugin(
             allSpans.push(...collectVariableSpans(body, undefined, unitSpans, diffSpans, dimSpans, bareFunctions));
           }
 
-          if (options?.colorQuantumOperators || options?.field === "quantum" || options?.field === "physics") {
+          if (options?.activeMode) {
+            const domainSpans = collectDomainOperatorSpans(body, palette, options.activeMode);
+            if (domainSpans.length > 0) {
+              const filtered = allSpans.filter(
+                (s) => !domainSpans.some((d) => d.start <= s.start && s.end <= d.end)
+              );
+              allSpans.length = 0;
+              allSpans.push(...filtered, ...domainSpans);
+            }
+          }
+
+          const isLiveQuantum = options?.activeMode === "quantum" || options?.activeMode === "quantum_stochastic";
+          if (options?.colorQuantumOperators || options?.field === "quantum" || options?.field === "physics" || isLiveQuantum) {
             const quantumSpans = collectQuantumOperatorSpans(body, palette, options);
             if (quantumSpans.length > 0) {
               const filtered = allSpans.filter(
