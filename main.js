@@ -1658,6 +1658,7 @@ function readGroupEnd(source, start, end, opening) {
   if (!closing || source[start] !== opening)
     return null;
   let depth = 1;
+  let nestedIntervalDepth = 0;
   let index = start + 1;
   while (index < end) {
     if (source[index] === "%") {
@@ -1686,8 +1687,24 @@ function readGroupEnd(source, start, end, opening) {
     if (source[index] === opening) {
       depth++;
     } else if (source[index] === closing) {
-      depth--;
-      if (depth === 0) {
+      if (nestedIntervalDepth > 0) {
+        nestedIntervalDepth--;
+      } else {
+        depth--;
+        if (depth === 0) {
+          return index + 1;
+        }
+      }
+    } else if (opening === "[" && source[index] === "(") {
+      nestedIntervalDepth++;
+    } else if (opening === "(" && source[index] === "[") {
+      nestedIntervalDepth++;
+    } else if (opening === "[" && source[index] === ")" && nestedIntervalDepth > 0) {
+      nestedIntervalDepth--;
+    } else if (opening === "(" && source[index] === "]" && nestedIntervalDepth > 0) {
+      nestedIntervalDepth--;
+    } else if (depth === 1 && nestedIntervalDepth === 0) {
+      if (opening === "[" && source[index] === ")" || opening === "(" && source[index] === "]") {
         return index + 1;
       }
     }
@@ -2192,7 +2209,10 @@ function readOperand(source, start, end) {
   if (source[start] === "(" || source[start] === "{" || source[start] === "[") {
     const groupEnd = readGroupEnd(source, start, end);
     if (groupEnd === null) {
-      return { kind: "opaque", start, end };
+      if (source[start] === "{") {
+        return { kind: "opaque", start, end };
+      }
+      return null;
     }
     if (containsVerbCommand(source, start, groupEnd)) {
       return { kind: "opaque", start, end: groupEnd };
@@ -3894,6 +3914,15 @@ function findDelimiterScan(text, options) {
           break;
         }
       }
+      if (matchIdx === -1 && (type === "paren" || type === "bracket")) {
+        const intervalComplement = type === "paren" ? "bracket" : "paren";
+        for (let i = stack.length - 1; i >= 0; i--) {
+          if (!stack[i].item.isLeftRight && stack[i].item.type === intervalComplement) {
+            matchIdx = i;
+            break;
+          }
+        }
+      }
       if (matchIdx !== -1) {
         const matched = stack.splice(matchIdx, 1)[0];
         pairs.push({
@@ -4036,6 +4065,9 @@ function collectDelimiterSpans(text, options) {
   if (options?.highlightUnmatched) {
     const errColor = options?.errorColor || "#f7768e";
     for (const item of scan.unmatched) {
+      if (item.type !== "bare_brace" && !item.isLeftRight) {
+        continue;
+      }
       if (item.type === "bare_brace" && !options?.includeBareBraces && !options?.onlyUnmatched) {
         continue;
       }
@@ -4062,7 +4094,7 @@ var DIFF_REGEX = new RegExp(
 );
 var D_OPERATOR_REGEX = /(?:d|\\partial|\\mathrm\{d\}|\\delta|∂)/;
 var BOUNDARY_DOMAIN_PATTERN = /^(?:\\partial|∂)\s*(?:\\{[^{}]+\\}|\\Omega|\\mathcal\{[A-Za-z]+\}|\\Sigma|\\Gamma|[VDMBUKS]|Ω|Σ|Γ)(?![a-z])/;
-var SUBDIFFERENTIAL_PATTERN = /^(?:\\partial|∂)\s*(?:[fgh\ell]|\\phi|\\psi)(?![a-zA-Z])/;
+var SUBDIFFERENTIAL_PATTERN = /^(?:\\partial|∂)\s*(?:[fgh]|\\ell|\\phi|\\psi)(?![a-zA-Z])/;
 var BOUNDARY_DOMAIN_SCANNER = new RegExp(
   "(?:^|[\\s+\\-=*({]|[\\[,;]|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)(\\s*(?:\\\\partial|\u2202)\\s*(?:\\{[^{}]+\\}|\\\\Omega|\\\\mathcal\\{[A-Za-z]+\\}|\\\\Sigma|\\\\Gamma|[VDMBUKS]|\u03A9|\u03A3|\u0393)(?:_[a-zA-Z0-9]+|_\\{[^{}]+\\})?(?![a-z]))",
   "g"
@@ -5076,7 +5108,7 @@ var PDE_MACROS = [
   "\\Box"
 ];
 var MATERIAL_DERIV_REGEX = /\\(?:d|t)?frac\{\s*(?:D|\\mathrm\{D\})\s*(?:\\[a-zA-Z]+|\{[^{}]*\}|[a-zA-Z])*\s*\}\{\s*(?:D|\\mathrm\{D\})\s*t\s*\}/g;
-var BOUNDARY_DOMAIN_REGEX = /\\partial\s*(?:\\Omega|\\mathcal\{D\}|V|\Omega)/g;
+var BOUNDARY_DOMAIN_REGEX = /\\partial\s*(?:\\Omega|\\mathcal\{D\}|V|Ω)/g;
 var POISSON_BRACKET_REGEX = /\\\{\s*[a-zA-Z]\s*,\s*[a-zA-Z]\s*\\\}(?:_\{?[a-zA-Z, ]*\}?)?/g;
 var STOCHASTIC_DIFF_REGEX = /\bd[WXB](?:_\{?[a-zA-Z0-9]+\}?|\([a-zA-Z0-9]+\))?/g;
 var PROBABILITY_MACROS = [
@@ -5303,10 +5335,6 @@ function generateModeAwareDerivativeSpans(body, palette, diffSpans, mode = "anal
           priority: 25
         });
       } else {
-        const numAbsStart = span.start + numStartOffset;
-        const numAbsEnd = span.start + numEndOffset;
-        const denomAbsStart = span.start + denomStartOffset;
-        const denomAbsEnd = span.start + denomEndOffset;
         spans.push({
           start: span.start,
           end: span.end,
@@ -5530,7 +5558,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
                 const inner = braced[0];
                 const baseMatch = inner.match(/[a-zA-Z]|[\u0370-\u03FF]|\uD835[\uDC00-\uDFFF]/);
                 const baseLetter = baseMatch ? baseMatch[0] : "x";
-                const color = hashStringToColor(baseLetter, palette);
+                const color = hashStringToColor(baseLetter, hashPalette);
                 spans.push({
                   start: index,
                   end: braced[1],
@@ -5553,7 +5581,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
                     afterNext = innerBraced[1];
                 }
                 const baseLetter = nextCmd[0].slice(1);
-                const color = hashStringToColor(baseLetter, palette);
+                const color = hashStringToColor(baseLetter, hashPalette);
                 spans.push({
                   start: index,
                   end: afterNext,
@@ -5568,7 +5596,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
               if (letterMatch) {
                 const fullVar = letterMatch[0];
                 const baseLetter = fullVar.replace(/'/g, "");
-                const color = hashStringToColor(baseLetter, palette);
+                const color = hashStringToColor(baseLetter, hashPalette);
                 spans.push({
                   start: index,
                   end: targetStart + fullVar.length,
@@ -5604,7 +5632,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
                 baseLetter = letMatch[0].replace(/'/g, "");
               }
             }
-            const color = hashStringToColor(baseLetter, palette);
+            const color = hashStringToColor(baseLetter, hashPalette);
             spans.push({
               start: index,
               end: targetEnd,
@@ -5629,7 +5657,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
           }
         }
         if (MATH_PARAMETERS.has(cmdName)) {
-          const color = hashStringToColor(cmdName, palette);
+          const color = hashStringToColor(cmdName, hashPalette);
           spans.push({
             start: index,
             end: cmdEnd,
@@ -5663,7 +5691,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
         } else {
           for (let i = 0; i < word.length; i++) {
             const letter = word[i];
-            const color = hashStringToColor(letter, palette);
+            const color = hashStringToColor(letter, hashPalette);
             spans.push({
               start: index + i,
               end: index + i + 1,
@@ -5691,7 +5719,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
       const fullVar = varMatch[0];
       const baseLetter = fullVar.replace(/'/g, "");
       const varEnd = index + fullVar.length;
-      const color = hashStringToColor(baseLetter, palette);
+      const color = hashStringToColor(baseLetter, hashPalette);
       spans.push({
         start: index,
         end: varEnd,
@@ -6371,7 +6399,7 @@ var MathJaxInterceptor = class {
     }
     this.installed = true;
     if (this.retryTimer) {
-      clearTimeout(this.retryTimer);
+      window.clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
     this.retryCount = 0;
@@ -6385,10 +6413,10 @@ var MathJaxInterceptor = class {
     const delay = delays[Math.min(this.retryCount, delays.length - 1)];
     this.retryCount++;
     if (this.retryTimer) {
-      clearTimeout(this.retryTimer);
+      window.clearTimeout(this.retryTimer);
     }
-    this.retryTimer = setTimeout(async () => {
-      await this.install(onSuccess);
+    this.retryTimer = window.setTimeout(() => {
+      void this.install(onSuccess);
     }, delay);
   }
   formatSafeErrorLatex(msg) {
@@ -6513,7 +6541,7 @@ Transformed: ${transformedLatex}`
   }
   uninstall() {
     if (this.retryTimer) {
-      clearTimeout(this.retryTimer);
+      window.clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
     for (const unpatch of this.unpatchFns) {
@@ -26652,7 +26680,7 @@ async function convertDocumentMathChunked(text, direction, options, chunkSize = 
         if (onProgress) {
           onProgress(mathBlockCount, totalMathBlocks);
         }
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
       }
     }
     idx = item.span.end;

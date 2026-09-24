@@ -41,7 +41,7 @@ export const BOUNDARY_DOMAIN_PATTERN =
   /^(?:\\partial|∂)\s*(?:\\{[^{}]+\\}|\\Omega|\\mathcal\{[A-Za-z]+\}|\\Sigma|\\Gamma|[VDMBUKS]|Ω|Σ|Γ)(?![a-z])/;
 
 export const SUBDIFFERENTIAL_PATTERN =
-  /^(?:\\partial|∂)\s*(?:[fgh\ell]|\\phi|\\psi)(?![a-zA-Z])/;
+  /^(?:\\partial|∂)\s*(?:[fgh]|\\ell|\\phi|\\psi)(?![a-zA-Z])/;
 
 const BOUNDARY_DOMAIN_SCANNER = new RegExp(
   "(?:^|[\\s+\\-=*({]|[\\[,;]|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)(\\s*(?:\\\\partial|∂)\\s*(?:\\{[^{}]+\\}|\\\\Omega|\\\\mathcal\\{[A-Za-z]+\\}|\\\\Sigma|\\\\Gamma|[VDMBUKS]|Ω|Σ|Γ)(?:_[a-zA-Z0-9]+|_\\{[^{}]+\\})?(?![a-z]))",

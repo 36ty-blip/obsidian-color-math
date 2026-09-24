@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findDelimiterPairs, collectDelimiterSpans } from "../src/parsers/delimiters";
+import { findDelimiterPairs, collectDelimiterSpans, findDelimiterScan } from "../src/parsers/delimiters";
 import { colorLatexBody } from "../src/converters/generic";
 import { RAINBOW_DELIMITER_COLORS } from "../src/config";
 
@@ -163,6 +163,84 @@ describe("Rainbow Delimiters Parser", () => {
     // Raw bare braces must never be wrapped with \textcolor
     expect(converted).not.toContain("\\textcolor{#");
     expect(converted).toBe("\\frac{a}{b}");
+  });
+
+  it("does NOT produce error spans for half-open intervals like (] or [) or escaped braces \\{", () => {
+    // (]
+    const interval1 = collectDelimiterSpans("(]", {
+      highlightUnmatched: true,
+      includeBareBraces: true,
+    });
+    expect(interval1.filter((s) => s.priority === 99).length).toBe(0);
+
+    // (0, 1]
+    const interval2 = collectDelimiterSpans("(0, 1]", {
+      highlightUnmatched: true,
+      includeBareBraces: true,
+    });
+    expect(interval2.filter((s) => s.priority === 99).length).toBe(0);
+
+    // [0, 1)
+    const interval3 = collectDelimiterSpans("[0, 1)", {
+      highlightUnmatched: true,
+      includeBareBraces: true,
+    });
+    expect(interval3.filter((s) => s.priority === 99).length).toBe(0);
+
+    // Standalone escaped brace \{
+    const escapedBrace = collectDelimiterSpans("\\{", {
+      highlightUnmatched: true,
+      includeBareBraces: true,
+    });
+    expect(escapedBrace.filter((s) => s.priority === 99).length).toBe(0);
+
+    // Set notation \{ 1, 2, 3 \}
+    const setBraces = collectDelimiterSpans("\\{ 1, 2, 3 \\}", {
+      highlightUnmatched: true,
+      includeBareBraces: true,
+    });
+    expect(setBraces.filter((s) => s.priority === 99).length).toBe(0);
+  });
+
+  it("still flags actual fatal MathJax syntax errors (unclosed bare braces and unclosed \\left)", () => {
+    // Unclosed bare brace {
+    const unclosedBrace = collectDelimiterSpans("\\frac{a}{b", {
+      highlightUnmatched: true,
+      includeBareBraces: true,
+    });
+    expect(unclosedBrace.filter((s) => s.priority === 99).length).toBe(1);
+
+    // Stray closing brace }
+    const strayBrace = collectDelimiterSpans("a + b}", {
+      highlightUnmatched: true,
+      includeBareBraces: true,
+    });
+    expect(strayBrace.filter((s) => s.priority === 99).length).toBe(1);
+
+    // Unclosed \left(
+    const unclosedLeft = collectDelimiterSpans("\\left( x", {
+      highlightUnmatched: true,
+      includeBareBraces: true,
+    });
+    expect(unclosedLeft.filter((s) => s.priority === 99).length).toBe(1);
+  });
+
+  it("correctly colors half-open intervals like [a,b) and (a,b]", () => {
+    const res1 = colorLatexBody("[a,b] , [a,b)", undefined, {
+      rainbowDelimiters: true,
+      variableDataFlow: true,
+    });
+    expect(res1).toBe(
+      `\\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{[}\\textcolor{#bb9af7}{a},\\textcolor{#f7768e}{b}\\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{]} , \\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{[}\\textcolor{#bb9af7}{a},\\textcolor{#f7768e}{b}\\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{)}`
+    );
+
+    const res2 = colorLatexBody("(a,b]", undefined, {
+      rainbowDelimiters: true,
+      variableDataFlow: true,
+    });
+    expect(res2).toBe(
+      `\\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{(}\\textcolor{#bb9af7}{a},\\textcolor{#f7768e}{b}\\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{]}`
+    );
   });
 });
 

@@ -161,7 +161,7 @@ export function collectVariableSpans(
                 const inner = braced[0];
                 const baseMatch = inner.match(/[a-zA-Z]|[\u0370-\u03FF]|\uD835[\uDC00-\uDFFF]/);
                 const baseLetter = baseMatch ? baseMatch[0] : "x";
-                const color = hashStringToColor(baseLetter, palette);
+                const color = hashStringToColor(baseLetter, hashPalette);
                 spans.push({
                   start: index,
                   end: braced[1],
@@ -183,7 +183,7 @@ export function collectVariableSpans(
                   if (innerBraced) afterNext = innerBraced[1];
                 }
                 const baseLetter = nextCmd[0].slice(1);
-                const color = hashStringToColor(baseLetter, palette);
+                const color = hashStringToColor(baseLetter, hashPalette);
                 spans.push({
                   start: index,
                   end: afterNext,
@@ -198,7 +198,7 @@ export function collectVariableSpans(
               if (letterMatch) {
                 const fullVar = letterMatch[0];
                 const baseLetter = fullVar.replace(/'/g, "");
-                const color = hashStringToColor(baseLetter, palette);
+                const color = hashStringToColor(baseLetter, hashPalette);
                 spans.push({
                   start: index,
                   end: targetStart + fullVar.length,
@@ -234,7 +234,7 @@ export function collectVariableSpans(
                 baseLetter = letMatch[0].replace(/'/g, "");
               }
             }
-            const color = hashStringToColor(baseLetter, palette);
+            const color = hashStringToColor(baseLetter, hashPalette);
             spans.push({
               start: index,
               end: targetEnd,
@@ -261,7 +261,7 @@ export function collectVariableSpans(
         }
 
         if (MATH_PARAMETERS.has(cmdName)) {
-          const color = hashStringToColor(cmdName, palette);
+          const color = hashStringToColor(cmdName, hashPalette);
           spans.push({
             start: index,
             end: cmdEnd,
@@ -306,7 +306,7 @@ export function collectVariableSpans(
           // Treat as distinct single-letter variables multiplied together!
           for (let i = 0; i < word.length; i++) {
             const letter = word[i];
-            const color = hashStringToColor(letter, palette);
+            const color = hashStringToColor(letter, hashPalette);
             spans.push({
               start: index + i,
               end: index + i + 1,
@@ -339,7 +339,7 @@ export function collectVariableSpans(
       const baseLetter = fullVar.replace(/'/g, "");
       const varEnd = index + fullVar.length;
 
-      const color = hashStringToColor(baseLetter, palette);
+      const color = hashStringToColor(baseLetter, hashPalette);
       spans.push({
         start: index,
         end: varEnd,

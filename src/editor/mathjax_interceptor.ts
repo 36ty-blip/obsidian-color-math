@@ -178,7 +178,7 @@ export class MathJaxInterceptor {
 
     this.installed = true;
     if (this.retryTimer) {
-      clearTimeout(this.retryTimer);
+      window.clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
     this.retryCount = 0;
@@ -192,10 +192,10 @@ export class MathJaxInterceptor {
     const delay = delays[Math.min(this.retryCount, delays.length - 1)];
     this.retryCount++;
     if (this.retryTimer) {
-      clearTimeout(this.retryTimer);
+      window.clearTimeout(this.retryTimer);
     }
-    this.retryTimer = setTimeout(async () => {
-      await this.install(onSuccess);
+    this.retryTimer = window.setTimeout(() => {
+      void this.install(onSuccess);
     }, delay);
   }
 
@@ -354,7 +354,7 @@ export class MathJaxInterceptor {
 
   uninstall(): void {
     if (this.retryTimer) {
-      clearTimeout(this.retryTimer);
+      window.clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
     for (const unpatch of this.unpatchFns) {

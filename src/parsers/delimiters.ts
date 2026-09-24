@@ -348,10 +348,21 @@ export function findDelimiterScan(
     if (text[index] === ")" || (text[index] === "]" && !ignoredBracketIndices.has(index))) {
       const type = text[index] === ")" ? "paren" : "bracket";
       let matchIdx = -1;
+      // 1. Try exact type match first
       for (let i = stack.length - 1; i >= 0; i--) {
         if (!stack[i].item.isLeftRight && stack[i].item.type === type) {
           matchIdx = i;
           break;
+        }
+      }
+      // 2. If no exact match, allow matching open paren/bracket as half-open interval: [a, b) or (a, b]
+      if (matchIdx === -1 && (type === "paren" || type === "bracket")) {
+        const intervalComplement = type === "paren" ? "bracket" : "paren";
+        for (let i = stack.length - 1; i >= 0; i--) {
+          if (!stack[i].item.isLeftRight && stack[i].item.type === intervalComplement) {
+            matchIdx = i;
+            break;
+          }
         }
       }
       if (matchIdx !== -1) {
@@ -529,6 +540,12 @@ export function collectDelimiterSpans(
   if (options?.highlightUnmatched) {
     const errColor = options?.errorColor || "#f7768e";
     for (const item of scan.unmatched) {
+      // Only bare braces { and } (or unclosed \left) represent fatal MathJax syntax errors.
+      // Standard parentheses/brackets (such as intervals (a, b] or [a, b)) and escaped \{
+      // do not break MathJax syntax and must not show error wavy underlines.
+      if (item.type !== "bare_brace" && !item.isLeftRight) {
+        continue;
+      }
       if (item.type === "bare_brace" && !options?.includeBareBraces && !options?.onlyUnmatched) {
         continue;
       }

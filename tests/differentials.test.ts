@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findDifferentialSpans } from "../src/parsers/differentials";
+import { findDifferentialSpans, SUBDIFFERENTIAL_PATTERN } from "../src/parsers/differentials";
 import { colorLatexBody } from "../src/converters/generic";
 import { DEFAULT_COLORS } from "../src/config";
 
@@ -120,6 +120,24 @@ describe("Calculus Differentials & Derivatives Disambiguation", () => {
       });
       expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.derivative}}{\\frac{∂}{∂t}}`);
       expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.orange}}{ℏ}`);
+    });
+  });
+
+  describe("SUBDIFFERENTIAL_PATTERN", () => {
+    it("matches subdifferential loss and function macros like \\ell", () => {
+      expect(SUBDIFFERENTIAL_PATTERN.test("\\partial \\ell")).toBe(true);
+      expect(SUBDIFFERENTIAL_PATTERN.test("∂\\ell")).toBe(true);
+      expect(SUBDIFFERENTIAL_PATTERN.test("\\partial f")).toBe(true);
+      expect(SUBDIFFERENTIAL_PATTERN.test("\\partial g")).toBe(true);
+      expect(SUBDIFFERENTIAL_PATTERN.test("\\partial h")).toBe(true);
+      expect(SUBDIFFERENTIAL_PATTERN.test("\\partial \\phi")).toBe(true);
+      expect(SUBDIFFERENTIAL_PATTERN.test("\\partial \\psi")).toBe(true);
+    });
+
+    it("does NOT match partial e or unrelated words", () => {
+      expect(SUBDIFFERENTIAL_PATTERN.test("\\partial e")).toBe(false);
+      expect(SUBDIFFERENTIAL_PATTERN.test("\\partial error")).toBe(false);
+      expect(SUBDIFFERENTIAL_PATTERN.test("\\partial x")).toBe(false);
     });
   });
 });

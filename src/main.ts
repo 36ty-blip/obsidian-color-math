@@ -9,7 +9,6 @@ import {
   Plugin,
   PluginSettingTab,
   Setting,
-  type SettingDefinitionItem,
 } from "obsidian";
 import {
   ColorPalette,

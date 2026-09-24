@@ -315,6 +315,7 @@ export function readGroupEnd(
   if (!closing || source[start] !== opening) return null;
 
   let depth = 1;
+  let nestedIntervalDepth = 0;
   let index = start + 1;
   while (index < end) {
     if (source[index] === "%") {
@@ -342,8 +343,25 @@ export function readGroupEnd(
     if (source[index] === opening) {
       depth++;
     } else if (source[index] === closing) {
-      depth--;
-      if (depth === 0) {
+      if (nestedIntervalDepth > 0) {
+        nestedIntervalDepth--;
+      } else {
+        depth--;
+        if (depth === 0) {
+          return index + 1;
+        }
+      }
+    } else if (opening === "[" && source[index] === "(") {
+      nestedIntervalDepth++;
+    } else if (opening === "(" && source[index] === "[") {
+      nestedIntervalDepth++;
+    } else if (opening === "[" && source[index] === ")" && nestedIntervalDepth > 0) {
+      nestedIntervalDepth--;
+    } else if (opening === "(" && source[index] === "]" && nestedIntervalDepth > 0) {
+      nestedIntervalDepth--;
+    } else if (depth === 1 && nestedIntervalDepth === 0) {
+      // Half-open interval closing: [a, b) or (a, b]
+      if ((opening === "[" && source[index] === ")") || (opening === "(" && source[index] === "]")) {
         return index + 1;
       }
     }
@@ -904,7 +922,10 @@ export function readOperand(
   if (source[start] === "(" || source[start] === "{" || source[start] === "[") {
     const groupEnd = readGroupEnd(source, start, end);
     if (groupEnd === null) {
-      return { kind: "opaque", start, end };
+      if (source[start] === "{") {
+        return { kind: "opaque", start, end };
+      }
+      return null;
     }
     if (containsVerbCommand(source, start, groupEnd)) {
       return { kind: "opaque", start, end: groupEnd };

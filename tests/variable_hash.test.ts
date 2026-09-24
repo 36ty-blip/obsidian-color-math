@@ -159,5 +159,20 @@ describe("Variable Data-Flow Hashing", () => {
     const colorW = hashStringToColor("w");
     expect(resOn).not.toContain(`\\textcolor{${colorW}}{w}`);
   });
+
+  it("safely handles ColorPalette object as palette without returning undefined", () => {
+    const objectPalette = {
+      primary: "#ff0000",
+      secondary: "#00ff00",
+      accent: "#0000ff",
+    };
+    const spans = collectVariableSpans("x + y + z", objectPalette);
+    expect(spans.length).toBe(3);
+    for (const span of spans) {
+      expect(span.color).toBeDefined();
+      expect(typeof span.color).toBe("string");
+      expect(Object.values(objectPalette)).toContain(span.color);
+    }
+  });
 });
 

@@ -51,9 +51,7 @@ import {
   UNICODE_RELATIONS,
   UNICODE_ARROWS,
   UNICODE_SETS,
-  UNICODE_MULTIPLICATION,
   UNICODE_CONSTANTS,
-  UNICODE_VECTORS,
   UNICODE_GREEK_LOWER_STANDARD,
   UNICODE_GREEK_LOWER_PLANE1,
   UNICODE_GREEK_UPPER_STANDARD,
@@ -692,7 +690,7 @@ export interface ColorMathOptions {
   highlightInlineMath?: boolean;
   highlightDisplayMath?: boolean;
   previewLatexNormalization?: boolean;
-  field?: "quantum" | "physics" | "math" | string;
+  field?: "quantum" | "physics" | "math" | (string & {});
   activeMode?: ActiveMathMode;
   autoDetectNoteMode?: boolean;
 }

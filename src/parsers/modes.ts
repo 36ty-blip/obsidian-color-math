@@ -2,7 +2,7 @@
 
 import { ColorPalette, ActiveMathMode, ColorMathOptions, hashStringToColor } from "../config";
 import { ColorSpan } from "../utils/spans";
-import { findDifferentialSpans, DifferentialSpan } from "./differentials";
+import type { DifferentialSpan } from "./differentials";
 
 /**
  * Domain-specific operators, tensors, and notation collections across the 14 modes.
@@ -17,7 +17,6 @@ const GEOMETRY_MACROS = [
 ];
 
 const COVARIANT_DERIV_REGEX = /\\nabla_\{?[a-zA-Z\\]+\}?/g;
-const METRIC_TENSOR_REGEX = /(?:g|\\eta)_\{?[a-zA-Z\\]+\}?/g;
 const RIEMANN_CURVATURE_REGEX = /R\^\{?[a-zA-Z\\]+\}?_\{?[a-zA-Z\\]+\}?|R_\{?[a-zA-Z\\]+\}?|G_\{?[a-zA-Z\\]+\}?/g;
 
 // Transport & PDEs
@@ -28,11 +27,10 @@ const PDE_MACROS = [
 ];
 
 const MATERIAL_DERIV_REGEX = /\\(?:d|t)?frac\{\s*(?:D|\\mathrm\{D\})\s*(?:\\[a-zA-Z]+|\{[^{}]*\}|[a-zA-Z])*\s*\}\{\s*(?:D|\\mathrm\{D\})\s*t\s*\}/g;
-const BOUNDARY_DOMAIN_REGEX = /\\partial\s*(?:\\Omega|\\mathcal\{D\}|V|\Omega)/g;
+const BOUNDARY_DOMAIN_REGEX = /\\partial\s*(?:\\Omega|\\mathcal\{D\}|V|Ω)/g;
 
 // Dynamics & ODEs
 const POISSON_BRACKET_REGEX = /\\\{\s*[a-zA-Z]\s*,\s*[a-zA-Z]\s*\\\}(?:_\{?[a-zA-Z, ]*\}?)?/g;
-const JACOBIAN_REGEX = /(?:\\mathbf\{J\}|\bJ\b)(?:\s*\([a-zA-Z0-9_, ]*\))?/g;
 
 // Stochastic & Probability
 const STOCHASTIC_DIFF_REGEX = /\bd[WXB](?:_\{?[a-zA-Z0-9]+\}?|\([a-zA-Z0-9]+\))?/g;
@@ -327,11 +325,6 @@ export function generateModeAwareDerivativeSpans(
         });
       } else {
         // \frac{\partial x}{\partial t}: operator frame is coordColor, target variable x retains its own color!
-        const numAbsStart = span.start + numStartOffset;
-        const numAbsEnd = span.start + numEndOffset;
-        const denomAbsStart = span.start + denomStartOffset;
-        const denomAbsEnd = span.start + denomEndOffset;
-
         // Operator frame
         spans.push({
           start: span.start,

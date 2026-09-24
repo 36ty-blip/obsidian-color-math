@@ -262,7 +262,7 @@ export function detectNoteMode(
     }
   }
   if (typeof frontmatter.mode === "string") {
-    const rawMode = (frontmatter.mode as string).toLowerCase().trim();
+    const rawMode = frontmatter.mode.toLowerCase().trim();
     for (const rule of MODE_RULES) {
       if (rawMode === rule.mode || rawMode === rule.superFamily) {
         return rule.mode;
@@ -343,7 +343,7 @@ export function detectNoteField(
     isQuantum = true;
   }
   if (typeof frontmatter["color-math-theme"] === "string") {
-    theme = frontmatter["color-math-theme"] as string;
+    theme = frontmatter["color-math-theme"];
   }
 
   // 2. Check standard note properties: field, subject, topic, discipline, category
