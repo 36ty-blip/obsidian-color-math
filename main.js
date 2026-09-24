@@ -899,6 +899,16 @@ function hashStringToSlot(str, numSlots = 8) {
   if (Object.prototype.hasOwnProperty.call(CANONICAL_VARIABLE_SLOTS, str)) {
     return CANONICAL_VARIABLE_SLOTS[str] % numSlots;
   }
+  const slashKey = "\\" + str;
+  if (Object.prototype.hasOwnProperty.call(CANONICAL_VARIABLE_SLOTS, slashKey)) {
+    return CANONICAL_VARIABLE_SLOTS[slashKey] % numSlots;
+  }
+  if (str.startsWith("\\")) {
+    const unslashed = str.slice(1);
+    if (Object.prototype.hasOwnProperty.call(CANONICAL_VARIABLE_SLOTS, unslashed)) {
+      return CANONICAL_VARIABLE_SLOTS[unslashed] % numSlots;
+    }
+  }
   let h = 0;
   for (let i = 0; i < str.length; i++) {
     h = (h << 5) - h + str.charCodeAt(i) | 0;
@@ -4051,6 +4061,31 @@ var DIFF_REGEX = new RegExp(
   "g"
 );
 var D_OPERATOR_REGEX = /(?:d|\\partial|\\mathrm\{d\}|\\delta|∂)/;
+var BOUNDARY_DOMAIN_PATTERN = /^(?:\\partial|∂)\s*(?:\\{[^{}]+\\}|\\Omega|\\mathcal\{[A-Za-z]+\}|\\Sigma|\\Gamma|[VDMBUKS]|Ω|Σ|Γ)(?![a-z])/;
+var SUBDIFFERENTIAL_PATTERN = /^(?:\\partial|∂)\s*(?:[fgh\ell]|\\phi|\\psi)(?![a-zA-Z])/;
+var BOUNDARY_DOMAIN_SCANNER = new RegExp(
+  "(?:^|[\\s+\\-=*({]|[\\[,;]|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)(\\s*(?:\\\\partial|\u2202)\\s*(?:\\{[^{}]+\\}|\\\\Omega|\\\\mathcal\\{[A-Za-z]+\\}|\\\\Sigma|\\\\Gamma|[VDMBUKS]|\u03A9|\u03A3|\u0393)(?:_[a-zA-Z0-9]+|_\\{[^{}]+\\})?(?![a-z]))",
+  "g"
+);
+function findBoundarySpans(body) {
+  const spans = [];
+  BOUNDARY_DOMAIN_SCANNER.lastIndex = 0;
+  let match;
+  while ((match = BOUNDARY_DOMAIN_SCANNER.exec(body)) !== null) {
+    const fullMatch = match[0];
+    const boundaryGroup = match[1];
+    const bStart = match.index + (fullMatch.length - boundaryGroup.length);
+    const dOffset = boundaryGroup.search(/(?:\\partial|∂)/);
+    const actualStart = bStart + dOffset;
+    const bText = boundaryGroup.slice(dOffset);
+    const opLen = bText.startsWith("\\partial") ? 8 : 1;
+    const opEnd = actualStart + opLen;
+    if (!spans.some((s) => actualStart < s.end && opEnd > s.start)) {
+      spans.push({ start: actualStart, end: opEnd, text: bText.slice(0, opLen) });
+    }
+  }
+  return spans;
+}
 function findDifferentialSpans(body) {
   const spans = [];
   function addSpan(start, end, text, kind) {
@@ -4074,6 +4109,10 @@ function findDifferentialSpans(body) {
     const actualStart = diffStart + dOffset;
     const diffText = diffGroup.slice(dOffset);
     const diffEnd = actualStart + diffText.length;
+    const trimmed = diffText.trim();
+    if (BOUNDARY_DOMAIN_PATTERN.test(trimmed) || SUBDIFFERENTIAL_PATTERN.test(trimmed)) {
+      continue;
+    }
     addSpan(actualStart, diffEnd, diffText, "differential");
   }
   return spans.sort((a, b) => a.start - b.start);
@@ -5050,7 +5089,6 @@ var WIRTINGER_REGEX = /\\(?:d|t)?frac\{\s*(?:\\partial|∂)\s*([a-zA-Z\\]*)\s*\}
 var RESIDUE_REGEX = /(?:\\operatorname\{Res\}|\\mathrm\{Res\}|\bRes\b)/g;
 var ALGEBRA_MACROS = [
   "\\det",
-  "\\tr",
   "\\ker",
   "\\operatorname{im}",
   "\\operatorname{rank}",
@@ -5062,6 +5100,25 @@ var ALGEBRA_MACROS = [
   "\\operatorname{Hom}",
   "\\operatorname{Aut}"
 ];
+function findMacroSpans(body, macros, color, priority) {
+  const spans = [];
+  const sorted = [...macros].sort((a, b) => b.length - a.length);
+  for (const macro of sorted) {
+    const escaped = macro.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const boundary = /[a-zA-Z]$/.test(macro) ? "(?![a-zA-Z])" : "";
+    const regex = new RegExp(escaped + boundary, "g");
+    let match;
+    while ((match = regex.exec(body)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+      if (!spans.some((s) => Math.max(s.start, start) < Math.min(s.end, end))) {
+        const assignedColor = typeof color === "function" ? color(macro) : color;
+        spans.push({ start, end, color: assignedColor, priority });
+      }
+    }
+  }
+  return spans;
+}
 function resolveModeCategory(mode) {
   if (!mode)
     return "analysis";
@@ -5083,18 +5140,14 @@ function collectDomainOperatorSpans(body, palette, mode = "analysis") {
   if (category === "geometry") {
     const geoColor = palette.arrow || "#f7768e";
     const connColor = palette.orange || "#e0af68";
-    for (const macro of GEOMETRY_MACROS) {
-      let idx = body.indexOf(macro);
-      while (idx !== -1) {
-        spans.push({
-          start: idx,
-          end: idx + macro.length,
-          color: macro === "\\Gamma" ? connColor : geoColor,
-          priority: 25
-        });
-        idx = body.indexOf(macro, idx + macro.length);
-      }
-    }
+    spans.push(
+      ...findMacroSpans(
+        body,
+        GEOMETRY_MACROS,
+        (macro) => macro === "\\Gamma" ? connColor : geoColor,
+        25
+      )
+    );
     let match;
     COVARIANT_DERIV_REGEX.lastIndex = 0;
     while ((match = COVARIANT_DERIV_REGEX.exec(body)) !== null) {
@@ -5117,18 +5170,7 @@ function collectDomainOperatorSpans(body, palette, mode = "analysis") {
   }
   if (category === "pde") {
     const pdeColor = palette.energyOperator || "#2ac3de";
-    for (const macro of PDE_MACROS) {
-      let idx = body.indexOf(macro);
-      while (idx !== -1) {
-        spans.push({
-          start: idx,
-          end: idx + macro.length,
-          color: pdeColor,
-          priority: 25
-        });
-        idx = body.indexOf(macro, idx + macro.length);
-      }
-    }
+    spans.push(...findMacroSpans(body, PDE_MACROS, pdeColor, 25));
     let match;
     MATERIAL_DERIV_REGEX.lastIndex = 0;
     while ((match = MATERIAL_DERIV_REGEX.exec(body)) !== null) {
@@ -5172,18 +5214,8 @@ function collectDomainOperatorSpans(body, palette, mode = "analysis") {
         priority: 26
       });
     }
-    for (const macro of PROBABILITY_MACROS) {
-      let idx = body.indexOf(macro);
-      while (idx !== -1) {
-        spans.push({
-          start: idx,
-          end: idx + macro.length,
-          color: palette.orange || "#e0af68",
-          priority: 25
-        });
-        idx = body.indexOf(macro, idx + macro.length);
-      }
-    }
+    const probColor = palette.orange || "#e0af68";
+    spans.push(...findMacroSpans(body, PROBABILITY_MACROS, probColor, 25));
   }
   if (mode === "complex" || category === "analysis" && body.includes("\\partial") && body.includes("z")) {
     let match;
@@ -5207,18 +5239,8 @@ function collectDomainOperatorSpans(body, palette, mode = "analysis") {
     }
   }
   if (category === "algebra") {
-    for (const macro of ALGEBRA_MACROS) {
-      let idx = body.indexOf(macro);
-      while (idx !== -1) {
-        spans.push({
-          start: idx,
-          end: idx + macro.length,
-          color: palette.orange || "#e0af68",
-          priority: 22
-        });
-        idx = body.indexOf(macro, idx + macro.length);
-      }
-    }
+    const algColor = palette.orange || "#e0af68";
+    spans.push(...findMacroSpans(body, ALGEBRA_MACROS, algColor, 22));
   }
   return spans;
 }
@@ -5425,10 +5447,12 @@ function skipComment5(text, start) {
   }
   return Math.min(index + 1, text.length);
 }
-function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, diffSpans, dimSpans, bareFunctions = BARE_FUNCTIONS) {
+function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, diffSpans, dimSpans, bareFunctions = BARE_FUNCTIONS, boundarySpans) {
+  const hashPalette = Array.isArray(palette) ? palette : palette && typeof palette === "object" ? Object.values(palette) : VARIABLE_HASH_PALETTE;
   const units = unitSpans || findUnitSpans(body);
   const diffs = diffSpans || findDifferentialSpans(body);
   const dims = dimSpans || findDimensionlessSpans(body);
+  const boundaries = boundarySpans || findBoundarySpans(body);
   const spans = [];
   let index = 0;
   while (index < body.length) {
@@ -5444,6 +5468,11 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
     const operand = readOperand(body, index);
     if (operand !== null && operand.kind === "opaque") {
       index = operand.end;
+      continue;
+    }
+    const inBoundary = boundaries.find((b) => b.start <= index && index < b.end);
+    if (inBoundary) {
+      index = inBoundary.end;
       continue;
     }
     const inUnit = units.find((u) => u.start <= index && index < u.end);
@@ -5506,7 +5535,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
                   start: index,
                   end: braced[1],
                   color,
-                  priority: 15
+                  priority: 26
                 });
                 index = braced[1];
                 continue;
@@ -5529,7 +5558,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
                   start: index,
                   end: afterNext,
                   color,
-                  priority: 15
+                  priority: 26
                 });
                 index = afterNext;
                 continue;
@@ -5544,7 +5573,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
                   start: index,
                   end: targetStart + fullVar.length,
                   color,
-                  priority: 15
+                  priority: 26
                 });
                 index = targetStart + fullVar.length;
                 continue;
@@ -5580,7 +5609,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
               start: index,
               end: targetEnd,
               color,
-              priority: 15
+              priority: 26
             });
             index = targetEnd;
             continue;
@@ -5598,6 +5627,17 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
               continue;
             }
           }
+        }
+        if (MATH_PARAMETERS.has(cmdName)) {
+          const color = hashStringToColor(cmdName, palette);
+          spans.push({
+            start: index,
+            end: cmdEnd,
+            color,
+            priority: 26
+          });
+          index = cmdEnd;
+          continue;
         }
         index = cmdEnd;
         continue;
@@ -5628,7 +5668,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
               start: index + i,
               end: index + i + 1,
               color,
-              priority: 15
+              priority: 26
             });
           }
           index += word.length;
@@ -5656,7 +5696,7 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
         start: index,
         end: varEnd,
         color,
-        priority: 15
+        priority: 26
       });
       index = varEnd;
       continue;
@@ -5706,11 +5746,20 @@ function colorLatexBody(body, palette = COLORS, options) {
   const unitSpans = needUnits ? findUnitSpans(normalized) : [];
   const diffSpans = needDiffs ? findDifferentialSpans(normalized) : [];
   const dimSpans = needDims ? findDimensionlessSpans(normalized) : [];
+  const boundarySpans = findBoundarySpans(normalized);
   const bareFunctions = getBareFunctions(options);
   const spans = [
     ...collectFunctionSpans(normalized, palette, bareFunctions, options),
     ...collectScannerSpans(normalized, palette)
   ];
+  for (const b of boundarySpans) {
+    spans.push({
+      start: b.start,
+      end: b.end,
+      color: palette.chain || "#9ece6a",
+      priority: 25
+    });
+  }
   if (options?.colorUnits !== false) {
     spans.push(...collectUnitSpans(normalized, palette, unitSpans));
   }
@@ -5746,7 +5795,7 @@ function colorLatexBody(body, palette = COLORS, options) {
     );
   }
   if (options?.variableDataFlow) {
-    spans.push(...collectVariableSpans(normalized, void 0, unitSpans, diffSpans, dimSpans, bareFunctions));
+    spans.push(...collectVariableSpans(normalized, void 0, unitSpans, diffSpans, dimSpans, bareFunctions, boundarySpans));
   }
   if (options?.activeMode) {
     const domainSpans = collectDomainOperatorSpans(normalized, palette, options.activeMode);

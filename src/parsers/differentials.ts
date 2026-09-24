@@ -31,12 +31,50 @@ const DIFF_REGEX = new RegExp(
 
 const D_OPERATOR_REGEX = /(?:d|\\partial|\\mathrm\{d\}|\\delta|∂)/;
 
+export interface BoundarySpan {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export const BOUNDARY_DOMAIN_PATTERN =
+  /^(?:\\partial|∂)\s*(?:\\{[^{}]+\\}|\\Omega|\\mathcal\{[A-Za-z]+\}|\\Sigma|\\Gamma|[VDMBUKS]|Ω|Σ|Γ)(?![a-z])/;
+
+export const SUBDIFFERENTIAL_PATTERN =
+  /^(?:\\partial|∂)\s*(?:[fgh\ell]|\\phi|\\psi)(?![a-zA-Z])/;
+
+const BOUNDARY_DOMAIN_SCANNER = new RegExp(
+  "(?:^|[\\s+\\-=*({]|[\\[,;]|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)(\\s*(?:\\\\partial|∂)\\s*(?:\\{[^{}]+\\}|\\\\Omega|\\\\mathcal\\{[A-Za-z]+\\}|\\\\Sigma|\\\\Gamma|[VDMBUKS]|Ω|Σ|Γ)(?:_[a-zA-Z0-9]+|_\\{[^{}]+\\})?(?![a-z]))",
+  "g"
+);
+
+export function findBoundarySpans(body: string): BoundarySpan[] {
+  const spans: BoundarySpan[] = [];
+  BOUNDARY_DOMAIN_SCANNER.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = BOUNDARY_DOMAIN_SCANNER.exec(body)) !== null) {
+    const fullMatch = match[0];
+    const boundaryGroup = match[1];
+    const bStart = match.index + (fullMatch.length - boundaryGroup.length);
+    const dOffset = boundaryGroup.search(/(?:\\partial|∂)/);
+    const actualStart = bStart + dOffset;
+    const bText = boundaryGroup.slice(dOffset);
+    const opLen = bText.startsWith("\\partial") ? 8 : 1;
+    const opEnd = actualStart + opLen;
+    if (!spans.some((s) => actualStart < s.end && opEnd > s.start)) {
+      spans.push({ start: actualStart, end: opEnd, text: bText.slice(0, opLen) });
+    }
+  }
+  return spans;
+}
+
 /**
  * Scans a LaTeX math body to identify differential spans and derivative fractions.
  * Handles:
  * - Derivative fractions: \frac{d}{dx}, \frac{df}{dx}, \frac{\partial \psi}{\partial t}, \frac{d^2 y}{dx^2}
  * - Infinitesimal differentials: dx, dt, dy, dz, dr, d\theta, d\phi, \partial x, \partial t
  * Protects standalone $d$ (e.g. $W = Fd$, $d = vt$) from being treated as differentials.
+ * Protects boundary surface manifolds (\partial\Omega, \partial V, \partial D, \partial M) from being treated as differentials.
  */
 export function findDifferentialSpans(body: string): DifferentialSpan[] {
   const spans: DifferentialSpan[] = [];
@@ -65,6 +103,14 @@ export function findDifferentialSpans(body: string): DifferentialSpan[] {
     const actualStart = diffStart + dOffset;
     const diffText = diffGroup.slice(dOffset);
     const diffEnd = actualStart + diffText.length;
+
+    // Protect boundary surface manifolds (\partial\Omega, \partial V, \partial D, etc.)
+    // Protect subdifferential set operators (\partial f, \partial g, \partial\phi)
+    const trimmed = diffText.trim();
+    if (BOUNDARY_DOMAIN_PATTERN.test(trimmed) || SUBDIFFERENTIAL_PATTERN.test(trimmed)) {
+      continue;
+    }
+
     addSpan(actualStart, diffEnd, diffText, "differential");
   }
 

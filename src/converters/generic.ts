@@ -4,7 +4,7 @@ import { COLORS, ColorPalette, ColorMathOptions, getBareFunctions } from "../con
 import { collectSingleConstantSpans } from "../parsers/constants";
 import { collectBraKetDelimiterSpans } from "../parsers/braket";
 import { collectDelimiterSpans } from "../parsers/delimiters";
-import { collectDifferentialSpans, findDifferentialSpans } from "../parsers/differentials";
+import { collectDifferentialSpans, findDifferentialSpans, findBoundarySpans } from "../parsers/differentials";
 import { collectDimensionlessSpans, findDimensionlessSpans } from "../parsers/dimensionless";
 import { findSemanticSpans } from "../parsers/math_parser";
 import { collectScannerSpans } from "../parsers/scanner";
@@ -70,6 +70,7 @@ export function colorLatexBody(
   const unitSpans = needUnits ? findUnitSpans(normalized) : [];
   const diffSpans = needDiffs ? findDifferentialSpans(normalized) : [];
   const dimSpans = needDims ? findDimensionlessSpans(normalized) : [];
+  const boundarySpans = findBoundarySpans(normalized);
 
   const bareFunctions = getBareFunctions(options);
 
@@ -77,6 +78,16 @@ export function colorLatexBody(
     ...collectFunctionSpans(normalized, palette, bareFunctions, options),
     ...collectScannerSpans(normalized, palette),
   ];
+
+  // Domain boundary surfaces (\partial\Omega, \partial V, ∂D, etc.) -> operator in palette.chain (#9ece6a)
+  for (const b of boundarySpans) {
+    spans.push({
+      start: b.start,
+      end: b.end,
+      color: palette.chain || "#9ece6a",
+      priority: 25,
+    });
+  }
 
   if (options?.colorUnits !== false) {
     spans.push(...collectUnitSpans(normalized, palette, unitSpans));
@@ -120,7 +131,7 @@ export function colorLatexBody(
   }
 
   if (options?.variableDataFlow) {
-    spans.push(...collectVariableSpans(normalized, undefined, unitSpans, diffSpans, dimSpans, bareFunctions));
+    spans.push(...collectVariableSpans(normalized, undefined, unitSpans, diffSpans, dimSpans, bareFunctions, boundarySpans));
   }
 
   if (options?.activeMode) {

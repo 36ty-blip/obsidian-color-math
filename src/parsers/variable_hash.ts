@@ -3,14 +3,16 @@
 import {
   VARIABLE_HASH_PALETTE,
   hashStringToColor,
+  ColorPalette,
   MATH_ACCENTS,
   FONT_STYLE_MACROS,
   BARE_FUNCTIONS,
+  MATH_PARAMETERS,
 } from "../config";
 import { readOperand } from "./latex_spans";
 import { readBraced, readColorCommand, skipEnvironmentHead } from "../utils/latex_helpers";
 import { ColorSpan } from "../utils/spans";
-import { findDifferentialSpans, DifferentialSpan } from "./differentials";
+import { findDifferentialSpans, DifferentialSpan, findBoundarySpans, BoundarySpan } from "./differentials";
 import { findDimensionlessSpans, DimensionlessSpan } from "./dimensionless";
 import { findUnitSpans, UnitSpan } from "./units";
 import { isEulerConstant, isImaginaryUnit } from "./constants";
@@ -53,15 +55,20 @@ function skipComment(text: string, start: number): number {
  */
 export function collectVariableSpans(
   body: string,
-  palette: string[] = VARIABLE_HASH_PALETTE,
+  palette: string[] | ColorPalette = VARIABLE_HASH_PALETTE,
   unitSpans?: UnitSpan[],
   diffSpans?: DifferentialSpan[],
   dimSpans?: DimensionlessSpan[],
-  bareFunctions: Set<string> = BARE_FUNCTIONS
+  bareFunctions: Set<string> = BARE_FUNCTIONS,
+  boundarySpans?: BoundarySpan[]
 ): ColorSpan[] {
+  const hashPalette = Array.isArray(palette)
+    ? palette
+    : (palette && typeof palette === "object" ? Object.values(palette) : VARIABLE_HASH_PALETTE);
   const units = unitSpans || findUnitSpans(body);
   const diffs = diffSpans || findDifferentialSpans(body);
   const dims = dimSpans || findDimensionlessSpans(body);
+  const boundaries = boundarySpans || findBoundarySpans(body);
   const spans: ColorSpan[] = [];
   let index = 0;
 
@@ -80,6 +87,12 @@ export function collectVariableSpans(
     const operand = readOperand(body, index);
     if (operand !== null && operand.kind === "opaque") {
       index = operand.end;
+      continue;
+    }
+
+    const inBoundary = boundaries.find((b) => b.start <= index && index < b.end);
+    if (inBoundary) {
+      index = inBoundary.end;
       continue;
     }
 
@@ -153,7 +166,7 @@ export function collectVariableSpans(
                   start: index,
                   end: braced[1],
                   color,
-                  priority: 15,
+                  priority: 26,
                 });
                 index = braced[1];
                 continue;
@@ -175,7 +188,7 @@ export function collectVariableSpans(
                   start: index,
                   end: afterNext,
                   color,
-                  priority: 15,
+                  priority: 26,
                 });
                 index = afterNext;
                 continue;
@@ -190,7 +203,7 @@ export function collectVariableSpans(
                   start: index,
                   end: targetStart + fullVar.length,
                   color,
-                  priority: 15,
+                  priority: 26,
                 });
                 index = targetStart + fullVar.length;
                 continue;
@@ -226,7 +239,7 @@ export function collectVariableSpans(
               start: index,
               end: targetEnd,
               color,
-              priority: 15,
+              priority: 26,
             });
             index = targetEnd;
             continue;
@@ -246,6 +259,19 @@ export function collectVariableSpans(
             }
           }
         }
+
+        if (MATH_PARAMETERS.has(cmdName)) {
+          const color = hashStringToColor(cmdName, palette);
+          spans.push({
+            start: index,
+            end: cmdEnd,
+            color,
+            priority: 26,
+          });
+          index = cmdEnd;
+          continue;
+        }
+
         index = cmdEnd;
         continue;
       }
@@ -285,7 +311,7 @@ export function collectVariableSpans(
               start: index + i,
               end: index + i + 1,
               color,
-              priority: 15,
+              priority: 26,
             });
           }
           index += word.length;
@@ -318,7 +344,7 @@ export function collectVariableSpans(
         start: index,
         end: varEnd,
         color,
-        priority: 15,
+        priority: 26,
       });
 
       index = varEnd;

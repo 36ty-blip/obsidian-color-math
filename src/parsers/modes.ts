@@ -46,10 +46,39 @@ const RESIDUE_REGEX = /(?:\\operatorname\{Res\}|\\mathrm\{Res\}|\bRes\b)/g;
 
 // Linear & Abstract Algebra
 const ALGEBRA_MACROS = [
-  "\\det", "\\tr", "\\ker", "\\operatorname{im}", "\\operatorname{rank}",
+  "\\det", "\\ker", "\\operatorname{im}", "\\operatorname{rank}",
   "\\otimes", "\\oplus", "\\cong", "\\triangleleft", "\\rtimes",
   "\\operatorname{Hom}", "\\operatorname{Aut}",
 ];
+
+/**
+ * Finds macro occurrences with strict LaTeX command boundary (?![a-zA-Z])
+ * so prefixes never collide with longer command names (e.g. \tr inside \triangleleft, \le inside \left).
+ */
+function findMacroSpans(
+  body: string,
+  macros: string[],
+  color: string | ((macro: string) => string),
+  priority: number
+): ColorSpan[] {
+  const spans: ColorSpan[] = [];
+  const sorted = [...macros].sort((a, b) => b.length - a.length);
+  for (const macro of sorted) {
+    const escaped = macro.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const boundary = /[a-zA-Z]$/.test(macro) ? "(?![a-zA-Z])" : "";
+    const regex = new RegExp(escaped + boundary, "g");
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(body)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+      if (!spans.some((s) => Math.max(s.start, start) < Math.min(s.end, end))) {
+        const assignedColor = typeof color === "function" ? color(macro) : color;
+        spans.push({ start, end, color: assignedColor, priority });
+      }
+    }
+  }
+  return spans;
+}
 
 /**
  * Returns the effective Super-Family or Granular Mode.
@@ -80,18 +109,14 @@ export function collectDomainOperatorSpans(
     const geoColor = palette.arrow || "#f7768e"; // High-visibility geometric accent
     const connColor = palette.orange || "#e0af68"; // Connection / Christoffel
 
-    for (const macro of GEOMETRY_MACROS) {
-      let idx = body.indexOf(macro);
-      while (idx !== -1) {
-        spans.push({
-          start: idx,
-          end: idx + macro.length,
-          color: macro === "\\Gamma" ? connColor : geoColor,
-          priority: 25,
-        });
-        idx = body.indexOf(macro, idx + macro.length);
-      }
-    }
+    spans.push(
+      ...findMacroSpans(
+        body,
+        GEOMETRY_MACROS,
+        (macro) => (macro === "\\Gamma" ? connColor : geoColor),
+        25
+      )
+    );
 
     let match: RegExpExecArray | null;
     COVARIANT_DERIV_REGEX.lastIndex = 0;
@@ -118,19 +143,7 @@ export function collectDomainOperatorSpans(
   // 2. Transport & PDEs
   if (category === "pde") {
     const pdeColor = palette.energyOperator || "#2ac3de";
-
-    for (const macro of PDE_MACROS) {
-      let idx = body.indexOf(macro);
-      while (idx !== -1) {
-        spans.push({
-          start: idx,
-          end: idx + macro.length,
-          color: pdeColor,
-          priority: 25,
-        });
-        idx = body.indexOf(macro, idx + macro.length);
-      }
-    }
+    spans.push(...findMacroSpans(body, PDE_MACROS, pdeColor, 25));
 
     let match: RegExpExecArray | null;
     MATERIAL_DERIV_REGEX.lastIndex = 0;
@@ -181,18 +194,8 @@ export function collectDomainOperatorSpans(
       });
     }
 
-    for (const macro of PROBABILITY_MACROS) {
-      let idx = body.indexOf(macro);
-      while (idx !== -1) {
-        spans.push({
-          start: idx,
-          end: idx + macro.length,
-          color: palette.orange || "#e0af68",
-          priority: 25,
-        });
-        idx = body.indexOf(macro, idx + macro.length);
-      }
-    }
+    const probColor = palette.orange || "#e0af68";
+    spans.push(...findMacroSpans(body, PROBABILITY_MACROS, probColor, 25));
   }
 
   // 5. Complex Analysis
@@ -221,18 +224,8 @@ export function collectDomainOperatorSpans(
 
   // 6. Algebra & Discrete
   if (category === "algebra") {
-    for (const macro of ALGEBRA_MACROS) {
-      let idx = body.indexOf(macro);
-      while (idx !== -1) {
-        spans.push({
-          start: idx,
-          end: idx + macro.length,
-          color: palette.orange || "#e0af68",
-          priority: 22,
-        });
-        idx = body.indexOf(macro, idx + macro.length);
-      }
-    }
+    const algColor = palette.orange || "#e0af68";
+    spans.push(...findMacroSpans(body, ALGEBRA_MACROS, algColor, 22));
   }
 
   return spans;

@@ -613,6 +613,16 @@ export function hashStringToSlot(str: string, numSlots: number = 8): number {
   if (Object.prototype.hasOwnProperty.call(CANONICAL_VARIABLE_SLOTS, str)) {
     return CANONICAL_VARIABLE_SLOTS[str] % numSlots;
   }
+  const slashKey = "\\" + str;
+  if (Object.prototype.hasOwnProperty.call(CANONICAL_VARIABLE_SLOTS, slashKey)) {
+    return CANONICAL_VARIABLE_SLOTS[slashKey] % numSlots;
+  }
+  if (str.startsWith("\\")) {
+    const unslashed = str.slice(1);
+    if (Object.prototype.hasOwnProperty.call(CANONICAL_VARIABLE_SLOTS, unslashed)) {
+      return CANONICAL_VARIABLE_SLOTS[unslashed] % numSlots;
+    }
+  }
 
   // Knuth 32-bit multiplicative hash with golden ratio constant 2654435761 (0x9E3779B9)
   let h = 0;
