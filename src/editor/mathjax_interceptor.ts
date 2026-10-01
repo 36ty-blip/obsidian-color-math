@@ -25,6 +25,16 @@ interface DomQueryableCandidate {
 
 export type ErrorDisplayMode = "inline" | "fallback" | "notice" | "native";
 
+export function computeMathHash(latex: string, contextKey: string = ""): string {
+  let h = 0x811c9dc5 >>> 0;
+  const str = latex + "\0" + contextKey;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36);
+}
+
 export class MathJaxInterceptor {
   private unpatchFns: (() => void)[] = [];
   private getPalette: () => ColorPalette;
@@ -32,6 +42,43 @@ export class MathJaxInterceptor {
   private isEnabled: () => boolean;
   private getErrorMode: () => ErrorDisplayMode;
   private lastNoticeTime: number = 0;
+  private renderCache = new Map<string, HTMLElement | SVGElement>();
+  private maxCacheEntries: number = 500;
+
+  clearCache(): void {
+    this.renderCache.clear();
+  }
+
+  private getContextKey(): string {
+    const p = this.getPalette();
+    const o = this.getOptions();
+    return `${p.main}-${p.orange}-${p.derivative}-${p.chain}-${o.activeMode || ""}`;
+  }
+
+  private getCachedElement<T extends HTMLElement | SVGElement>(hash: string): T | null {
+    const cached = this.renderCache.get(hash);
+    if (!cached) return null;
+    if (typeof (cached as any).cloneNode === "function") {
+      return (cached as any).cloneNode(true) as T;
+    }
+    return cached as T;
+  }
+
+  private cacheElement<T extends HTMLElement | SVGElement>(hash: string, el: T): void {
+    if (!el) return;
+    if (typeof (el as any).setAttribute === "function") {
+      (el as any).setAttribute("data-math-hash", hash);
+    }
+    if (this.renderCache.size >= this.maxCacheEntries) {
+      const firstKey = this.renderCache.keys().next().value;
+      if (firstKey) this.renderCache.delete(firstKey);
+    }
+    if (typeof (el as any).cloneNode === "function") {
+      this.renderCache.set(hash, (el as any).cloneNode(true));
+    } else {
+      this.renderCache.set(hash, el);
+    }
+  }
 
   constructor(
     getPalette: () => ColorPalette,
@@ -93,10 +140,15 @@ export class MathJaxInterceptor {
       const orig = mathJax.tex2chtml;
       mathJax.tex2chtml = (latex: string, options?: unknown) => {
         if (!this.isEnabled()) return orig.call(mathJax, latex, options);
+        const hash = computeMathHash(latex, this.getContextKey());
+        const cached = this.getCachedElement<HTMLElement>(hash);
+        if (cached) return cached;
         try {
           const transformed = transform(latex);
           const res = orig.call(mathJax, transformed, options);
-          return this.handleResult(res, orig, mathJax, latex, transformed, options);
+          const finalResult = this.handleResult(res, orig, mathJax, latex, transformed, options);
+          this.cacheElement(hash, finalResult);
+          return finalResult;
         } catch (err) {
           console.warn("Color Math: Exception during tex2chtml, falling back to original LaTeX:", err);
           return orig.call(mathJax, latex, options);
@@ -112,9 +164,12 @@ export class MathJaxInterceptor {
       const orig = mathJax.tex2chtmlPromise;
       mathJax.tex2chtmlPromise = async (latex: string, options?: unknown) => {
         if (!this.isEnabled()) return orig.call(mathJax, latex, options);
+        const hash = computeMathHash(latex, this.getContextKey());
+        const cached = this.getCachedElement<HTMLElement>(hash);
+        if (cached) return cached;
         try {
           const transformed = transform(latex);
-          return await this.handleAsyncResult(
+          const finalResult = await this.handleAsyncResult(
             orig.call(mathJax, transformed, options),
             orig,
             mathJax,
@@ -122,6 +177,8 @@ export class MathJaxInterceptor {
             transformed,
             options
           );
+          this.cacheElement(hash, finalResult);
+          return finalResult;
         } catch (err) {
           console.warn("Color Math: Exception during tex2chtmlPromise, falling back to original LaTeX:", err);
           return await orig.call(mathJax, latex, options);
@@ -137,10 +194,15 @@ export class MathJaxInterceptor {
       const orig = mathJax.tex2svg;
       mathJax.tex2svg = (latex: string, options?: unknown) => {
         if (!this.isEnabled()) return orig.call(mathJax, latex, options);
+        const hash = computeMathHash(latex, this.getContextKey());
+        const cached = this.getCachedElement<SVGElement>(hash);
+        if (cached) return cached;
         try {
           const transformed = transform(latex);
           const res = orig.call(mathJax, transformed, options);
-          return this.handleResult(res, orig, mathJax, latex, transformed, options);
+          const finalResult = this.handleResult(res, orig, mathJax, latex, transformed, options);
+          this.cacheElement(hash, finalResult);
+          return finalResult;
         } catch (err) {
           console.warn("Color Math: Exception during tex2svg, falling back to original LaTeX:", err);
           return orig.call(mathJax, latex, options);
@@ -156,9 +218,12 @@ export class MathJaxInterceptor {
       const orig = mathJax.tex2svgPromise;
       mathJax.tex2svgPromise = async (latex: string, options?: unknown) => {
         if (!this.isEnabled()) return orig.call(mathJax, latex, options);
+        const hash = computeMathHash(latex, this.getContextKey());
+        const cached = this.getCachedElement<SVGElement>(hash);
+        if (cached) return cached;
         try {
           const transformed = transform(latex);
-          return await this.handleAsyncResult(
+          const finalResult = await this.handleAsyncResult(
             orig.call(mathJax, transformed, options),
             orig,
             mathJax,
@@ -166,6 +231,8 @@ export class MathJaxInterceptor {
             transformed,
             options
           );
+          this.cacheElement(hash, finalResult);
+          return finalResult;
         } catch (err) {
           console.warn("Color Math: Exception during tex2svgPromise, falling back to original LaTeX:", err);
           return await orig.call(mathJax, latex, options);

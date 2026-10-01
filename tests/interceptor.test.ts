@@ -180,4 +180,33 @@ describe("MathJaxInterceptor Headless Unit Tests", () => {
 
     interceptor.uninstall();
   });
+
+  it("tags rendered elements with data-math-hash and reconciles unchanged equations via cache", async () => {
+    const interceptor = new MathJaxInterceptor(
+      () => DEFAULT_COLORS,
+      () => ({ enableTaxonomy: true }),
+      () => true,
+      () => "fallback"
+    );
+
+    await interceptor.install();
+
+    // First render
+    const res1 = (window as any).MathJax.tex2chtml("E = mc^2") as MockElement;
+    expect(res1.getAttribute("data-math-hash")).toBeDefined();
+    expect(capturedTexCalls.length).toBe(1);
+
+    // Second render with identical formula
+    const res2 = (window as any).MathJax.tex2chtml("E = mc^2") as MockElement;
+    expect(res2.getAttribute("data-math-hash")).toBe(res1.getAttribute("data-math-hash"));
+    // Content hash hit avoids re-running MathJax!
+    expect(capturedTexCalls.length).toBe(1);
+
+    // Modified formula triggers new render
+    const res3 = (window as any).MathJax.tex2chtml("E = mc^3") as MockElement;
+    expect(res3.getAttribute("data-math-hash")).not.toBe(res1.getAttribute("data-math-hash"));
+    expect(capturedTexCalls.length).toBe(2);
+
+    interceptor.uninstall();
+  });
 });

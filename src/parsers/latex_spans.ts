@@ -315,7 +315,6 @@ export function readGroupEnd(
   if (!closing || source[start] !== opening) return null;
 
   let depth = 1;
-  let nestedIntervalDepth = 0;
   let index = start + 1;
   while (index < end) {
     if (source[index] === "%") {
@@ -343,30 +342,58 @@ export function readGroupEnd(
     if (source[index] === opening) {
       depth++;
     } else if (source[index] === closing) {
-      if (nestedIntervalDepth > 0) {
-        nestedIntervalDepth--;
-      } else {
-        depth--;
-        if (depth === 0) {
-          return index + 1;
-        }
-      }
-    } else if (opening === "[" && source[index] === "(") {
-      nestedIntervalDepth++;
-    } else if (opening === "(" && source[index] === "[") {
-      nestedIntervalDepth++;
-    } else if (opening === "[" && source[index] === ")" && nestedIntervalDepth > 0) {
-      nestedIntervalDepth--;
-    } else if (opening === "(" && source[index] === "]" && nestedIntervalDepth > 0) {
-      nestedIntervalDepth--;
-    } else if (depth === 1 && nestedIntervalDepth === 0) {
-      // Half-open interval closing: [a, b) or (a, b]
-      if ((opening === "[" && source[index] === ")") || (opening === "(" && source[index] === "]")) {
+      depth--;
+      if (depth === 0) {
         return index + 1;
       }
     }
     index++;
   }
+
+  // Half-open interval fallback: [a, b) or (a, b] containing a top-level comma
+  if (opening === "[" || opening === "(") {
+    const altClosing = opening === "[" ? ")" : "]";
+    let parenDepth = 0;
+    let bracketDepth = 0;
+    let braceDepth = 0;
+    let hasComma = false;
+    let idx = start + 1;
+    while (idx < end) {
+      if (source[idx] === "%") {
+        idx = skipComment(source, idx, end);
+        continue;
+      }
+      if (source[idx] === "\\") {
+        const cmd = readCommand(source, idx, end);
+        idx = cmd !== null ? cmd[1] : idx + 1;
+        continue;
+      }
+      const ch = source[idx];
+      if (ch === "(") {
+        parenDepth++;
+      } else if (ch === ")") {
+        if (parenDepth === 0 && altClosing === ")" && hasComma && bracketDepth === 0 && braceDepth === 0) {
+          return idx + 1;
+        }
+        parenDepth = Math.max(0, parenDepth - 1);
+      } else if (ch === "[") {
+        bracketDepth++;
+      } else if (ch === "]") {
+        if (bracketDepth === 0 && altClosing === "]" && hasComma && parenDepth === 0 && braceDepth === 0) {
+          return idx + 1;
+        }
+        bracketDepth = Math.max(0, bracketDepth - 1);
+      } else if (ch === "{") {
+        braceDepth++;
+      } else if (ch === "}") {
+        braceDepth = Math.max(0, braceDepth - 1);
+      } else if (ch === "," && parenDepth === 0 && bracketDepth === 0 && braceDepth === 0) {
+        hasComma = true;
+      }
+      idx++;
+    }
+  }
+
   return null;
 }
 
@@ -706,6 +733,27 @@ export function readOperand(
     return null;
   }
 
+  if (source.charCodeAt(start) === 34) {
+    let j = start + 1;
+    while (j < end) {
+      if (source.startsWith("$$", j)) break;
+      if (source[j] === "\\") {
+        j += 2;
+        continue;
+      }
+      if (source.charCodeAt(j) === 34) {
+        j++;
+        break;
+      }
+      j++;
+    }
+    return {
+      kind: "opaque",
+      start,
+      end: consumePostfix(source, j, end),
+    };
+  }
+
   if (source[start] === "\\") {
     const command = readCommand(source, start, end);
     if (command === null) return null;
@@ -922,10 +970,7 @@ export function readOperand(
   if (source[start] === "(" || source[start] === "{" || source[start] === "[") {
     const groupEnd = readGroupEnd(source, start, end);
     if (groupEnd === null) {
-      if (source[start] === "{") {
-        return { kind: "opaque", start, end };
-      }
-      return null;
+      return { kind: "opaque", start, end };
     }
     if (containsVerbCommand(source, start, groupEnd)) {
       return { kind: "opaque", start, end: groupEnd };

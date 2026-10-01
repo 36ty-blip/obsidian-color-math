@@ -1,3 +1,6 @@
+import type { ColorMathOptions } from "../config";
+import { findUnitSpans } from "../parsers/units";
+
 const COMMAND_STICKY_RE = /\\(?:[A-Za-z]+|.)/y;
 
 export function matchCommand(text: string, index: number): string | null {
@@ -263,6 +266,11 @@ function readSingleMacroArg(
   const index = skipIgnorableWhitespace(text, start);
   if (index >= text.length) return null;
 
+  // Cell boundary and delimiter hard-stops: bare '&', '\\' (newline), or '$' cannot be arguments
+  if (text[index] === "&" || text[index] === "$" || text.startsWith("\\\\", index)) {
+    return null;
+  }
+
   let base: ParsedMacroArg | null = null;
 
   if (text[index] === "{") {
@@ -276,6 +284,31 @@ function readSingleMacroArg(
       };
     } else {
       return null;
+    }
+  } else if (text[index] === "(") {
+    let depth = 1;
+    let j = index + 1;
+    while (j < text.length && depth > 0) {
+      if (text[j] === "%") {
+        j = readCommentEnd(text, j);
+        continue;
+      }
+      if (text[j] === "\\") {
+        const cmd = matchCommand(text, j);
+        j += cmd ? cmd.length : 1;
+        continue;
+      }
+      if (text[j] === "(") depth++;
+      else if (text[j] === ")") depth--;
+      j++;
+    }
+    if (depth === 0) {
+      base = {
+        raw: text.slice(index, j),
+        inner: text.slice(index + 1, j - 1),
+        end: j,
+        braced: false,
+      };
     }
   } else if (text[index] === "\\") {
     const cmd = matchCommand(text, index);
@@ -334,13 +367,128 @@ function readSingleMacroArg(
       }
 
       if (!base) {
+        // Check if command is followed by parenthesized argument: e.g. \sin(x) or \sin^2(x)
+        let lookahead = afterCmd;
+        if (lookahead < text.length && text[lookahead] === "^") {
+          lookahead++;
+          if (lookahead < text.length && text[lookahead] === "{") {
+            while (lookahead < text.length && text[lookahead] !== "}") lookahead++;
+            if (lookahead < text.length) lookahead++;
+          } else if (lookahead < text.length && /[0-9A-Za-z]/.test(text[lookahead])) {
+            lookahead++;
+          }
+        }
+        let ws = lookahead;
+        while (ws < text.length && /\s/.test(text[ws])) ws++;
+        if (ws < text.length && text[ws] === "(") {
+          let depth = 1;
+          let p = ws + 1;
+          while (p < text.length && depth > 0) {
+            if (text[p] === "\\") {
+              const subCmd = matchCommand(text, p);
+              p += subCmd ? subCmd.length : 1;
+              continue;
+            }
+            if (text[p] === "(") depth++;
+            else if (text[p] === ")") depth--;
+            p++;
+          }
+          if (depth === 0) {
+            base = {
+              raw: text.slice(index, p),
+              inner: text.slice(index, p),
+              end: p,
+              braced: false,
+            };
+          }
+        }
+
+        if (!base) {
+          base = {
+            raw: cmd,
+            inner: cmd,
+            end: index + cmd.length,
+            braced: false,
+          };
+        }
+      }
+    }
+  }
+
+  // Digits / numbers and monomial chunking: e.g. 12 or 2x
+  if (!base && index < text.length && /[0-9]/.test(text[index])) {
+    let j = index + 1;
+    while (j < text.length && /[0-9]/.test(text[j])) {
+      j++;
+    }
+    // Only allow monomial chunking (e.g. 2x) if preceded by whitespace and followed by a single lowercase variable
+    if (start < index && j < text.length && /^[a-z](?![A-Za-z0-9])/.test(text.slice(j))) {
+      j++;
+    }
+    base = {
+      raw: text.slice(index, j),
+      inner: text.slice(index, j),
+      end: j,
+      braced: false,
+    };
+  }
+
+  // Identifiers, bare functions (sin(x)), and bare symbols (alpha)
+  if (!base && index < text.length && /[A-Za-z]/.test(text[index])) {
+    let j = index + 1;
+    while (j < text.length && /[A-Za-z]/.test(text[j])) {
+      j++;
+    }
+    const word = text.slice(index, j);
+    // Check for power: e.g. sin^2(x)
+    let lookahead = j;
+    if (lookahead < text.length && text[lookahead] === "^") {
+      lookahead++;
+      if (lookahead < text.length && text[lookahead] === "{") {
+        while (lookahead < text.length && text[lookahead] !== "}") lookahead++;
+        if (lookahead < text.length) lookahead++;
+      } else if (lookahead < text.length && /[0-9A-Za-z]/.test(text[lookahead])) {
+        lookahead++;
+      }
+    }
+    let ws = lookahead;
+    while (ws < text.length && /\s/.test(text[ws])) ws++;
+    if (ws < text.length && text[ws] === "(") {
+      let depth = 1;
+      let p = ws + 1;
+      while (p < text.length && depth > 0) {
+        if (text[p] === "\\") {
+          const subCmd = matchCommand(text, p);
+          p += subCmd ? subCmd.length : 1;
+          continue;
+        }
+        if (text[p] === "(") depth++;
+        else if (text[p] === ")") depth--;
+        p++;
+      }
+      if (depth === 0) {
         base = {
-          raw: cmd,
-          inner: cmd,
-          end: index + cmd.length,
+          raw: text.slice(index, p),
+          inner: text.slice(index, p),
+          end: p,
           braced: false,
         };
       }
+    } else if (BARE_GREEK_AND_CONSTANTS[word]) {
+      base = {
+        raw: word,
+        inner: word,
+        end: j,
+        braced: false,
+      };
+    } else {
+      // Single character for arbitrary variables (e.g. 'a' in \frac ab, 'V' in \frac VI)
+      base = {
+        raw: text[index],
+        inner: text[index],
+        end: index + 1,
+        braced: false,
+      };
     }
   }
 
@@ -507,10 +655,10 @@ export function normalizeLatexBraces(source: string): string {
           if (arg1) {
             const arg2 = readSingleMacroArg(source, arg1.end, true);
             if (arg2) {
-              const norm1 = arg1.braced
+              const norm1 = arg1.braced || (arg1.raw.startsWith("(") && arg1.raw.endsWith(")"))
                 ? normalizeLatexBraces(arg1.inner)
                 : normalizeLatexBraces(arg1.raw);
-              const norm2 = arg2.braced
+              const norm2 = arg2.braced || (arg2.raw.startsWith("(") && arg2.raw.endsWith(")"))
                 ? normalizeLatexBraces(arg2.inner)
                 : normalizeLatexBraces(arg2.raw);
               result += `${cmd}{${norm1}}{${norm2}}`;
@@ -610,5 +758,777 @@ export function skipEnvironmentHead(
   }
   return null;
 }
+
+const TYPST_FONT_MAP: Record<string, string> = {
+  bb: "\\mathbb",
+  cal: "\\mathcal",
+  bold: "\\mathbf",
+  frak: "\\mathfrak",
+  scr: "\\mathscr",
+};
+
+const BARE_GREEK_AND_CONSTANTS: Record<string, string> = {
+  alpha: "\\alpha",
+  beta: "\\beta",
+  gamma: "\\gamma",
+  delta: "\\delta",
+  epsilon: "\\epsilon",
+  zeta: "\\zeta",
+  eta: "\\eta",
+  theta: "\\theta",
+  iota: "\\iota",
+  kappa: "\\kappa",
+  lambda: "\\lambda",
+  mu: "\\mu",
+  nu: "\\nu",
+  xi: "\\xi",
+  pi: "\\pi",
+  rho: "\\rho",
+  sigma: "\\sigma",
+  tau: "\\tau",
+  upsilon: "\\upsilon",
+  phi: "\\phi",
+  chi: "\\chi",
+  psi: "\\psi",
+  omega: "\\omega",
+  varepsilon: "\\varepsilon",
+  vartheta: "\\vartheta",
+  varpi: "\\varpi",
+  varrho: "\\varrho",
+  varsigma: "\\varsigma",
+  varphi: "\\varphi",
+  Gamma: "\\Gamma",
+  Delta: "\\Delta",
+  Theta: "\\Theta",
+  Lambda: "\\Lambda",
+  Xi: "\\Xi",
+  Pi: "\\Pi",
+  Sigma: "\\Sigma",
+  Upsilon: "\\Upsilon",
+  Phi: "\\Phi",
+  Psi: "\\Psi",
+  Omega: "\\Omega",
+  oo: "\\infty",
+  hbar: "\\hbar",
+  nabla: "\\nabla",
+  partial: "\\partial",
+  ell: "\\ell",
+};
+
+/**
+ * Normalizes Typst-style quoted strings: "where " x > 0 -> \text{where } x > 0.
+ * Distinguishes ASCII double quotes (34) from consecutive primes '' (39, 39).
+ */
+export function normalizeQuotedStrings(source: string): string {
+  let result = "";
+  let index = 0;
+
+  while (index < source.length) {
+    if (source[index] === "%") {
+      const end = readCommentEnd(source, index);
+      result += source.slice(index, end);
+      index = end;
+      continue;
+    }
+
+    if (source[index] === "\\") {
+      const verb = readVerbEnd(source, index);
+      if (verb !== null) {
+        result += source.slice(index, verb[0]);
+        index = verb[0];
+        continue;
+      }
+      const cmd = matchCommand(source, index);
+      if (cmd && OPAQUE_TEXT_COMMANDS.has(cmd)) {
+        const braced = readBraced(source, index + cmd.length);
+        if (braced) {
+          result += `${cmd}${braced[0]}`;
+          index = braced[1];
+          continue;
+        }
+      }
+      if (cmd) {
+        result += cmd;
+        index += cmd.length;
+        continue;
+      }
+    }
+
+    if (source.charCodeAt(index) === 34) {
+      let j = index + 1;
+      let closed = false;
+      while (j < source.length) {
+        if (source.startsWith("$$", j)) {
+          break; // cannot cross display math boundary
+        }
+        if (source[j] === "\r" || source[j] === "\n") {
+          break; // cannot cross newlines in single-line math
+        }
+        if (source[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (source.charCodeAt(j) === 34) {
+          closed = true;
+          break;
+        }
+        j++;
+      }
+
+      if (closed) {
+        const textContent = source.slice(index + 1, j);
+        const escaped = textContent.replace(/\$/g, "\\$");
+        const withSpaces = escaped.replace(/ {2,}/g, (m) => "\\ ".repeat(m.length));
+        result += `\\text{${withSpaces}}`;
+        index = j + 1;
+        continue;
+      }
+    }
+
+    result += source[index];
+    index++;
+  }
+
+  return result;
+}
+
+/**
+ * Normalizes Typst font shortcuts: bb(R) -> \mathbb{R}, cal(L) -> \mathcal{L},
+ * bold(f(x)) -> \mathbf{f(x)}, frak(g) -> \mathfrak{g}, scr(F) -> \mathscr{F}.
+ * Uses balanced parenthesis scanning to preserve nested arguments.
+ */
+export function normalizeTypstFontShortcuts(source: string): string {
+  let result = "";
+  let index = 0;
+
+  while (index < source.length) {
+    if (source[index] === "%") {
+      const end = readCommentEnd(source, index);
+      result += source.slice(index, end);
+      index = end;
+      continue;
+    }
+
+    if (source[index] === "\\") {
+      const verb = readVerbEnd(source, index);
+      if (verb !== null) {
+        result += source.slice(index, verb[0]);
+        index = verb[0];
+        continue;
+      }
+      const cmd = matchCommand(source, index);
+      if (cmd) {
+        if (OPAQUE_TEXT_COMMANDS.has(cmd)) {
+          const braced = readBraced(source, index + cmd.length);
+          if (braced) {
+            result += `${cmd}${braced[0]}`;
+            index = braced[1];
+            continue;
+          }
+        }
+        result += cmd;
+        index += cmd.length;
+        continue;
+      }
+    }
+
+    const prevChar = index > 0 ? source[index - 1] : "";
+    if (index === 0 || !/[A-Za-z0-9_\\]/.test(prevChar)) {
+      const match = source.slice(index).match(/^(bb|cal|bold|frak|scr)\s*\(/);
+      if (match) {
+        const prefix = match[1];
+        const parenStart = index + match[0].length - 1;
+        let depth = 1;
+        let j = parenStart + 1;
+        while (j < source.length && depth > 0) {
+          if (source[j] === "%") {
+            j = readCommentEnd(source, j);
+            continue;
+          }
+          if (source[j] === "\\") {
+            const cmd = matchCommand(source, j);
+            j += cmd ? cmd.length : 1;
+            continue;
+          }
+          if (source[j] === "(") depth++;
+          else if (source[j] === ")") depth--;
+          j++;
+        }
+
+        if (depth === 0) {
+          const innerArg = source.slice(parenStart + 1, j - 1);
+          const macro = TYPST_FONT_MAP[prefix];
+          const normInner = normalizeTypstFontShortcuts(innerArg);
+          result += `${macro}{${normInner}}`;
+          index = j;
+          continue;
+        }
+      }
+    }
+
+    result += source[index];
+    index++;
+  }
+
+  return result;
+}
+
+/**
+ * Normalizes Infix Inverted Division:
+ * - Grouped braces: {a + b} / {c + d} -> \frac{a + b}{c + d}
+ * - Grouped parens in braces: {(a + b)} / {(c + d)} -> \frac{(a + b)}{(c + d)}
+ * - Bounded numbers: 12 / 3 -> \frac{12}{3}
+ * - Preserves literal unit slashes like m/s, km/h and exponent slashes.
+ */
+export function normalizeInfixDivision(source: string, requireBraces: boolean = false): string {
+  let result = source;
+
+  // 1. Grouped braces: {numerator} / {denominator}
+  let changed = true;
+  while (changed) {
+    changed = false;
+    let index = 0;
+    while (index < result.length) {
+      if (result[index] === "%") {
+        index = readCommentEnd(result, index);
+        continue;
+      }
+      if (result[index] === "\\") {
+        const cmd = matchCommand(result, index);
+        index += cmd ? cmd.length : 1;
+        continue;
+      }
+
+      if (result[index] === "{") {
+        // Must NOT be a macro argument like \text{W} or \mathrm{X}
+        const isMacroArg = /\\[A-Za-z]+$/.test(result.slice(0, index));
+        if (isMacroArg) {
+          const braced = readBraced(result, index);
+          index = braced ? braced[1] : index + 1;
+          continue;
+        }
+
+        const numBraced = readBraced(result, index);
+        if (numBraced) {
+          let afterNum = skipIgnorableWhitespace(result, numBraced[1]);
+          if (afterNum < result.length && result[afterNum] === "/") {
+            let afterSlash = skipIgnorableWhitespace(result, afterNum + 1);
+            if (afterSlash < result.length) {
+              const denArg = readSingleMacroArg(result, afterSlash, false);
+              if (denArg) {
+                const numInner = numBraced[0].slice(1, -1);
+                const denInner = denArg.braced ? denArg.inner : denArg.raw;
+                const replacement = `\\frac{${numInner}}{${denInner}}`;
+                result =
+                  result.slice(0, index) +
+                  replacement +
+                  result.slice(denArg.end);
+                changed = true;
+                break;
+              }
+            }
+          }
+        }
+      }
+      index++;
+    }
+  }
+
+  // 2. Whitespace-bounded numeric division: e.g. 12 / 3 -> \frac{12}{3}, 1 / 2 -> \frac{1}{2}
+  if (!requireBraces) {
+    result = result.replace(
+      /(^|[^A-Za-z0-9_\\])\b([0-9]+)\s*\/\s*([0-9]+)\b/g,
+      "$1\\frac{$2}{$3}"
+    );
+  }
+
+  return result;
+}
+
+/**
+ * Normalizes bare Greek letters and constants in math mode:
+ * alpha -> \alpha, beta -> \beta, pi -> \pi, Gamma -> \Gamma, oo -> \infty, hbar -> \hbar.
+ * Excludes matches inside \text{...} or \mathrm{...} and matches already prefixed by \.
+ */
+export function normalizeBareGreekInMath(source: string): string {
+  let result = "";
+  let index = 0;
+
+  while (index < source.length) {
+    if (source[index] === "%") {
+      const end = readCommentEnd(source, index);
+      result += source.slice(index, end);
+      index = end;
+      continue;
+    }
+
+    if (source[index] === "\\") {
+      const verb = readVerbEnd(source, index);
+      if (verb !== null) {
+        result += source.slice(index, verb[0]);
+        index = verb[0];
+        continue;
+      }
+      const cmd = matchCommand(source, index);
+      if (cmd) {
+        if (OPAQUE_TEXT_COMMANDS.has(cmd)) {
+          const braced = readBraced(source, index + cmd.length);
+          if (braced) {
+            result += `${cmd}${braced[0]}`;
+            index = braced[1];
+            continue;
+          }
+        }
+        result += cmd;
+        index += cmd.length;
+        continue;
+      }
+    }
+
+    // Check for bare word boundary
+    const prevChar = index > 0 ? source[index - 1] : "";
+    if (index === 0 || !/[A-Za-z0-9_\\]/.test(prevChar)) {
+      // Check for 'oo' (infinity)
+      if (
+        source.startsWith("oo", index) &&
+        (index + 2 === source.length || !/[A-Za-z0-9]/.test(source[index + 2]))
+      ) {
+        result += "\\infty";
+        index += 2;
+        continue;
+      }
+
+      // Check for alphabetical word
+      if (/[A-Za-z]/.test(source[index])) {
+        let j = index;
+        while (j < source.length && /[A-Za-z]/.test(source[j])) {
+          j++;
+        }
+        const word = source.slice(index, j);
+        const nextChar = j < source.length ? source[j] : "";
+        if (!/[A-Za-z0-9]/.test(nextChar) && BARE_GREEK_AND_CONSTANTS[word]) {
+          result += BARE_GREEK_AND_CONSTANTS[word];
+          index = j;
+          continue;
+        }
+      }
+    }
+
+    result += source[index];
+    index++;
+  }
+
+  return result;
+}
+
+const TALL_MATH_PATTERN =
+  /\\(?:frac|dfrac|tfrac|cfrac|binom|dbinom|tbinom|sum|prod|coprod|bigcup|bigcap|bigsqcup|bigvee|bigwedge|bigoplus|bigotimes|int|iint|iiint|oint|smallint|stackrel|overset|underset|atop|sqrt)(?![A-Za-z])|\\begin\s*\{(?:matrix|pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix|aligned|cases|array|split|gather)\}/;
+
+function isDelimSized(source: string, index: number, isClosing: boolean): boolean {
+  if (
+    index > 0 &&
+    source[index - 1] === "\\" &&
+    source.slice(index - 1, index + 1) !== "\\{" &&
+    source.slice(index - 1, index + 1) !== "\\}" &&
+    source.slice(index - 1, index + 1) !== "\\|"
+  ) {
+    return true; // \( or \) or \[ or \] (LaTeX math/display delimiters)
+  }
+  const before = source.slice(Math.max(0, index - 10), index);
+  if (isClosing) {
+    return /\\(?:right|bigr|Bigr|biggr|Biggr|big|Big|bigg|Bigg)\s*$/.test(before);
+  } else {
+    return /\\(?:left|bigl|Bigl|biggl|Biggl|big|Big|bigg|Bigg)\s*$/.test(before);
+  }
+}
+
+/**
+ * Typst-Style Auto-Scaling Delimiters:
+ * Automatically scales balanced `( ... )`, `[ ... ]`, `\{ ... \}`, and paired `| ... |` / `\| ... \|` with `\left` and `\right`
+ * whenever the interior content contains tall mathematical structures (fractions, sums, integrals, matrices).
+ */
+export function normalizeAutoScaledDelimiters(source: string): string {
+  interface DelimNode {
+    type: "(" | "[" | "{" | "|" | "\\|";
+    start: number;
+    end: number;
+    sized: boolean;
+  }
+
+  const stack: DelimNode[] = [];
+  interface Replacement {
+    start: number;
+    end: number;
+    replacement: string;
+  }
+  const replacements: Replacement[] = [];
+
+  let index = 0;
+  while (index < source.length) {
+    if (source[index] === "%") {
+      index = readCommentEnd(source, index);
+      continue;
+    }
+
+    if (source.charCodeAt(index) === 34) {
+      // String literal
+      let j = index + 1;
+      while (j < source.length) {
+        if (source.startsWith("$$", j)) break;
+        if (source[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (source.charCodeAt(j) === 34) {
+          j++;
+          break;
+        }
+        j++;
+      }
+      index = j;
+      continue;
+    }
+
+    if (source[index] === "\\") {
+      const verb = readVerbEnd(source, index);
+      if (verb !== null) {
+        index = verb[0];
+        continue;
+      }
+
+      const cmd = matchCommand(source, index);
+      if (cmd && OPAQUE_TEXT_COMMANDS.has(cmd)) {
+        const braced = readBraced(source, index + cmd.length);
+        if (braced) {
+          index = braced[1];
+          continue;
+        }
+      }
+
+      // Check escaped \{ or \}
+      if (source.startsWith("\\{", index)) {
+        const sized = isDelimSized(source, index, false);
+        stack.push({ type: "{", start: index, end: index + 2, sized });
+        index += 2;
+        continue;
+      }
+      if (source.startsWith("\\}", index)) {
+        const sized = isDelimSized(source, index, true);
+        // Pop any unclosed lone vertical bars inside
+        while (stack.length > 0 && (stack[stack.length - 1].type === "|" || stack[stack.length - 1].type === "\\|")) {
+          stack.pop();
+        }
+        if (stack.length > 0 && stack[stack.length - 1].type === "{") {
+          const open = stack.pop()!;
+          if (!open.sized && !sized) {
+            const inner = source.slice(open.end, index);
+            if (TALL_MATH_PATTERN.test(inner)) {
+              replacements.push({ start: index, end: index + 2, replacement: "\\right\\}" });
+              replacements.push({ start: open.start, end: open.end, replacement: "\\left\\{" });
+            }
+          }
+        }
+        index += 2;
+        continue;
+      }
+
+      // Check double vertical bar \|
+      if (source.startsWith("\\|", index)) {
+        const sized = isDelimSized(source, index, false);
+        if (stack.length > 0 && stack[stack.length - 1].type === "\\|") {
+          const open = stack.pop()!;
+          if (!open.sized && !sized) {
+            const inner = source.slice(open.end, index);
+            if (TALL_MATH_PATTERN.test(inner)) {
+              replacements.push({ start: index, end: index + 2, replacement: "\\right\\|" });
+              replacements.push({ start: open.start, end: open.end, replacement: "\\left\\|" });
+            }
+          }
+        } else {
+          stack.push({ type: "\\|", start: index, end: index + 2, sized });
+        }
+        index += 2;
+        continue;
+      }
+
+      if (
+        cmd === "\\rangle" ||
+        cmd === "\\quad" ||
+        cmd === "\\qquad" ||
+        cmd === "\\to" ||
+        cmd === "\\implies" ||
+        cmd === "\\iff" ||
+        cmd === "\\approx" ||
+        cmd === "\\equiv" ||
+        cmd === "\\le" ||
+        cmd === "\\ge" ||
+        cmd === "\\leq" ||
+        cmd === "\\geq" ||
+        cmd === "\\ne" ||
+        cmd === "\\neq"
+      ) {
+        while (
+          stack.length > 0 &&
+          (stack[stack.length - 1].type === "|" || stack[stack.length - 1].type === "\\|")
+        ) {
+          stack.pop();
+        }
+      }
+
+      index += cmd ? cmd.length : 1;
+      continue;
+    }
+
+    if (source[index] === "=" || source[index] === "," || source[index] === ";" || source[index] === ">") {
+      while (
+        stack.length > 0 &&
+        (stack[stack.length - 1].type === "|" || stack[stack.length - 1].type === "\\|")
+      ) {
+        stack.pop();
+      }
+    }
+
+    // Check single vertical bar |
+    if (source[index] === "|") {
+      const sized = isDelimSized(source, index, false);
+      if (stack.length > 0 && stack[stack.length - 1].type === "|") {
+        const open = stack.pop()!;
+        if (!open.sized && !sized) {
+          const inner = source.slice(open.end, index);
+          if (TALL_MATH_PATTERN.test(inner)) {
+            replacements.push({ start: index, end: index + 1, replacement: "\\right|" });
+            replacements.push({ start: open.start, end: open.end, replacement: "\\left|" });
+          }
+        }
+      } else {
+        stack.push({ type: "|", start: index, end: index + 1, sized });
+      }
+      index++;
+      continue;
+    }
+
+    if (source[index] === "(" || source[index] === "[") {
+      const char = source[index] as "(" | "[";
+      const sized = isDelimSized(source, index, false);
+      stack.push({ type: char, start: index, end: index + 1, sized });
+      index++;
+      continue;
+    }
+
+    if (source[index] === ")" || source[index] === "]") {
+      const char = source[index] as ")" | "]";
+      const matchType = char === ")" ? "(" : "[";
+      const sized = isDelimSized(source, index, true);
+      // Pop any unclosed lone vertical bars inside
+      while (stack.length > 0 && (stack[stack.length - 1].type === "|" || stack[stack.length - 1].type === "\\|")) {
+        stack.pop();
+      }
+      if (stack.length > 0 && stack[stack.length - 1].type === matchType) {
+        const open = stack.pop()!;
+        if (!open.sized && !sized) {
+          const inner = source.slice(open.end, index);
+          if (TALL_MATH_PATTERN.test(inner)) {
+            replacements.push({
+              start: index,
+              end: index + 1,
+              replacement: char === ")" ? "\\right)" : "\\right]",
+            });
+            replacements.push({
+              start: open.start,
+              end: open.end,
+              replacement: open.type === "(" ? "\\left(" : "\\left[",
+            });
+          }
+        }
+      }
+      index++;
+      continue;
+    }
+
+    index++;
+  }
+
+  if (replacements.length === 0) return source;
+
+  // Apply replacements descending by start offset
+  replacements.sort((a, b) => b.start - a.start);
+  let result = source;
+  for (const rep of replacements) {
+    result = result.slice(0, rep.start) + rep.replacement + result.slice(rep.end);
+  }
+  return result;
+}
+
+/**
+ * Compiler Crash Immunity:
+ * Detects unclosed `\left` delimiters and unclosed `{` scopes at the equation boundary,
+ * automatically appending matching `}` and `\right.` to prevent MathJax red syntax errors while typing.
+ */
+export function autoSealUnclosedDelimiters(source: string): string {
+  let openBraceCount = 0;
+  let openLeftCount = 0;
+  let index = 0;
+
+  while (index < source.length) {
+    if (source[index] === "%") {
+      index = readCommentEnd(source, index);
+      continue;
+    }
+
+    if (source.charCodeAt(index) === 34) {
+      let j = index + 1;
+      while (j < source.length) {
+        if (source.startsWith("$$", j)) break;
+        if (source[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (source.charCodeAt(j) === 34) {
+          j++;
+          break;
+        }
+        j++;
+      }
+      index = j;
+      continue;
+    }
+
+    if (source[index] === "\\") {
+      const verb = readVerbEnd(source, index);
+      if (verb !== null) {
+        index = verb[0];
+        continue;
+      }
+
+      if (
+        source.startsWith("\\left", index) &&
+        (index + 5 === source.length || !/[A-Za-z]/.test(source[index + 5]))
+      ) {
+        openLeftCount++;
+        index += 5;
+        continue;
+      }
+
+      if (
+        source.startsWith("\\right", index) &&
+        (index + 6 === source.length || !/[A-Za-z]/.test(source[index + 6]))
+      ) {
+        if (openLeftCount > 0) openLeftCount--;
+        index += 6;
+        continue;
+      }
+
+      if (source.startsWith("\\{", index) || source.startsWith("\\}", index)) {
+        index += 2;
+        continue;
+      }
+
+      const cmd = matchCommand(source, index);
+      index += cmd ? cmd.length : 1;
+      continue;
+    }
+
+    if (source[index] === "{") {
+      openBraceCount++;
+    } else if (source[index] === "}") {
+      if (openBraceCount > 0) openBraceCount--;
+    }
+
+    index++;
+  }
+
+  let result = source;
+  if (openBraceCount > 0) {
+    result += "}".repeat(openBraceCount);
+  }
+  if (openLeftCount > 0) {
+    result += " \\right.".repeat(openLeftCount);
+  }
+
+  return result;
+}
+
+/**
+ * Normalizes physical unit spacing:
+ * When a number is followed by a tightly bound physical unit (0 or 1 space),
+ * auto-inserts an ISO-compliant thin space `\; ` if not already preceded by spacing commands.
+ * Only applied when colorUnits is enabled.
+ */
+export function normalizePhysicalUnitSpacing(
+  source: string,
+  options?: ColorMathOptions
+): string {
+  if (options?.colorUnits !== true) return source;
+
+  const spans = findUnitSpans(source, {
+    allowSingleLetterUnits: options?.allowSingleLetterUnits,
+    activeMode: options?.activeMode,
+  });
+  if (spans.length === 0) return source;
+
+  interface Replacement {
+    start: number;
+    end: number;
+    replacement: string;
+  }
+  const replacements: Replacement[] = [];
+
+  for (const span of spans) {
+    const before = source.slice(0, span.start);
+    // Look backwards from span.start to see if immediately preceded by a number + (0 or 1 space)
+    const match = /(?:^|[^A-Za-z0-9_])(\d+(?:\.\d+)?|\.\d+)([ ]{0,1})$/.exec(before);
+    if (match) {
+      const spacer = match[2];
+      const spacerStart = span.start - spacer.length;
+      replacements.push({
+        start: spacerStart,
+        end: span.start,
+        replacement: "\\; ",
+      });
+    }
+  }
+
+  if (replacements.length === 0) return source;
+
+  replacements.sort((a, b) => b.start - a.start);
+  let result = source;
+  for (const rep of replacements) {
+    result = result.slice(0, rep.start) + rep.replacement + result.slice(rep.end);
+  }
+  return result;
+}
+
+/**
+ * Master mathematical syntax normalizer executing in strict pipeline dependency order:
+ * 1. Quoted Text Isolation ("text" -> \text{text})
+ * 2. Typst Font Shortcuts (bb(R) -> \mathbb{R}, cal(L) -> \mathcal{L})
+ * 3. Infix Inverted Division ({a+b}/{c+d} -> \frac{a+b}{c+d}, 12 / 3 -> \frac{12}{3})
+ * 4. Bare Greek & Math Constants (alpha -> \alpha, pi -> \pi, oo -> \infty)
+ * 5. Typst Auto-Scaling Delimiters (( \frac{a}{b} ) -> \left( \frac{a}{b} \right), | \frac{a}{b} | -> \left| \frac{a}{b} \right|)
+ * 6. Smart Whitespace & Fraction Braces Normalization (\frac 12 3 -> \frac{12}{3})
+ * 7. Physical Unit Spacing Normalization (12 m/s^2 -> 12 \; m/s^2)
+ * 8. Compiler Crash Immunity (Auto-sealing unclosed { and \left)
+ */
+export function normalizeMathSyntax(
+  source: string,
+  options?: ColorMathOptions
+): string {
+  let text = normalizeQuotedStrings(source);
+  text = normalizeTypstFontShortcuts(text);
+  text = normalizeInfixDivision(text, options?.requireBracesForSlashDivision);
+  text = normalizeBareGreekInMath(text);
+  if (options?.autoScaleDelimiters !== false) {
+    text = normalizeAutoScaledDelimiters(text);
+  }
+  text = normalizeLatexBraces(text);
+  if (options?.colorUnits === true) {
+    text = normalizePhysicalUnitSpacing(text, options);
+  }
+  if (options?.crashImmunityAutoSeal === true) {
+    text = autoSealUnclosedDelimiters(text);
+  }
+  return text;
+}
+
 
 

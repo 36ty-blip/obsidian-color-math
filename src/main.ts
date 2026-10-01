@@ -9,6 +9,7 @@ import {
   Plugin,
   PluginSettingTab,
   Setting,
+  TFile,
 } from "obsidian";
 import {
   ColorPalette,
@@ -34,6 +35,7 @@ import {
   UnicodeConversionOptions,
 } from "./converters/unicode_converter";
 import { detectNoteField, NoteFieldDetection } from "./parsers/frontmatter";
+import { QuickMenuModal, findAmbiguousTokenAtCursor } from "./editor/quick_menu_modal";
 
 interface ColorMathSettings {
   palette: ColorPalette;
@@ -74,6 +76,10 @@ interface ColorMathSettings {
   autoDetectNoteMode: boolean;
   enableQuantumOperatorsGlobal: boolean;
   previewLatexNormalization: boolean;
+  autoScaleDelimiters: boolean;
+  crashImmunityAutoSeal: boolean;
+  requireBracesForSlashDivision: boolean;
+  enableQuickMenuOnAmbiguity: boolean;
   collapsedSections: Record<string, boolean>;
 }
 
@@ -81,7 +87,7 @@ const DEFAULT_SETTINGS: ColorMathSettings = {
   palette: { ...DEFAULT_COLORS },
   rainbowColors: [...RAINBOW_DELIMITER_COLORS],
   liveRendering: true,
-  livePreviewHighlighting: false,
+  livePreviewHighlighting: true,
   highlightInlineMath: true,
   highlightDisplayMath: true,
   colorAlignment: true,
@@ -116,6 +122,10 @@ const DEFAULT_SETTINGS: ColorMathSettings = {
   autoDetectNoteMode: true,
   enableQuantumOperatorsGlobal: false,
   previewLatexNormalization: true,
+  autoScaleDelimiters: true,
+  crashImmunityAutoSeal: true,
+  requireBracesForSlashDivision: false,
+  enableQuickMenuOnAmbiguity: false,
   collapsedSections: {},
 };
 
@@ -221,12 +231,50 @@ export default class ColorMathPlugin extends Plugin {
       },
     });
 
+    // 2b. Bake colors across all notes in vault
+    this.addCommand({
+      id: "colorize-vault",
+      name: "Bake colors into all notes in vault",
+      callback: () => {
+        void this.colorizeVault();
+      },
+    });
+
+    // 2c. Clean baked colors across all notes in vault
+    this.addCommand({
+      id: "undo-vault",
+      name: "Clean baked colors from all notes in vault",
+      callback: () => {
+        void this.uncolorVault();
+      },
+    });
+
     // 3. Bake colors into current math block
     this.addCommand({
       id: "colorize-current-block",
       name: "Bake colors into current math block",
       editorCallback: (editor: Editor) => {
         void this.colorizeCurrentMathBlock(editor);
+      },
+    });
+
+    // 3b. Quick suggestion menu on ambiguous notation (Alt+Enter)
+    this.addCommand({
+      id: "quick-menu-ambiguity",
+      name: "Resolve ambiguous math notation (Quick Menu)",
+      hotkeys: [{ modifiers: ["Alt"], key: "Enter" }],
+      editorCallback: (editor: Editor) => {
+        if (!this.settings.enableQuickMenuOnAmbiguity) return;
+        const cursor = editor.getCursor();
+        const line = editor.getLine(cursor.line);
+        const suggestions = findAmbiguousTokenAtCursor(
+          line,
+          cursor.ch,
+          cursor.line
+        );
+        if (suggestions && suggestions.length > 0) {
+          new QuickMenuModal(this.app, editor, suggestions).open();
+        }
       },
     });
 
@@ -563,6 +611,10 @@ export default class ColorMathPlugin extends Plugin {
       highlightInlineMath: this.settings.highlightInlineMath,
       highlightDisplayMath: this.settings.highlightDisplayMath,
       previewLatexNormalization: this.settings.previewLatexNormalization,
+      autoScaleDelimiters: this.settings.autoScaleDelimiters,
+      crashImmunityAutoSeal: this.settings.crashImmunityAutoSeal,
+      requireBracesForSlashDivision: this.settings.requireBracesForSlashDivision,
+      enableQuickMenuOnAmbiguity: this.settings.enableQuickMenuOnAmbiguity,
       defaultMode: this.settings.defaultMode,
       autoDetectNoteMode: this.settings.autoDetectNoteMode,
     };
@@ -747,6 +799,99 @@ export default class ColorMathPlugin extends Plugin {
     } else {
       new Notice("Color Math: Successfully cleaned colors from note! 🧹");
     }
+  }
+
+  getVaultMathFiles(): TFile[] {
+    const files = this.app.vault.getMarkdownFiles();
+    const candidates: TFile[] = [];
+    for (const file of files) {
+      const cache = this.app.metadataCache.getFileCache(file);
+      if (!cache) {
+        candidates.push(file); // unindexed fallback
+        continue;
+      }
+      const hasMath = cache.sections?.some((s) => s.type === "math");
+      if (hasMath) {
+        candidates.push(file);
+        continue;
+      }
+      if (
+        cache.frontmatter?.["field"] ||
+        cache.frontmatter?.["mode"] ||
+        cache.frontmatter?.["math"]
+      ) {
+        candidates.push(file);
+      }
+    }
+    return candidates;
+  }
+
+  async colorizeVault() {
+    const candidates = this.getVaultMathFiles();
+    if (candidates.length === 0) {
+      new Notice("Color Math: No markdown notes with math found in vault.");
+      return;
+    }
+
+    let modifiedCount = 0;
+    const notice = new Notice(`Color Math: Scanning ${candidates.length} candidate notes...`, 0);
+
+    for (let i = 0; i < candidates.length; i++) {
+      const file = candidates[i];
+      try {
+        const content = await this.app.vault.read(file);
+        if (!content.includes("$")) continue;
+        const colored = convertText(
+          content,
+          this.settings.palette,
+          this.getMathOptions(content)
+        );
+        if (colored !== content) {
+          await this.app.vault.modify(file, colored);
+          modifiedCount++;
+        }
+      } catch (err) {
+        console.error(`Color Math: Failed to colorize ${file.path}:`, err);
+      }
+    }
+
+    notice.hide();
+    new Notice(
+      `Color Math: Vault bake complete! Colored equations in ${modifiedCount} notes. 🎨`,
+      6000
+    );
+  }
+
+  async uncolorVault() {
+    const candidates = this.getVaultMathFiles();
+    if (candidates.length === 0) {
+      new Notice("Color Math: No markdown notes with math found in vault.");
+      return;
+    }
+
+    let modifiedCount = 0;
+    const notice = new Notice(`Color Math: Scanning ${candidates.length} candidate notes...`, 0);
+
+    for (let i = 0; i < candidates.length; i++) {
+      const file = candidates[i];
+      try {
+        const content = await this.app.vault.read(file);
+        if (!content.includes("\\textcolor") && !content.includes("\\color")) continue;
+        const uncolored = uncolorText(content);
+        if (uncolored !== content) {
+          await this.app.vault.modify(file, uncolored);
+          modifiedCount++;
+        }
+      } catch (err) {
+        console.error(`Color Math: Failed to uncolor ${file.path}:`, err);
+      }
+    }
+
+    notice.hide();
+    new Notice(
+      `Color Math: Vault clean complete! Cleaned baked colors from ${modifiedCount} notes. 🧹`,
+      6000
+    );
   }
 
   getUnicodeOptions(): UnicodeConversionOptions {
@@ -1826,6 +1971,45 @@ class ColorMathSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.previewLatexNormalization)
           .onChange(async (val) => {
             this.plugin.settings.previewLatexNormalization = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    new Setting(previewBody)
+      .setName("Auto-scaling delimiters (Typst style)")
+      .setDesc("Automatically scale balanced parentheses ( ... ), brackets [ ... ], and sets \\{ ... \\} with \\left and \\right when they enclose tall math structures like fractions, sums, integrals, and matrices.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.autoScaleDelimiters)
+          .onChange(async (val) => {
+            this.plugin.settings.autoScaleDelimiters = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    new Setting(previewBody)
+      .setName("Compiler crash immunity")
+      .setDesc("Automatically seal unclosed \\left delimiters with \\right. and unclosed { scopes with } at equation boundaries to prevent red MathJax syntax crash boxes while typing unfinished formulas.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.crashImmunityAutoSeal)
+          .onChange(async (val) => {
+            this.plugin.settings.crashImmunityAutoSeal = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    new Setting(previewBody)
+      .setName("Require braces for infix slash division")
+      .setDesc("When enabled, infix slash division requires grouped braces {a} / {b}. When disabled, raw whitespace-bounded numbers like 12 / 3 are also converted to vertical fractions.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.requireBracesForSlashDivision)
+          .onChange(async (val) => {
+            this.plugin.settings.requireBracesForSlashDivision = val;
             await this.plugin.saveSettings();
             this.plugin.rerenderMath();
           })

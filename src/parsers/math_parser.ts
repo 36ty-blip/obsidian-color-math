@@ -355,14 +355,20 @@ function collectSemanticSpansInternal(
             index = callEnd;
             continue;
           } else {
+            let funcEnd = commandEnd;
+            const remaining = text.slice(commandEnd, end);
+            const limitModifierMatch = remaining.match(/^(\\(?:limits|nolimits|displaylimits))(?![a-zA-Z])/);
+            if (limitModifierMatch) {
+              funcEnd = commandEnd + limitModifierMatch[1].length;
+            }
             spans.push({
               kind: "function",
               value: name,
               start: index,
-              end: commandEnd,
+              end: funcEnd,
               depth,
             });
-            index = commandEnd;
+            index = funcEnd;
             continue;
           }
         }

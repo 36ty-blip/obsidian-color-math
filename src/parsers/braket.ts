@@ -142,7 +142,7 @@ export function collectBraKetDelimiterSpans(
     const rangleIdx = match.index + full.lastIndexOf("\\rangle");
     const rangleEnd = rangleIdx + 7;
 
-    if (!hasSizedPrefix(body, rangleIdx) && !spans.some((s) => s.start === barIdx)) {
+    if (!hasSizedPrefix(body, barIdx) && !hasSizedPrefix(body, rangleIdx) && !spans.some((s) => s.start === barIdx)) {
       spans.push({ start: barIdx, end: barEnd, color: delimColor, priority: 25 });
       spans.push({ start: rangleIdx, end: rangleEnd, color: delimColor, priority: 25 });
     }
@@ -157,7 +157,7 @@ export function collectBraKetDelimiterSpans(
     const barIdx = match.index + full.search(VERT_BAR_REGEX);
     const barEnd = barIdx + (full.endsWith("\\vert") ? 5 : 1);
 
-    if (!hasSizedPrefix(body, langleIdx) && !spans.some((s) => s.start === langleIdx)) {
+    if (!hasSizedPrefix(body, langleIdx) && !hasSizedPrefix(body, barIdx) && !spans.some((s) => s.start === langleIdx)) {
       spans.push({ start: langleIdx, end: langleEnd, color: delimColor, priority: 25 });
       spans.push({ start: barIdx, end: barEnd, color: delimColor, priority: 25 });
     }

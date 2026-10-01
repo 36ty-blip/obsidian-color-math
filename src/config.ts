@@ -690,6 +690,10 @@ export interface ColorMathOptions {
   highlightInlineMath?: boolean;
   highlightDisplayMath?: boolean;
   previewLatexNormalization?: boolean;
+  autoScaleDelimiters?: boolean;
+  crashImmunityAutoSeal?: boolean;
+  requireBracesForSlashDivision?: boolean;
+  enableQuickMenuOnAmbiguity?: boolean;
   field?: "quantum" | "physics" | "math" | (string & {});
   activeMode?: ActiveMathMode;
   autoDetectNoteMode?: boolean;
@@ -719,6 +723,10 @@ export const DEFAULT_OPTIONS: ColorMathOptions = {
   highlightInlineMath: true,
   highlightDisplayMath: true,
   previewLatexNormalization: true,
+  autoScaleDelimiters: true,
+  crashImmunityAutoSeal: true,
+  requireBracesForSlashDivision: false,
+  enableQuickMenuOnAmbiguity: false,
   activeMode: "analysis",
   autoDetectNoteMode: true,
 };

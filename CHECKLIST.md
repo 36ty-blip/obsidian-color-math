@@ -92,4 +92,57 @@
 - [x] Distinct 13-role palette eliminating duplicate purples (`set` -> Tokyo Sky Cyan, `parameter` -> Tokyo Coral, `upper` -> Tokyo Violet)
 - [x] Curated preset theme palettes (Tokyo Night, Catppuccin Mocha, Nord, Clean Light) with complete 13 semantic role styling and human-readable names
 - [x] Full unit test suite (30 test suites, 350 tests passing)
-- [x] Version tracking (`1.0.29`)
+- [x] Unified Comprehensive LaTeX Catalog & Minimal Perfect Hash (MPHF) / Lexer Engine:
+  - [x] Implement Minimal Perfect Hash / Lexer architecture with $\mathcal{O}(1)$ direct array lookup
+  - [x] Support two-tier bare function recognition (`sin(x)`/`sin x`, `rank(A)`, `relu(z)`) without requiring leading backslash
+  - [x] Import complete 5,211+ symbol taxonomy dataset (`unicode-math-table.tex`, AMS, Mathtools, SI units, physical constants)
+  - [x] Bidirectional $\mathcal{O}(1)$ reverse lookup for BMP and Plane 1 Unicode characters
+  - [x] Canonical LaTeX aliases (`\le` -> `\leq`, `\to` -> `\rightarrow`, etc.) and package origin tags
+  - [x] Unit test suite for shortest/longest macro disambiguation and O(1) performance benchmarks
+- [x] CodeMirror 6 Native Decoration Facet Composition:
+  - [x] Migrate Live Preview decoration builder to linear single-pass `RangeSetBuilder`
+  - [x] Eliminate manual $O(N \log N)$ `array.sort()` loops while preserving modular sub-parsers
+- [x] Content-Hash Block Reconciliation for Live Preview & MathJax:
+  - [x] Tag math blocks with fast 32-bit content hash (`data-math-hash`)
+  - [x] Skip re-rendering unmodified math DOM elements in Reading View and Live Preview
+- [x] Zero-I/O Vault Candidate Filtering:
+  - [x] Wire vault-wide scanning commands directly to Obsidian's in-memory `app.metadataCache`
+- [x] Single-Pass StringBuilder Chunk Buffer:
+  - [x] Refactor Bake command to assemble colorized output in a single buffer pass
+  - [x] Refactor Undo command to strip color wrappers in $O(N)$ without fixed-point regex looping
+- [x] Default Settings: Set Editor syntax highlighting (Live Preview) ON by default
+- [x] Version tracking (`1.0.37`)
+- [x] 👑 Lemire MPHF (FNV-1a Full-String) Engine:
+  - [x] 8.2 KB `Uint16Array` L1 displacement table for 6,879 mathematical symbols
+  - [x] Daniel Lemire branchless fast range reduction eliminating `%` modulo division
+  - [x] Zero probe degradation (55 ns flat lookup on positive hits and negative rejections)
+  - [x] 100.0% verified collision-free coverage across LaTeX macros, bare Typst symbols, and Unicode glyphs
+- [x] Unified Single-Pipeline Span Engine (`extractMathColorSpans`):
+  - [x] Eliminates Live Preview vs MathJax / Bake desynchronization
+  - [x] Strict monotonic ordering with non-overlapping CodeMirror 6 ranges
+  - [x] Opaque shielding for TeX comments `%...`, Typst strings `"..."`, and `\text{...}`
+- [x] Two-Tier Lexer Operand Consumption (`arity: 1`):
+  - [x] Font macro roots (`\mathbf`, `\mathbb`, `\mathcal`, `bb`, `bold`, etc.) dynamically consume operands
+  - [x] Eliminates KaTeX unexpected end-of-input failures on braceless single characters (`\mathbf v`)
+- [x] Typst Ergonomics & Compiler Crash Immunity:
+  - [x] Auto-scaling delimiters (`( \frac{a}{b} )` $\to$ `\left( \frac{a}{b} \right)`)
+  - [x] Compiler crash immunity: auto-sealing unclosed `\left` with `\right.` and unclosed `{` with `}`
+  - [x] String literal mirror mode (`"..."` with protected `$` symbols)
+- [x] Feature Previews Settings & Quick Menu:
+  - [x] Settings toggles for autoScaleDelimiters, crashImmunityAutoSeal, requireBracesForSlashDivision, enableQuickMenuOnAmbiguity
+  - [x] `Alt+Enter` interactive SuggestModal for resolving ambiguous mathematical notation
+- [x] Zero-ReDoS Physical Units Engine (`WELL_KNOWN_UNITS` HashMap lookup, strictly non-backtracking) (v1.0.38)
+- [x] Whitespace Affinity Unit Grammar ($\le 1$ space $\to$ unit with `\;` insertion when `colorUnits` toggle is on; $\ge 2$ spaces $\to$ algebraic variables; operators $\to$ arithmetic) (v1.0.38)
+- [x] Single-letter unit safety (excluded by default, enabled via note YAML `units: physics`, options, or `"..."`) (v1.0.38)
+- [x] Nested unit exponent coloring (`\textcolor{unit}{m/s^{\textcolor{upper}{2}}}`) (v1.0.38)
+- [x] Delimiter and environment isolation (`\textcolor` prevention across `\begin{...}...\end{...}` to stop vertical bar & matrix color flooding) (v1.0.39)
+- [x] Quoted string literal protection (`"..."` completely shielded from live preview and variable coloring) (v1.0.40)
+- [x] Preserved multi-space formatting in string literals (`\text{...}`) via LaTeX control spaces (`\ `) (v1.0.40)
+- [x] Remove Quick Suggestion (`Alt+Enter` / SuggestModal) toggle from Feature Previews in Settings tab (feature kept internal until fully developed) (v1.0.41)
+- [x] Comprehensive documentation update in `README.md` covering Typst syntax shortcuts, smart whitespace normalization, physical units grammar, vertical bar auto-scaling, and string literal isolation (v1.0.41)
+- [x] Version tracking (`1.0.41`)
+
+
+
+
+

@@ -1,119 +1,110 @@
 # 🎨 Obsidian Color Math
 
-> Automatically apply beautiful, semantic colors to LaTeX and MathJax equations in Obsidian Markdown.
+> Semantic color for LaTeX and MathJax equations — making math effortless to read and understand.
 
-Obsidian Color Math dynamically transforms plain monochrome equations into rich, readable mathematical expressions. It operates seamlessly across both **Live Preview** and **Reading View**, with support for dynamic real-time coloring and permanent Markdown exports.
-
-![Obsidian Color Math Preview](https://raw.githubusercontent.com/36ty-blip/obsidian-color-math/main/docs/assets/obsidian-color-math-preview.png)
-
-*Rendered MathJax equations displayed with signature Tokyo Night semantic color roles.*
-
-> [!TIP]
-> **100% Local, Pure TypeScript & Zero Dependencies:** Color Math runs completely offline on Desktop and Mobile (iOS & Android). It makes zero network requests, collects no telemetry, and requires no external tools or AI services.
-
-> [!NOTE]
-> **Looking for the Python CLI & Library?** Check out [python-color-math](https://github.com/36ty-blip/python-color-math) (`pip install python-color-math`) to colorize equations in batch scripts, terminal pipelines, Jupyter notebooks, or Quarto documents without needing Obsidian open!
+Monochrome LaTeX equations are visually dense and mentally exhausting to parse. **Obsidian Color Math** automatically transforms plain mathematical expressions into clear, semantically colored notation in real time, so your brain can distinguish operators, variables, functions, and differentials at a glance.
 
 ---
 
-## ✨ Key Features
-
-### 1. ⚡ Dynamic MathJax Interceptor (Zero Note Modification)
-- **Automatic Rendering:** Color Math hooks directly into Obsidian's internal MathJax pipeline (`tex2chtml` and `tex2svg`). Rendered equations in **Live Preview** and **Reading View** appear in full color automatically without altering your raw notes!
-- **Both Inline & Display Math:** Full support for inline equations (`$...$`) and display blocks (`$$...$$`).
-- **Piecewise Environments (`\begin{cases}`):** Full multi-branch recognition with condition alignment (`&`) and relations (`\ge`, `\le`, `\ne`, `<`, `>`).
-
-### 2. 🌈 Rich Semantic Palette & Theme Integration
-- **Signature Tokyo Night Palette:** Carefully calibrated pastel tones designed to reduce visual clutter and eye strain.
-- **Theme Auto-Sync:** One-click extraction of accent and syntax colors from your active Obsidian theme.
-- **Light / Dark Mode Contrast Adaptability:** Automatically shifts operator contrast (e.g. `=`, `\cdot`, spacing) so equations never wash out on light backgrounds.
-
-### 3. 🧠 Smart Mathematical Disambiguation
-- **Piecewise Cases & Relations:** Accurately formats and colors multi-branch conditional functions without swallowing subsequent lines.
-- **Half-Colored Completion:** Automatically detects partially colored or edited equations and completes them end-to-end rather than skipping them.
-- **Physical Units & Metric Prefixes:** Distinguishes metric prefixes (e.g. `1.064\, \mu m`, `10 m/s`, `500 nm`, `50 kg`) from algebraic variables, with a dedicated **"Natural Color"** option to keep units uncolored if desired.
-- **Calculus Differentials & Derivatives:** Identifies infinitesimal differentials (`dx`, `dt`, `d\theta`) and derivative fractions (`\frac{d}{dx}`, `\frac{df}{dx}`, `\frac{\partial \psi}{\partial t}`) so calculus operators stay unified, while preserving standalone distance `$d$`.
-- **Quantum Bra-Ket Notation (Dirac):** Recognizes kets (`|\psi\rangle`), bras (`\langle\phi|`), and brackets (`\langle\phi|\psi\rangle`, `\langle\psi|\hat{H}|\psi\rangle`), keeping delimiters cleanly styled.
-- **Dimensionless Numbers:** Recognizes contiguous engineering numbers (`Re`, `Ma`, `Pr`, `Nu`), while preserving separated variables (`R e`) as distinct entities.
-
-### 4. 🛠️ IDE Visual Enhancements
-- **Rainbow Delimiters:** Recursively colors nested parentheses, brackets, and braces by depth to eliminate delimiter blindness in complex algebraic expressions.
-- **Symbol Taxonomy:** Distinguishes constants ($\pi, \hbar, \infty$), Greek parameters ($\alpha, \theta, \lambda$), standard functions ($\sin, \cos, \ln$), and bound iteration indices ($\sum_{i=1}^n$).
-- **Variable Data-Flow Hashing:** Deterministically assigns unique, consistent colors to distinct identifiers across an equation to visually trace the flow of variables.
+<!-- HERO DEMO: 5-10s GIF or Video showing real-time, lag-free typing in Live Preview -->
+<p align="center">
+  <img src="https://raw.githubusercontent.com/36ty-blip/obsidian-color-math/main/docs/assets/demo.gif" alt="Obsidian Color Math Live Demo" width="800">
+</p>
 
 ---
 
-## 🚀 Usage
+## 🌈 Before & After (Live Rendered Math)
 
-### Ribbon Menu
-Click the **Color Math** palette icon on the left ribbon to access quick actions:
-- **Bake colors into note (Permanent):** Permanently embeds LaTeX `\textcolor{...}{...}` wrappers into all math blocks and inline math in your note.
-- **Clean baked colors from note:** Safely strips all color wrappers back to clean, plain LaTeX.
-- **Bake / Clean current math block:** Targets only the equation under your cursor.
-- **Bake / Clean selection:** Targets highlighted text in the editor.
+### 1. Calculus & Chain Rule
 
-### Command Palette
-Open the Command Palette (`Ctrl+P` or `Cmd+P`) and search for:
-- `Color Math: Bake colors into note (Permanent)`
-- `Color Math: Clean baked colors from note`
-- `Color Math: Bake colors into current math block`
-- `Color Math: Clean baked colors from current math block`
-- `Color Math: Bake colors into selection`
-- `Color Math: Clean baked colors from selection`
+**Before (Monochrome LaTeX):**
+$$ \frac{d}{dx} f(g(y)) = f'(g(y)) \cdot g'(y)y' $$
 
----
+**After (Semantic Color Math):**
+$$ \textcolor{#bb9af7}{\frac{d}{dx}} \textcolor{#7aa2f7}{f}\textcolor{#e0af68}{(}\textcolor{#bb9af7}{g}\textcolor{#7aa2f7}{(}\textcolor{#e0af68}{y}\textcolor{#7aa2f7}{)}\textcolor{#e0af68}{)} = \textcolor{#7aa2f7}{f'}\textcolor{#e0af68}{(}\textcolor{#bb9af7}{g}\textcolor{#7aa2f7}{(}\textcolor{#e0af68}{y}\textcolor{#7aa2f7}{)}\textcolor{#e0af68}{)} \cdot \textcolor{#7aa2f7}{g'}\textcolor{#e0af68}{(}\textcolor{#e0af68}{y}\textcolor{#e0af68}{)}\textcolor{#e0af68}{y'} $$
 
-## ⚙️ Settings
+### 2. Quantum Mechanics & Bra-Ket
 
-| Setting | Description | Default |
-| --- | --- | --- |
-| **Live rendered math coloring** | Automatically colorizes MathJax equations without modifying raw Markdown. | `Enabled` |
-| **Real-time editor syntax highlighting** | Live syntax highlighting inside the CodeMirror editor as you type. | `Disabled` |
-| **Rainbow delimiters** | Colors nested brackets, parentheses, and braces by depth. | `Enabled` |
-| **Mathematical symbol taxonomy** | Categorizes constants, parameters, functions, and bound indices. | `Enabled` |
-| **Color physical units** | Highlights physical units (`\mu m`, `m/s`, `nm`) or leaves them in natural theme font. | `Enabled` |
-| **Calculus differentials & derivatives** | Highlights differentials (`dx`, `dt`) and derivative operators. | `Enabled` |
-| **Quantum bra-ket notation** | Highlights Dirac state vectors and brackets. | `Enabled` |
-| **Engineering dimensionless numbers** | Recognizes unified numbers (`Re`, `Ma`, `Pr`). | `Enabled` |
-| **Variable data-flow hashing** | Hashes unique variables to distinct colors across expressions. | `Disabled` |
-| **Auto-adapt for light / dark mode** | Adjusts operator contrast dynamically on light themes. | `Enabled` |
-| **Auto-match on theme change** | Re-extracts colors whenever you change your Obsidian theme. | `Disabled` |
+**Before (Monochrome LaTeX):**
+$$ i\hbar \frac{\partial}{\partial t} |\psi(t)\rangle = \hat{H} |\psi(t)\rangle $$
+
+**After (Semantic Color Math):**
+$$ \textcolor{#e0af68}{i}\textcolor{#e0af68}{\hbar} \textcolor{#bb9af7}{\frac{\partial}{\partial t}} \textcolor{#e0af68}{|}\textcolor{#ff9e64}{\psi}\textcolor{#e0af68}{(}\textcolor{#7dcfff}{t}\textcolor{#e0af68}{)}\textcolor{#e0af68}{\rangle} = \textcolor{#ff9e64}{\hat{\textcolor{#7aa2f7}{H}}} \textcolor{#e0af68}{|}\textcolor{#ff9e64}{\psi}\textcolor{#e0af68}{(}\textcolor{#7dcfff}{t}\textcolor{#e0af68}{)}\textcolor{#e0af68}{\rangle} $$
 
 ---
 
-## 📦 Installation
+## ✨ Quality-of-Life Improvements
 
-### From Obsidian Community Plugins (Recommended)
+- **Zero Note Modification (Live Interceptor)**: Hooks directly into Obsidian's internal MathJax rendering engine. Equations appear in full color in **Live Preview** and **Reading View** without adding any code or modifying your raw markdown notes.
+- **Typst Syntax Shortcuts & Modern Ergonomics**:
+  - **Backslash-Free Greek & Constants**: Write bare Greek letters (`alpha`, `beta`, `gamma`, `pi`, `omega`, `Delta`) and symbols (`oo` $\to \infty$, `hbar` $\to \hbar$, `nabla` $\to \nabla$, `partial` $\to \partial$, `ell` $\to \ell$) without tedious backslashes, resolved in $\mathcal{O}(1)$ via Lemire Minimal Perfect Hashing.
+  - **Typst Font Callouts**: Clean font macros like `bb(R)` $\to \mathbb{R}$, `cal(L)` $\to \mathcal{L}$, `bold(v)` $\to \mathbf{v}$, `frak(g)` $\to \mathfrak{g}$, `scr(F)` $\to \mathscr{F}$, fully supporting nested operands (`bold(f(x))`, `bb(R^n)`).
+  - **Infix Inverted Division**: Natural slash divisions like `{a + b} / {c + d}` or `12 / 3` are rendered as vertical fractions ($\frac{a+b}{c+d}$, $\frac{12}{3}$) directly on screen in Live Preview without mutating raw markdown text on disk.
+- **Smart Whitespace & Function-Aware Normalization**:
+  - Context-aware LaTeX normalization replacing rigid single-token splitting. Intelligently groups multi-digit numbers (`\frac 12 3` $\to \frac{12}{3}$), cohesive monomials (`\frac 1 2x` $\to \frac{1}{2x}$), parenthesized terms (`\frac (a+b) c` $\to \frac{a+b}{c}$), and function calls (`\frac \sin(x) \cos(x)` $\to \frac{\sin(x)}{\cos(x)}$).
+  - Strictly respects matrix and alignment cell walls (`&` and `\\`) to prevent arguments from overflowing across tabular boundaries.
+- **Zero-ReDoS Physical Units & Whitespace Affinity Grammar**:
+  - **Static Unit Engine**: Instant $\mathcal{O}(1)$ table lookup for standard SI and compound units (`m/s^2`, `km/h`, `GeV`, `\mu m`, `kHz`), completely eliminating catastrophic regex backtracking.
+  - **Whitespace Affinity**: Spacing determines mathematical semantics: tight spacing ($\le 1$ space / 0 spaces) treats expressions as dimensional units with automatic LaTeX thin spacing ($12\text{ m/s}^2 \to 12 \; \mathrm{m/s^2}$), while wide spacing ($\ge 2$ spaces) and arithmetic operators ($12 + m$) preserve standalone algebraic variables.
+  - **Single-Letter Safety**: Single letters (`m`, `s`, `g`, `N`, `A`) are protected from accidental unit collision by default, and can be activated per-note via YAML frontmatter (`units: physics`), settings, or explicit Typst quotes (`12 "m"`).
+  - **Nested Unit Exponents**: Unit powers and exponents are colored harmoniously (`\textcolor{unit}{m/s^{\textcolor{upper}{2}}}`).
+- **Delimiter Auto-Scaling & Compiler Crash Immunity**:
+  - **Auto-Scaling Delimiters & Vertical Bars**: Standard parentheses `( \frac{a}{b} )`, single vertical bars `| \frac{a}{b} |`, and double bars `\| \mathbf{M} \|` automatically scale to matching `\left ... \right` heights for fractions, determinants, norms, and absolute values.
+  - **Matrix Isolation**: Delimiter coloring is prevented from wrapping whole matrix environments (`\begin{matrix}` ... `\end{matrix}`), preserving crisp matrix alignment and preventing color flooding.
+  - **Compiler Crash Immunity**: Automatically heals unclosed `\left(` delimiters with ghost closing seals to prevent KaTeX/MathJax compilation crashes while typing.
+- **String Literal Isolation & Formatting**:
+  - Double-quoted strings (`"..."`) and `\text{...}` spans are completely shielded from mathematical variable detection and coloring.
+  - Preserves multi-space formatting inside string literals using LaTeX control spaces (`\ `), preventing collapsed spaces in code labels and prose annotations.
+- **Eliminates Delimiter Blindness**: Nested parentheses, brackets, and braces `(((...)))` receive recursive rainbow depth coloring so you never lose your place in deep algebraic expressions.
+- **Smart Mathematical Disambiguation**:
+  - **Calculus Differentials**: Identifies infinitesimal differentials (`dx`, `dt`, `d\theta`) and derivative fractions (`\frac{df}{dx}`, `\frac{\partial u}{\partial t}`) while leaving standalone variables like distance `$d$` untouched.
+  - **Quantum Bra-Ket**: Formats Dirac state vectors and expectation values (`|\psi\rangle`, `\langle\phi|`, `\langle\phi|\psi\rangle`).
+  - **Piecewise Environments**: Full recognition of `\begin{cases}` environments, conditions, and relations without line swallowing.
+- **Eye-Comfort Palettes**:
+  - Calibrated default **Tokyo Night** palette designed to eliminate eye strain during long study and writing sessions.
+  - Curated themes: **Catppuccin Mocha**, **Nord**, and **Clean Light**.
+  - **Auto-Contrast Adaptation**: Shifter ensures operators (`=`, `\cdot`) maintain crisp contrast on both dark and light Obsidian themes.
+- **100% Reversible (Zero Lock-In)**:
+  - **Bake Colors**: Embeds standard LaTeX `\textcolor{...}{...}` wrappers when you want to export notes to standard PDF or TeX.
+  - **Clean / Undo**: Instantly strips all color markup back to pristine, uncolored LaTeX anytime.
+
+---
+
+## ⚡ Performance & Resource Footprint
+
+- **👑 Lemire MPHF (FNV-1a Full-String) Engine**: Branchless fast range reduction with 16 KB L1 displacement table delivers 55 ns flat lookup across 6,800+ mathematical symbols with zero collision degradation.
+- **Linear Time Complexity $\mathcal{O}(N)$**: Single-pass tokenization without backtracking — scales smoothly with note length.
+- **Viewport-Constrained**: Live Preview only highlights equations currently visible on screen, keeping 10,000-word notes stutter-free.
+- **Zero Idle CPU (0.0%)**: Purely event-driven; no background polling loops, watchers, or worker processes.
+- **Hard-Bounded Memory**: Built-in LRU render cache keeps memory overhead under ~5 MB.
+- **100% Local & Private**: Pure TypeScript with zero binary dependencies, zero telemetry, and zero network calls. Fully compatible with desktop and mobile (iOS & Android).
+
+---
+
+## 🚀 Quick Start
+
+### Installation
 1. In Obsidian, open **Settings > Community plugins**.
 2. Turn off **Restricted mode**.
-3. Click **Browse** and search for `Color Math`.
-4. Click **Install**, then **Enable**.
+3. Click **Browse**, search for **`Color Math`**, then click **Install** and **Enable**.
 
-### Manual Installation
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/36ty-blip/obsidian-color-math/releases).
-2. Create a folder named `color-math` inside `<vault>/.obsidian/plugins/`.
-3. Move the downloaded files into that folder.
-4. Reload Obsidian and enable **Color Math** under **Settings > Community plugins**.
-
----
-
-## 💬 Feedback & Community
-
-Feedback, questions, and feature requests are very welcome!
-
-- **Share your thoughts or suggest features**: Join the conversation on [GitHub Discussions](https://github.com/36ty-blip/obsidian-color-math/discussions).
-- **Report bugs or rendering issues**: Open a [GitHub Issue](https://github.com/36ty-blip/obsidian-color-math/issues).
+### Everyday Usage
+- **Read & Write**: Just write your equations naturally (`$...$` or `$$...$$`). Color Math renders them automatically in Live Preview and Reading View.
+- **Ribbon Palette Icon (`fx`)**: Click the left ribbon icon for instant access to Bake and Clean actions.
+- **Command Palette (`Ctrl+P` / `Cmd+P`)**:
+  - `Color Math: Bake colors into note (Permanent)`
+  - `Color Math: Clean baked colors from note`
+  - `Color Math: Bake / Clean current math block`
+  - `Color Math: Bake / Clean selection`
 
 ---
 
-## 🛠️ Development & Testing
+## 🛠️ Settings & Customization
 
-```bash
-npm install
-npm run build     # Builds production main.js
-npm run test      # Runs Vitest test suite (97/97 passing)
-npm run dev       # Watch mode with inline sourcemaps
-```
+Open **Settings > Color Math** to customize:
+- **Palette**: Fine-tune individual hex values for variables, numbers, operators, differentials, and constants.
+- **Feature Toggles**: Individually enable or disable rainbow delimiters, calculus differentials, physical units, or bra-ket notation.
+- **Interactive Preview**: Live equation sandbox inside the settings tab to test your palette in real time.
 
 ---
 

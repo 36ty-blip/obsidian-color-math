@@ -13,9 +13,18 @@ import { collectQuantumOperatorSpans } from "../parsers/physics";
 import { collectDomainOperatorSpans, generateModeAwareDerivativeSpans } from "../parsers/modes";
 import { collectUnitSpans, findUnitSpans } from "../parsers/units";
 import { collectVariableSpans } from "../parsers/variable_hash";
-import { containsColorWrapper, normalizeLatexBraces } from "../utils/latex_helpers";
+import { parseMathWithCST } from "../parsers/cst/index";
+import { containsColorWrapper, normalizeLatexBraces, normalizeMathSyntax } from "../utils/latex_helpers";
 import { ColorSpan, applyColorSpans } from "../utils/spans";
 import { uncolorFragment } from "../undo";
+import { LruCache } from "../utils/lru_cache";
+
+// Mode-aware LRU cache for full LaTeX string colorization
+const latexBodyCache = new LruCache<string, string>(1000);
+
+export function clearLatexBodyCache(): void {
+  latexBodyCache.clear();
+}
 
 const FUNCTION_COLOR_NAMES: ("main" | "derivative" | "chain")[] = [
   "main",
@@ -52,22 +61,61 @@ export function collectFunctionSpans(
   return spans;
 }
 
+function getOptionsHash(palette: ColorPalette, options?: ColorMathOptions): string {
+  const pId = Object.values(palette).join(",");
+  if (!options) return pId;
+  return [
+    pId,
+    options.activeMode || "",
+    options.previewLatexNormalization !== false ? "1" : "0",
+    options.colorUnits !== false ? "1" : "0",
+    options.colorDifferentials !== false ? "1" : "0",
+    options.colorDimensionless !== false ? "1" : "0",
+    options.colorBraKet !== false ? "1" : "0",
+    options.colorSingleConstants !== false ? "1" : "0",
+    options.colorAlignment !== false ? "1" : "0",
+    options.rainbowDelimiters ? "1" : "0",
+    options.enableTaxonomy ? "1" : "0",
+    options.taxonomyFunctions !== false ? "1" : "0",
+    options.taxonomyParameters !== false ? "1" : "0",
+    options.taxonomyConstants !== false ? "1" : "0",
+    options.taxonomyIndices !== false ? "1" : "0",
+    options.variableDataFlow ? "1" : "0",
+    options.colorQuantumOperators ? "1" : "0",
+    options.extendedFunctions !== false ? "1" : "0",
+    options.field || "",
+    options.useCST ? "1" : "0",
+  ].join(";");
+}
+
 export function colorLatexBody(
   body: string,
   palette: ColorPalette = COLORS,
   options?: ColorMathOptions
 ): string {
   const cleanBody = containsColorWrapper(body) ? uncolorFragment(body) : body;
+  const optHash = getOptionsHash(palette, options);
+  const cacheKey = `${optHash}::${cleanBody}`;
+
+  const cached = latexBodyCache.get(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+
   const normalized =
     options?.previewLatexNormalization !== false
-      ? normalizeLatexBraces(cleanBody)
+      ? normalizeMathSyntax(cleanBody, options)
       : cleanBody;
 
   const needUnits = options?.colorUnits !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
   const needDiffs = options?.colorDifferentials !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
   const needDims = options?.colorDimensionless !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
 
-  const unitSpans = needUnits ? findUnitSpans(normalized) : [];
+  const unitSpans = needUnits ? findUnitSpans(normalized, {
+    allowSingleLetterUnits: options?.allowSingleLetterUnits,
+    activeMode: options?.activeMode,
+    colorUnits: options?.colorUnits,
+  }) : [];
   const diffSpans = needDiffs ? findDifferentialSpans(normalized) : [];
   const dimSpans = needDims ? findDimensionlessSpans(normalized) : [];
   const boundarySpans = findBoundarySpans(normalized);
@@ -79,7 +127,7 @@ export function colorLatexBody(
     ...collectScannerSpans(normalized, palette),
   ];
 
-  // Domain boundary surfaces (\partial\Omega, \partial V, ∂D, etc.) -> operator in palette.chain (#9ece6a)
+  // 0.4 Domain boundary surfaces (\partial\Omega, \partial V, ∂D, etc.) -> operator in palette.chain (#9ece6a)
   for (const b of boundarySpans) {
     spans.push({
       start: b.start,
@@ -131,7 +179,17 @@ export function colorLatexBody(
   }
 
   if (options?.variableDataFlow) {
-    spans.push(...collectVariableSpans(normalized, undefined, unitSpans, diffSpans, dimSpans, bareFunctions, boundarySpans));
+    spans.push(
+      ...collectVariableSpans(
+        normalized,
+        undefined,
+        unitSpans,
+        diffSpans,
+        dimSpans,
+        bareFunctions,
+        boundarySpans
+      )
+    );
   }
 
   if (options?.activeMode) {
@@ -158,7 +216,27 @@ export function colorLatexBody(
     }
   }
 
-  return applyColorSpans(normalized, spans);
+  if (options?.useCST) {
+    try {
+      const cstSpans = parseMathWithCST(normalized, {
+        palette,
+        rainbowColors: options?.rainbowColors,
+        highlightUnmatched: options?.highlightUnmatchedBraces !== false,
+        strictBracketWarnings: options?.strictBracketWarnings === true,
+        activeMode: options?.activeMode,
+        forLatexWrap: true,
+      });
+      if (cstSpans.length > 0) {
+        spans.push(...cstSpans);
+      }
+    } catch {
+      // Graceful fallback to legacy spans
+    }
+  }
+
+  const result = applyColorSpans(normalized, spans);
+  latexBodyCache.set(cacheKey, result);
+  return result;
 }
 
 export function colorGenericMathLine(

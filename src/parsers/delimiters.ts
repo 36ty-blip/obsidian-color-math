@@ -29,6 +29,7 @@ export interface DelimiterCollectorOptions {
   highlightUnmatched?: boolean;
   onlyUnmatched?: boolean;
   errorColor?: string;
+  strictBracketWarnings?: boolean;
 }
 
 const OPTIONAL_BRACKET_COMMANDS = new Set([
@@ -59,6 +60,39 @@ function skipComment(text: string, start: number): number {
     return index + 2;
   }
   return Math.min(index + 1, text.length);
+}
+
+/**
+ * Checks if a substring contains a top-level comma (depth 0 of any nested brackets/braces),
+ * used to identify valid mathematical intervals like [a, b) and (a, b].
+ */
+function hasTopLevelComma(text: string, start: number, end: number): boolean {
+  let parenDepth = 0;
+  let bracketDepth = 0;
+  let braceDepth = 0;
+  let i = start;
+  while (i < end) {
+    const ch = text[i];
+    if (ch === "%") {
+      i = skipComment(text, i);
+      continue;
+    }
+    if (ch === "(") parenDepth++;
+    else if (ch === ")") parenDepth = Math.max(0, parenDepth - 1);
+    else if (ch === "[") bracketDepth++;
+    else if (ch === "]") bracketDepth = Math.max(0, bracketDepth - 1);
+    else if (ch === "{" || text.startsWith("\\{", i)) {
+      if (text.startsWith("\\{", i)) i++;
+      braceDepth++;
+    } else if (ch === "}" || text.startsWith("\\}", i)) {
+      if (text.startsWith("\\}", i)) i++;
+      braceDepth = Math.max(0, braceDepth - 1);
+    } else if (ch === "," && parenDepth === 0 && bracketDepth === 0 && braceDepth === 0) {
+      return true;
+    }
+    i++;
+  }
+  return false;
 }
 
 function getDelimiterType(str: string): string {
@@ -208,6 +242,16 @@ export function findDelimiterScan(
           break;
         }
       }
+      // Half-open interval fallback: \bigl[ a, b \bigr) or \bigl( a, b \bigr]
+      if (matchIdx === -1 && (type === "paren" || type === "bracket")) {
+        const altType = type === "paren" ? "bracket" : "paren";
+        for (let i = stack.length - 1; i >= 0; i--) {
+          if (!stack[i].item.isLeftRight && stack[i].item.type === altType && hasTopLevelComma(text, stack[i].item.end, index)) {
+            matchIdx = i;
+            break;
+          }
+        }
+      }
       if (matchIdx !== -1) {
         const matched = stack.splice(matchIdx, 1)[0];
         pairs.push({
@@ -348,18 +392,17 @@ export function findDelimiterScan(
     if (text[index] === ")" || (text[index] === "]" && !ignoredBracketIndices.has(index))) {
       const type = text[index] === ")" ? "paren" : "bracket";
       let matchIdx = -1;
-      // 1. Try exact type match first
       for (let i = stack.length - 1; i >= 0; i--) {
         if (!stack[i].item.isLeftRight && stack[i].item.type === type) {
           matchIdx = i;
           break;
         }
       }
-      // 2. If no exact match, allow matching open paren/bracket as half-open interval: [a, b) or (a, b]
+      // Half-open interval fallback: [a, b) or (a, b] containing top-level comma
       if (matchIdx === -1 && (type === "paren" || type === "bracket")) {
-        const intervalComplement = type === "paren" ? "bracket" : "paren";
+        const altType = type === "paren" ? "bracket" : "paren";
         for (let i = stack.length - 1; i >= 0; i--) {
-          if (!stack[i].item.isLeftRight && stack[i].item.type === intervalComplement) {
+          if (!stack[i].item.isLeftRight && stack[i].item.type === altType && hasTopLevelComma(text, stack[i].item.end, index)) {
             matchIdx = i;
             break;
           }
@@ -495,7 +538,9 @@ export function collectDelimiterSpans(
   const forLatexWrap = options?.forLatexWrap ?? false;
   // SAFETY GUARD: If forLatexWrap is true (LaTeX baking), we NEVER include bare braces!
   const includeBareBraces = forLatexWrap ? false : (options?.includeBareBraces ?? false);
-  const scan = findDelimiterScan(text, { includeBareBraces: options?.includeBareBraces ?? false });
+  const scan = findDelimiterScan(text, {
+    includeBareBraces: options?.highlightUnmatched ? true : Boolean(options?.includeBareBraces),
+  });
   const palette = options?.palette || RAINBOW_DELIMITER_COLORS;
   const spans: ColorSpan[] = [];
 
@@ -511,6 +556,13 @@ export function collectDelimiterSpans(
 
       const color = palette[pair.depth % palette.length];
       if (forLatexWrap && pair.open.isLeftRight) {
+        const innerText = text.slice(pair.open.end, pair.close.start);
+        if (/\\begin\s*\{/.test(innerText)) {
+          // Never wrap entire environment blocks (matrices, cases, arrays) in \textcolor:
+          // In MathJax and KaTeX, wrapping an environment block in \textcolor breaks vertical delimiter scaling
+          // and floods the entire matrix with a single uniform color.
+          continue;
+        }
         // Wrap entire \left...\right expression so KaTeX/MathJax does not fail group boundaries
         spans.push({
           start: pair.open.start,
@@ -539,16 +591,19 @@ export function collectDelimiterSpans(
   // Highlight unmatched delimiters (unclosed opening or stray closing)
   if (options?.highlightUnmatched) {
     const errColor = options?.errorColor || "#f7768e";
+    const strict = options?.strictBracketWarnings === true;
+
     for (const item of scan.unmatched) {
-      // Only bare braces { and } (or unclosed \left) represent fatal MathJax syntax errors.
-      // Standard parentheses/brackets (such as intervals (a, b] or [a, b)) and escaped \{
-      // do not break MathJax syntax and must not show error wavy underlines.
-      if (item.type !== "bare_brace" && !item.isLeftRight) {
+      // True MathJax compiler syntax errors:
+      // 1. Unmatched bare grouping braces: item.type === "bare_brace"
+      // 2. Unmatched \left / \right: item.isLeftRight === true
+      const isSyntaxError = item.type === "bare_brace" || item.isLeftRight === true;
+
+      // Mathematical delimiters (bare paren, bracket, brace, angle, pipe) only warn if strictBracketWarnings is enabled
+      if (!isSyntaxError && !strict) {
         continue;
       }
-      if (item.type === "bare_brace" && !options?.includeBareBraces && !options?.onlyUnmatched) {
-        continue;
-      }
+
       spans.push({
         start: item.start,
         end: item.end,

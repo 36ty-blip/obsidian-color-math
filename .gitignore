@@ -11,4 +11,5 @@ wheelhouse/
 *.egg-info/
 
 node_modules/
-
+tests/corpus/
+benchmark_results.json

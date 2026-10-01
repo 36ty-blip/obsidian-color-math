@@ -494,11 +494,23 @@ function findMathInlines(text: string, protectedSpans: MarkdownSpan[]): Markdown
         let closing = contentStart;
         let found = false;
 
+        let inQuote = false;
         while (closing < end) {
           if (text[closing] === "\r" || text[closing] === "\n") {
             break; // Inline math must not cross lines
           }
-          if (text[closing] === "$" && !isEscaped(text, closing)) {
+          if (text[closing] === '"' && !isEscaped(text, closing)) {
+            if (!inQuote) {
+              const nextQuote = text.indexOf('"', closing + 1);
+              const nextNl = text.indexOf("\n", closing + 1);
+              if (nextQuote !== -1 && (nextNl === -1 || nextQuote < nextNl)) {
+                inQuote = true;
+              }
+            } else {
+              inQuote = false;
+            }
+          }
+          if (!inQuote && text[closing] === "$" && !isEscaped(text, closing)) {
             // Closing $ must not be preceded by whitespace
             // Pandoc / GFM: Closing $ must not be followed immediately by a digit
             const prevChar = text[closing - 1];

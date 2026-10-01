@@ -99,14 +99,20 @@ export function collectScannerSpans(body: string, palette: ColorPalette = COLORS
     const cmdMatch = body.slice(index).match(/^(\\[A-Za-z]+|\\.)/);
     if (cmdMatch) {
       const command = cmdMatch[0];
+      let spanEnd = index + command.length;
       if (SORTED_COLOR_COMMANDS.includes(command)) {
+        const rem = body.slice(spanEnd);
+        const limitMatch = rem.match(/^(\\(?:limits|nolimits|displaylimits))(?![a-zA-Z])/);
+        if (limitMatch) {
+          spanEnd += limitMatch[1].length;
+        }
         spans.push({
           start: index,
-          end: index + command.length,
+          end: spanEnd,
           color: commandColor(command, palette),
         });
       }
-      index += command.length;
+      index = spanEnd;
       if (index < body.length && body[index] === "*") {
         index += 1;
       }

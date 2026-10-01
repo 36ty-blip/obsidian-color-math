@@ -13,6 +13,7 @@ import {
   NON_SLASH_MATH_CONSTANTS,
   NON_SLASH_MATH_PARAMETERS,
 } from "../config";
+import { lookupCatalog, matchBareFunction } from "./catalog";
 import { readOperand, OPAQUE_MACROS } from "./latex_spans";
 import { readBraced, readColorCommand, skipEnvironmentHead } from "../utils/latex_helpers";
 import { ColorSpan } from "../utils/spans";
@@ -112,11 +113,23 @@ export function collectTaxonomySpans(
       continue;
     }
 
-    // Bare math functions (sin, cos, tan, ln, exp, etc.)
+    // Bare math functions (sin, cos, tan, ln, exp, rank(A), relu(z), etc.) via MPHF engine
     if (options?.taxonomyFunctions !== false) {
-      const bareMatch = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
-      if (bareMatch && BARE_FUNCTIONS.has(bareMatch[1].toLowerCase())) {
-        const fnName = bareMatch[1];
+      const bareMatch = matchBareFunction(body, index);
+      if (bareMatch) {
+        spans.push({
+          start: index,
+          end: index + bareMatch.length,
+          color: palette.main,
+          priority: 22,
+        });
+        index += bareMatch.length;
+        continue;
+      }
+      // Fallback for user custom bare functions
+      const legacyBare = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
+      if (legacyBare && BARE_FUNCTIONS.has(legacyBare[1].toLowerCase())) {
+        const fnName = legacyBare[1];
         spans.push({
           start: index,
           end: index + fnName.length,
@@ -232,6 +245,71 @@ export function collectTaxonomySpans(
           }
         }
 
+        // Query O(1) MPHF catalog first
+        const catalogEntry = lookupCatalog(name);
+        if (catalogEntry) {
+          if (catalogEntry.arity === 1) {
+            let targetStart = cmdEnd;
+            while (targetStart < body.length && /\s/.test(body[targetStart])) {
+              targetStart++;
+            }
+            if (targetStart < body.length) {
+              let targetEnd = targetStart + 1;
+              if (body[targetStart] === "{") {
+                const braced = readBraced(body, targetStart);
+                if (braced) targetEnd = braced[1];
+              } else {
+                const letMatch = body.slice(targetStart).match(/^[a-zA-Z](')*/);
+                if (letMatch) targetEnd = targetStart + letMatch[0].length;
+              }
+              spans.push({
+                start: index,
+                end: targetEnd,
+                color: palette.main,
+                priority: 20,
+              });
+              index = targetEnd;
+              continue;
+            }
+          }
+          if (catalogEntry.role === "constant" && options?.taxonomyConstants !== false) {
+            spans.push({
+              start: index,
+              end: cmdEnd,
+              color: palette.orange,
+              priority: catalogEntry.priority || 22,
+            });
+            index = cmdEnd;
+            continue;
+          }
+          if (catalogEntry.role === "function" && options?.taxonomyFunctions !== false) {
+            let spanEnd = cmdEnd;
+            const remaining = body.slice(cmdEnd);
+            const limitModifierMatch = remaining.match(/^(\\(?:limits|nolimits|displaylimits))(?![a-zA-Z])/);
+            if (limitModifierMatch) {
+              spanEnd = cmdEnd + limitModifierMatch[1].length;
+            }
+            spans.push({
+              start: index,
+              end: spanEnd,
+              color: palette.main,
+              priority: catalogEntry.priority || 22,
+            });
+            index = spanEnd;
+            continue;
+          }
+          if (catalogEntry.role === "parameter" && options?.taxonomyParameters !== false) {
+            spans.push({
+              start: index,
+              end: cmdEnd,
+              color: palette.parameter || palette.derivative,
+              priority: catalogEntry.priority || 20,
+            });
+            index = cmdEnd;
+            continue;
+          }
+        }
+
         if (MATH_CONSTANTS.has(name)) {
           if (options?.taxonomyConstants !== false) {
             spans.push({
@@ -247,14 +325,22 @@ export function collectTaxonomySpans(
 
         if (MATH_FUNCTIONS.has(name)) {
           if (options?.taxonomyFunctions !== false) {
+            let spanEnd = cmdEnd;
+            const remaining = body.slice(cmdEnd);
+            const limitModifierMatch = remaining.match(/^(\\(?:limits|nolimits|displaylimits))(?![a-zA-Z])/);
+            if (limitModifierMatch) {
+              spanEnd = cmdEnd + limitModifierMatch[1].length;
+            }
             spans.push({
               start: index,
-              end: cmdEnd,
+              end: spanEnd,
               color: palette.main,
               priority: 22,
             });
+            index = spanEnd;
+          } else {
+            index = cmdEnd;
           }
-          index = cmdEnd;
           continue;
         }
 
