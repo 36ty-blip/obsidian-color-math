@@ -174,5 +174,13 @@ describe("Variable Data-Flow Hashing", () => {
       expect(Object.values(objectPalette)).toContain(span.color);
     }
   });
+
+  it("assigns identical hash color to bare Greek letter and backslash command (eta vs \\eta)", () => {
+    const spansBare = collectVariableSpans("eta");
+    const spansCmd = collectVariableSpans("\\eta");
+    expect(spansBare.length).toBe(1);
+    expect(spansCmd.length).toBe(1);
+    expect(spansBare[0].color).toBe(spansCmd[0].color);
+  });
 });
 

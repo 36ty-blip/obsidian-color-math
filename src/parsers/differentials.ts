@@ -8,8 +8,22 @@ export interface DifferentialSpan {
   kind: "differential" | "derivative_fraction";
 }
 
+const DIFF_FONT_COMMANDS =
+  "mathbf|boldsymbol|pmb|vec|hat|bar|tilde|dot|ddot|mathit|mathrm|mathbb|mathcal|mathfrak|msf|Bbb|check|acute|grave|breve|overline|underline|widetilde|widehat";
+
+const DIFF_RESERVED_COMMANDS =
+  "end|begin|right|left|frac|dfrac|tfrac|text|operatorname|limits|nolimits|displaylimits|sqrt|pmod|pod|mod|bmod|" +
+  DIFF_FONT_COMMANDS;
+
+const DIFF_GREEK_COMMANDS =
+  "alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|varkappa|lambda|mu|nu|xi|pi|varpi|rho|varrho|sigma|varsigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega|ell";
+
 const DIFF_VAR_PATTERN =
-  "(?:\\\\[a-zA-Z]+|[a-zA-Z]|[\\u0370-\\u03FF]|\\uD835[\\uDC00-\\uDFFF])";
+  "(?:\\\\(?:" +
+  DIFF_FONT_COMMANDS +
+  ")(?:\\{[^{}]+\\}|\\s+[a-zA-Z])|\\\\(?:" +
+  DIFF_GREEK_COMMANDS +
+  ")(?![a-zA-Z])|[a-zA-Z]|[\\u0370-\\u03FF]|\\uD835[\\uDC00-\\uDFFF])";
 
 const DERIV_FRAC_REGEX = new RegExp(
   "\\\\(?:dfrac|tfrac|frac)\\s*\\{\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|∂)(?:\\^\\{?\\d+\\}?)?\\s*(?:" +
@@ -25,7 +39,7 @@ const DERIV_FRAC_REGEX = new RegExp(
 const DIFF_REGEX = new RegExp(
   "(?:^|[\\s+\\-=*({]|\\[|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)(\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|\\\\delta|∂)\\s*" +
     DIFF_VAR_PATTERN +
-    "(?![a-zA-Z0-9_({])(?:\\^\\{?\\d+\\}?)?)",
+    "(?![a-zA-Z0-9_])(?:\\^\\{?\\d+\\}?)?)",
   "g"
 );
 

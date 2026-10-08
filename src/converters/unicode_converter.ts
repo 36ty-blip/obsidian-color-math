@@ -24,6 +24,7 @@ import {
   DELIMITER_AUTO_REPAIR,
 } from "../config/unicode";
 import { scanMarkdown } from "../parsers/markdown_scanner";
+import { lookupCatalog } from "../parsers/catalog";
 
 export interface UnicodeConversionOptions {
   convertDefiniteIntegrals?: boolean; // default: false (preserves \int_a^b)
@@ -142,6 +143,11 @@ export function convertLatexToUnicode(
   options?: UnicodeConversionOptions
 ): string {
   const map = getLatexToUnicodeMap(options);
+  const fastMap = new Map<string, string>();
+  for (let i = 0; i < map.length; i++) {
+    fastMap.set(map[i].key, map[i].val);
+  }
+
   let result = "";
   let idx = 0;
 
@@ -190,10 +196,20 @@ export function convertLatexToUnicode(
           }
         }
 
-        // 4. General dictionary replacement
-        const entry = map.find((m) => m.key === cmd);
-        if (entry) {
-          result += entry.val;
+        // 4. O(1) Lookup: fast map + MPHF catalog lookup
+        let replacement = fastMap.get(cmd);
+        if (!replacement) {
+          const catalogEntry = lookupCatalog(cmd);
+          if (catalogEntry && (catalogEntry.role === "parameter" || catalogEntry.role === "constant")) {
+            replacement =
+              options?.greekStyle === "standard"
+                ? (catalogEntry.unicode || catalogEntry.plane1)
+                : (catalogEntry.plane1 || catalogEntry.unicode);
+          }
+        }
+
+        if (replacement) {
+          result += replacement;
           // For differentials like \partial, consume one delimiter space if followed by a variable (e.g. \partial t -> ∂t)
           if (cmd in UNICODE_DIFFERENTIALS && cmdEnd < mathBody.length && mathBody[cmdEnd] === " ") {
             const nextChar = mathBody[cmdEnd + 1];
@@ -233,21 +249,40 @@ export function convertUnicodeToLatex(mathBody: string): string {
     }
   );
 
-  // Step 2: Convert Unicode symbols to canonical LaTeX
+  // Step 2: Convert Unicode symbols to canonical LaTeX via O(1) fast map + MPHF lookup
   const map = getUnicodeToLatexMap();
+  const fastUniMap = new Map<string, string>();
+  for (let i = 0; i < map.length; i++) {
+    fastUniMap.set(map[i].char, map[i].latex);
+  }
+
   let result = "";
   let idx = 0;
 
   while (idx < repaired.length) {
-    const entry = map.find((m) => repaired.startsWith(m.char, idx));
-    if (entry) {
-      const nextCharIdx = idx + entry.char.length;
-      const nextChar = nextCharIdx < repaired.length ? repaired[nextCharIdx] : "";
-      // Spacing guard: add trailing space if followed by an ASCII letter (e.g. \psi x, not \psix)
-      const needsTrailingSpace = /[a-zA-Z]/.test(nextChar);
-      result += entry.latex + (needsTrailingSpace ? " " : "");
-      idx += entry.char.length;
-      continue;
+    const charCode = repaired.charCodeAt(idx);
+    if (charCode > 127) {
+      const isSurrogate = charCode >= 0xd800 && charCode <= 0xdbff;
+      const charLen = isSurrogate && idx + 1 < repaired.length ? 2 : 1;
+      const glyph = repaired.slice(idx, idx + charLen);
+
+      // O(1) check
+      let latex = fastUniMap.get(glyph);
+      if (!latex) {
+        const entry = lookupCatalog(glyph);
+        if (entry?.canonical) {
+          latex = entry.canonical;
+        }
+      }
+
+      if (latex) {
+        const nextCharIdx = idx + charLen;
+        const nextChar = nextCharIdx < repaired.length ? repaired[nextCharIdx] : "";
+        const needsTrailingSpace = /[a-zA-Z]/.test(nextChar);
+        result += latex + (needsTrailingSpace ? " " : "");
+        idx += charLen;
+        continue;
+      }
     }
 
     result += repaired[idx];

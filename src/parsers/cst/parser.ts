@@ -28,6 +28,9 @@ import {
   CHAR_PERCENT,
   CHAR_PRIME,
   GREEK_COMMANDS,
+  isGreekCommand,
+  isQuantifier,
+  isSubgroupOrMorphism,
   OPTIONAL_BRACKET_COMMANDS,
   COMMON_DIMENSIONLESS_SET,
   TENSOR_BASE_SYMBOLS,
@@ -138,8 +141,8 @@ export class MathCSTParser {
         const cmdNode = this.parseCommand(depth, nodes.length > 0 ? nodes[nodes.length - 1] : undefined);
         if (cmdNode) {
           nodes.push(cmdNode);
-          continue;
         }
+        continue;
       }
 
       // 4. Standard Parentheses and Brackets: (, [
@@ -523,6 +526,24 @@ export class MathCSTParser {
     if (cmd === "\\left") {
       return this.parseLeftRightGroup(start, depth);
     }
+    if (cmd === "\\right") {
+      this.skipWhitespace();
+      const token = this.readDelimiterToken();
+      return {
+        kind: "group",
+        delimType: token ? token.text : "right",
+        openStart: start,
+        openEnd: token ? token.end : this.index,
+        closeStart: start,
+        closeEnd: token ? token.end : this.index,
+        openText: "\\right",
+        closeText: token ? token.text : "",
+        isLeftRight: true,
+        isSyntaxError: true,
+        children: [],
+        depth,
+      };
+    }
     if (cmd === "\\middle") {
       this.skipWhitespace();
       const token = this.readDelimiterToken();
@@ -866,7 +887,7 @@ export class MathCSTParser {
     }
 
     // Greek symbols & KKT multipliers
-    if (GREEK_COMMANDS.has(cmd)) {
+    if (isGreekCommand(cmd)) {
       const isKkt = KKT_MULTIPLIER_SYMBOLS.has(cmd);
       return {
         kind: "identifier",

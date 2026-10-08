@@ -71,6 +71,20 @@ describe("Quantum Bra-Ket Notation & Engineering Dimensionless Numbers", () => {
       expect(expectation[0].kind).toBe("bracket");
     });
 
+    it("detects Unicode Dirac notation |ψ⟩, ⟨ϕ|ψ⟩, ⟨ψ|", () => {
+      const ket = findBraKetSpans("|ψ⟩");
+      expect(ket.length).toBe(1);
+      expect(ket[0].kind).toBe("ket");
+
+      const bra = findBraKetSpans("⟨ϕ|");
+      expect(bra.length).toBe(1);
+      expect(bra[0].kind).toBe("bra");
+
+      const bracket = findBraKetSpans("⟨ϕ|ψ⟩");
+      expect(bracket.length).toBe(1);
+      expect(bracket[0].kind).toBe("bracket");
+    });
+
     it("does NOT treat absolute values or inequalities as bra-kets", () => {
       expect(findBraKetSpans("|x| < 5").length).toBe(0);
       expect(findBraKetSpans("|a - b| > 0").length).toBe(0);

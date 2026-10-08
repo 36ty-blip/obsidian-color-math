@@ -80,6 +80,7 @@ interface ColorMathSettings {
   crashImmunityAutoSeal: boolean;
   requireBracesForSlashDivision: boolean;
   enableQuickMenuOnAmbiguity: boolean;
+  padMatrixPadding: boolean;
   collapsedSections: Record<string, boolean>;
 }
 
@@ -126,6 +127,7 @@ const DEFAULT_SETTINGS: ColorMathSettings = {
   crashImmunityAutoSeal: true,
   requireBracesForSlashDivision: false,
   enableQuickMenuOnAmbiguity: false,
+  padMatrixPadding: false,
   collapsedSections: {},
 };
 
@@ -615,6 +617,7 @@ export default class ColorMathPlugin extends Plugin {
       crashImmunityAutoSeal: this.settings.crashImmunityAutoSeal,
       requireBracesForSlashDivision: this.settings.requireBracesForSlashDivision,
       enableQuickMenuOnAmbiguity: this.settings.enableQuickMenuOnAmbiguity,
+      padMatrixPadding: this.settings.padMatrixPadding,
       defaultMode: this.settings.defaultMode,
       autoDetectNoteMode: this.settings.autoDetectNoteMode,
     };
@@ -2010,6 +2013,19 @@ class ColorMathSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.requireBracesForSlashDivision)
           .onChange(async (val) => {
             this.plugin.settings.requireBracesForSlashDivision = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    new Setting(previewBody)
+      .setName("Ergonomic matrix padding (&)")
+      .setDesc("Automatically adds extra & spacing before the first column and at the end of the last row in matrix environments (pmatrix, bmatrix, etc.) for comfortable typing breathing room.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.padMatrixPadding)
+          .onChange(async (val) => {
+            this.plugin.settings.padMatrixPadding = val;
             await this.plugin.saveSettings();
             this.plugin.rerenderMath();
           })

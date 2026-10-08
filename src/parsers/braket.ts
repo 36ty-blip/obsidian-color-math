@@ -16,24 +16,24 @@ export interface BraKetSpan {
  * - Bra: \langle \phi |, \langle \phi \vert, \bra{\phi}
  */
 const BRAKET_REGEX =
-  /\\langle\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)\s*\|\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)(?:\s*\|\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?))?\s*\\rangle/g;
+  /(?:\\langle|⟨)\s*((?:(?!(?:\\langle|⟨|\\rangle|⟩))[^|‖<>=\n\r])+?)\s*(?:\||\\vert|\\lvert|\\rvert|\\Vert|\\lVert|\\rVert|‖)\s*((?:(?!(?:\\langle|⟨|\\rangle|⟩))[^|‖<>=\n\r])+?)(?:\s*(?:\||\\vert|\\lvert|\\rvert|\\Vert|\\lVert|\\rVert|‖)\s*((?:(?!(?:\\langle|⟨|\\rangle|⟩))[^|‖<>=\n\r])+?))?\s*(?:\\rangle|⟩)/g;
 
 const KET_MACRO_REGEX =
-  /(?:\||\\vert)\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)\s*\\rangle|\\ket\s*\{([^}]+)\}/g;
+  /(?:\||\\vert|\\lvert|\\lVert|‖)\s*((?:(?!(?:\\langle|⟨|\\rangle|⟩))[^|‖<>=\n\r])+?)\s*(?:\\rangle|⟩)|\\ket\s*\{([^}]+)\}/g;
 
 const BRA_MACRO_REGEX =
-  /\\langle\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)\s*(?:\||\\vert)|\\bra\s*\{([^}]+)\}/g;
+  /(?:\\langle|⟨)\s*((?:(?!(?:\\langle|⟨|\\rangle|⟩))[^|‖<>=\n\r])+?)\s*(?:\||\\vert|\\rvert|\\rVert|‖)|\\bra\s*\{([^}]+)\}/g;
 
 const KET_DELIM_REGEX =
-  /(?:\||\\vert)\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)\s*\\rangle/g;
+  /(?:\||\\vert|\\lvert|\\lVert|‖)\s*((?:(?!(?:\\langle|⟨|\\rangle|⟩))[^|‖<>=\n\r])+?)\s*(?:\\rangle|⟩)/g;
 
 const BRA_DELIM_REGEX =
-  /\\langle\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)\s*(?:\||\\vert)/g;
+  /(?:\\langle|⟨)\s*((?:(?!(?:\\langle|⟨|\\rangle|⟩))[^|‖<>=\n\r])+?)\s*(?:\||\\vert|\\rvert|\\rVert|‖)/g;
 
 const INNER_PRODUCT_REGEX =
-  /\\langle\s*((?:(?!\\langle|\\rangle)[^|<>=\n\r])+?)\s*\\rangle/g;
+  /(?:\\langle|⟨)\s*((?:(?!(?:\\langle|⟨|\\rangle|⟩))[^|‖<>=\n\r])+?)\s*(?:\\rangle|⟩)/g;
 
-const VERT_BAR_REGEX = /(?:\||\\vert)/;
+const VERT_BAR_REGEX = /(?:\||\\vert|\\lvert|\\rvert|\\Vert|\\lVert|\\rVert|‖)/;
 
 /**
  * Scans a LaTeX math body to identify Dirac bra-ket spans:
@@ -109,15 +109,17 @@ export function collectBraKetDelimiterSpans(
 ): ColorSpan[] {
   const spans: ColorSpan[] = [];
 
-  // 1. \langle ... | ... \rangle
+  // 1. \langle ... | ... \rangle or ⟨ ... | ... ⟩
   BRAKET_REGEX.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = BRAKET_REGEX.exec(body)) !== null) {
     const full = match[0];
+    const langleMatch = full.match(/^(?:\\langle|⟨)/)!;
     const langleIdx = match.index;
-    const langleEnd = langleIdx + "\\langle".length;
-    const rangleIdx = match.index + full.lastIndexOf("\\rangle");
-    const rangleEnd = rangleIdx + "\\rangle".length;
+    const langleEnd = langleIdx + langleMatch[0].length;
+    const rangleMatch = full.match(/(?:\\rangle|⟩)$/)!;
+    const rangleIdx = match.index + full.lastIndexOf(rangleMatch[0]);
+    const rangleEnd = rangleIdx + rangleMatch[0].length;
 
     if (!hasSizedPrefix(body, langleIdx)) {
       spans.push({ start: langleIdx, end: langleEnd, color: delimColor, priority: 25 });
@@ -126,21 +128,27 @@ export function collectBraKetDelimiterSpans(
       spans.push({ start: rangleIdx, end: rangleEnd, color: delimColor, priority: 25 });
     }
 
-    let barSearch = match.index;
-    while ((barSearch = body.indexOf("|", barSearch)) !== -1 && barSearch < rangleIdx) {
-      spans.push({ start: barSearch, end: barSearch + 1, color: delimColor, priority: 25 });
-      barSearch++;
+    const barRegex = new RegExp(VERT_BAR_REGEX.source, "g");
+    barRegex.lastIndex = langleMatch[0].length;
+    let bMatch: RegExpExecArray | null;
+    while ((bMatch = barRegex.exec(full)) !== null) {
+      const bIdx = match.index + bMatch.index;
+      if (bIdx >= langleEnd && bIdx < rangleIdx) {
+        spans.push({ start: bIdx, end: bIdx + bMatch[0].length, color: delimColor, priority: 25 });
+      }
     }
   }
 
-  // 2. Ket: | ... \rangle or \vert ... \rangle
+  // 2. Ket: | ... \rangle, | ... ⟩, \vert ... \rangle, etc.
   KET_DELIM_REGEX.lastIndex = 0;
   while ((match = KET_DELIM_REGEX.exec(body)) !== null) {
     const full = match[0];
+    const barMatch = full.match(/^(?:\||\\vert|\\lvert|\\lVert|‖)/)!;
     const barIdx = match.index;
-    const barEnd = barIdx + (full.startsWith("\\vert") ? 5 : 1);
-    const rangleIdx = match.index + full.lastIndexOf("\\rangle");
-    const rangleEnd = rangleIdx + 7;
+    const barEnd = barIdx + barMatch[0].length;
+    const rangleMatch = full.match(/(?:\\rangle|⟩)$/)!;
+    const rangleIdx = match.index + full.lastIndexOf(rangleMatch[0]);
+    const rangleEnd = rangleIdx + rangleMatch[0].length;
 
     if (!hasSizedPrefix(body, barIdx) && !hasSizedPrefix(body, rangleIdx) && !spans.some((s) => s.start === barIdx)) {
       spans.push({ start: barIdx, end: barEnd, color: delimColor, priority: 25 });
@@ -148,14 +156,16 @@ export function collectBraKetDelimiterSpans(
     }
   }
 
-  // 3. Bra: \langle ... | or \langle ... \vert
+  // 3. Bra: \langle ... |, ⟨ ... |, \langle ... \vert, etc.
   BRA_DELIM_REGEX.lastIndex = 0;
   while ((match = BRA_DELIM_REGEX.exec(body)) !== null) {
     const full = match[0];
+    const langleMatch = full.match(/^(?:\\langle|⟨)/)!;
     const langleIdx = match.index;
-    const langleEnd = langleIdx + 7;
-    const barIdx = match.index + full.search(VERT_BAR_REGEX);
-    const barEnd = barIdx + (full.endsWith("\\vert") ? 5 : 1);
+    const langleEnd = langleIdx + langleMatch[0].length;
+    const barMatch = full.match(/(?:\||\\vert|\\rvert|\\rVert|‖)$/)!;
+    const barIdx = match.index + full.lastIndexOf(barMatch[0]);
+    const barEnd = barIdx + barMatch[0].length;
 
     if (!hasSizedPrefix(body, langleIdx) && !hasSizedPrefix(body, barIdx) && !spans.some((s) => s.start === langleIdx)) {
       spans.push({ start: langleIdx, end: langleEnd, color: delimColor, priority: 25 });
@@ -163,14 +173,16 @@ export function collectBraKetDelimiterSpans(
     }
   }
 
-  // 4. Standard inner product / expectation value: \langle ... \rangle
+  // 4. Standard inner product / expectation value: \langle ... \rangle or ⟨ ... ⟩
   INNER_PRODUCT_REGEX.lastIndex = 0;
   while ((match = INNER_PRODUCT_REGEX.exec(body)) !== null) {
     const full = match[0];
+    const langleMatch = full.match(/^(?:\\langle|⟨)/)!;
     const langleIdx = match.index;
-    const langleEnd = langleIdx + "\\langle".length;
-    const rangleIdx = match.index + full.lastIndexOf("\\rangle");
-    const rangleEnd = rangleIdx + "\\rangle".length;
+    const langleEnd = langleIdx + langleMatch[0].length;
+    const rangleMatch = full.match(/(?:\\rangle|⟩)$/)!;
+    const rangleIdx = match.index + full.lastIndexOf(rangleMatch[0]);
+    const rangleEnd = rangleIdx + rangleMatch[0].length;
 
     if (!hasSizedPrefix(body, langleIdx) && !hasSizedPrefix(body, rangleIdx)) {
       if (!spans.some((s) => s.start === langleIdx)) {

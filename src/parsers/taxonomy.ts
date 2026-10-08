@@ -4,18 +4,15 @@ import {
   COLORS,
   ColorPalette,
   ColorMathOptions,
-  MATH_CONSTANTS,
-  MATH_FUNCTIONS,
   BARE_FUNCTIONS,
-  MATH_PARAMETERS,
   MATH_ACCENTS,
   FONT_STYLE_MACROS,
   NON_SLASH_MATH_CONSTANTS,
   NON_SLASH_MATH_PARAMETERS,
 } from "../config";
-import { lookupCatalog, matchBareFunction } from "./catalog";
+import { lookupCatalog, matchBareFunction, matchBareSymbol } from "./catalog";
 import { readOperand, OPAQUE_MACROS } from "./latex_spans";
-import { readBraced, readColorCommand, skipEnvironmentHead } from "../utils/latex_helpers";
+import { readBraced, readColorCommand, skipEnvironmentHead, matchCommand } from "../utils/latex_helpers";
 import { ColorSpan } from "../utils/spans";
 import { findDifferentialSpans, DifferentialSpan } from "./differentials";
 import { findDimensionlessSpans, DimensionlessSpan } from "./dimensionless";
@@ -141,6 +138,67 @@ export function collectTaxonomySpans(
       }
     }
 
+    // Bare mathematical symbols (Greek letters, constants, operators like hbar, nabla, alpha, arrow.r)
+    const bareSymbol = matchBareSymbol(body, index);
+    if (bareSymbol) {
+      const entry = bareSymbol.entry;
+      if (entry.role === "constant" && options?.taxonomyConstants !== false) {
+        spans.push({
+          start: index,
+          end: index + bareSymbol.length,
+          color: palette.orange,
+          priority: entry.priority || 22,
+        });
+        index += bareSymbol.length;
+        continue;
+      } else if (entry.role === "parameter" && options?.taxonomyParameters !== false) {
+        spans.push({
+          start: index,
+          end: index + bareSymbol.length,
+          color: palette.parameter || palette.derivative,
+          priority: entry.priority || 20,
+        });
+        index += bareSymbol.length;
+        continue;
+      } else if (entry.role === "differential") {
+        spans.push({
+          start: index,
+          end: index + bareSymbol.length,
+          color: palette.derivative || palette.main,
+          priority: entry.priority || 24,
+        });
+        index += bareSymbol.length;
+        continue;
+      } else if (entry.role === "operator") {
+        spans.push({
+          start: index,
+          end: index + bareSymbol.length,
+          color: palette.chain || palette.derivative,
+          priority: 25,
+        });
+        index += bareSymbol.length;
+        continue;
+      } else if (entry.role === "relation") {
+        spans.push({
+          start: index,
+          end: index + bareSymbol.length,
+          color: palette.chain || palette.derivative,
+          priority: 20,
+        });
+        index += bareSymbol.length;
+        continue;
+      } else if (entry.role === "variable" && options?.taxonomyParameters !== false) {
+        spans.push({
+          start: index,
+          end: index + bareSymbol.length,
+          color: palette.parameter || palette.main,
+          priority: entry.priority || 20,
+        });
+        index += bareSymbol.length;
+        continue;
+      }
+    }
+
     if (body[index] === "\\") {
       const match = body.slice(index).match(/^(\\[A-Za-z]+|\\.)/);
       if (match) {
@@ -179,6 +237,45 @@ export function collectTaxonomySpans(
             }
           }
           index = cmdEnd;
+          continue;
+        }
+
+        // Definition commands: \newcommand, \renewcommand, \providecommand, \DeclareMathOperator, \def, \let
+        if (
+          name === "\\newcommand" ||
+          name === "\\renewcommand" ||
+          name === "\\providecommand" ||
+          name === "\\DeclareMathOperator"
+        ) {
+          let afterCmd = cmdEnd;
+          if (afterCmd < body.length && body[afterCmd] === "*") afterCmd++;
+          while (afterCmd < body.length && /\s/.test(body[afterCmd])) afterCmd++;
+          if (afterCmd < body.length && body[afterCmd] === "{") {
+            const braced = readBraced(body, afterCmd);
+            if (braced) afterCmd = braced[1];
+          } else if (afterCmd < body.length && body[afterCmd] === "\\") {
+            const m = matchCommand(body, afterCmd);
+            if (m) afterCmd += m.length;
+          }
+          index = afterCmd;
+          continue;
+        }
+
+        if (name === "\\def" || name === "\\let") {
+          let afterCmd = cmdEnd;
+          while (afterCmd < body.length && /\s/.test(body[afterCmd])) afterCmd++;
+          if (afterCmd < body.length && body[afterCmd] === "\\") {
+            const m = matchCommand(body, afterCmd);
+            if (m) afterCmd += m.length;
+          }
+          while (afterCmd < body.length && body[afterCmd] !== "{") {
+            afterCmd++;
+          }
+          if (afterCmd < body.length && body[afterCmd] === "{") {
+            const braced = readBraced(body, afterCmd);
+            if (braced) afterCmd = braced[1];
+          }
+          index = afterCmd;
           continue;
         }
 
@@ -245,116 +342,97 @@ export function collectTaxonomySpans(
           }
         }
 
+const EXTENSIBLE_ANNOTATIONS = new Set([
+  "\\underbrace",
+  "\\overbrace",
+  "\\underbracket",
+  "\\overbracket",
+  "\\underline",
+  "\\overline",
+  "\\overleftarrow",
+  "\\overrightarrow",
+]);
+
         // Query O(1) MPHF catalog first
         const catalogEntry = lookupCatalog(name);
-        if (catalogEntry) {
-          if (catalogEntry.arity === 1) {
-            let targetStart = cmdEnd;
-            while (targetStart < body.length && /\s/.test(body[targetStart])) {
-              targetStart++;
+        if (
+          name === "\\Bbb" ||
+          name === "\\mod" ||
+          name === "\\pmod" ||
+          name === "\\pod" ||
+          (catalogEntry && catalogEntry.arity === 1 && !EXTENSIBLE_ANNOTATIONS.has(name))
+        ) {
+          let targetStart = cmdEnd;
+          while (targetStart < body.length && /\s/.test(body[targetStart])) {
+            targetStart++;
+          }
+          if (targetStart < body.length) {
+            let targetEnd = targetStart + 1;
+            if (body[targetStart] === "{") {
+              const braced = readBraced(body, targetStart);
+              if (braced) targetEnd = braced[1];
+            } else if (body[targetStart] === "\\") {
+              const subCmd = matchCommand(body, targetStart);
+              if (subCmd) targetEnd = targetStart + subCmd.length;
+            } else {
+              const letMatch = body.slice(targetStart).match(/^[a-zA-Z0-9](')*/);
+              if (letMatch) targetEnd = targetStart + letMatch[0].length;
             }
-            if (targetStart < body.length) {
-              let targetEnd = targetStart + 1;
-              if (body[targetStart] === "{") {
-                const braced = readBraced(body, targetStart);
-                if (braced) targetEnd = braced[1];
-              } else {
-                const letMatch = body.slice(targetStart).match(/^[a-zA-Z](')*/);
-                if (letMatch) targetEnd = targetStart + letMatch[0].length;
+            spans.push({
+              start: index,
+              end: targetEnd,
+              color: palette.main,
+              priority: 20,
+            });
+            index = targetEnd;
+            continue;
+          }
+        }
+        if (catalogEntry) {
+          if (catalogEntry.role === "constant") {
+            if (options?.taxonomyConstants !== false) {
+              spans.push({
+                start: index,
+                end: cmdEnd,
+                color: palette.orange,
+                priority: catalogEntry.priority || 22,
+              });
+            }
+            index = cmdEnd;
+            continue;
+          }
+          if (catalogEntry.role === "function") {
+            if (options?.taxonomyFunctions !== false) {
+              let spanEnd = cmdEnd;
+              const remaining = body.slice(cmdEnd);
+              const limitModifierMatch = remaining.match(/^(\s*\\(?:limits|nolimits|displaylimits))(?![a-zA-Z])/);
+              if (limitModifierMatch) {
+                spanEnd = cmdEnd + limitModifierMatch[0].length;
               }
               spans.push({
                 start: index,
-                end: targetEnd,
+                end: spanEnd,
                 color: palette.main,
-                priority: 20,
+                priority: catalogEntry.priority || 22,
               });
-              index = targetEnd;
-              continue;
+              index = spanEnd;
+            } else {
+              index = cmdEnd;
             }
+            continue;
           }
-          if (catalogEntry.role === "constant" && options?.taxonomyConstants !== false) {
-            spans.push({
-              start: index,
-              end: cmdEnd,
-              color: palette.orange,
-              priority: catalogEntry.priority || 22,
-            });
+          if (catalogEntry.role === "parameter") {
+            if (options?.taxonomyParameters !== false) {
+              spans.push({
+                start: index,
+                end: cmdEnd,
+                color: palette.parameter || palette.derivative,
+                priority: catalogEntry.priority || 20,
+              });
+            }
             index = cmdEnd;
             continue;
           }
-          if (catalogEntry.role === "function" && options?.taxonomyFunctions !== false) {
-            let spanEnd = cmdEnd;
-            const remaining = body.slice(cmdEnd);
-            const limitModifierMatch = remaining.match(/^(\\(?:limits|nolimits|displaylimits))(?![a-zA-Z])/);
-            if (limitModifierMatch) {
-              spanEnd = cmdEnd + limitModifierMatch[1].length;
-            }
-            spans.push({
-              start: index,
-              end: spanEnd,
-              color: palette.main,
-              priority: catalogEntry.priority || 22,
-            });
-            index = spanEnd;
-            continue;
-          }
-          if (catalogEntry.role === "parameter" && options?.taxonomyParameters !== false) {
-            spans.push({
-              start: index,
-              end: cmdEnd,
-              color: palette.parameter || palette.derivative,
-              priority: catalogEntry.priority || 20,
-            });
-            index = cmdEnd;
-            continue;
-          }
-        }
-
-        if (MATH_CONSTANTS.has(name)) {
-          if (options?.taxonomyConstants !== false) {
-            spans.push({
-              start: index,
-              end: cmdEnd,
-              color: palette.orange,
-              priority: 22,
-            });
-          }
-          index = cmdEnd;
-          continue;
-        }
-
-        if (MATH_FUNCTIONS.has(name)) {
-          if (options?.taxonomyFunctions !== false) {
-            let spanEnd = cmdEnd;
-            const remaining = body.slice(cmdEnd);
-            const limitModifierMatch = remaining.match(/^(\\(?:limits|nolimits|displaylimits))(?![a-zA-Z])/);
-            if (limitModifierMatch) {
-              spanEnd = cmdEnd + limitModifierMatch[1].length;
-            }
-            spans.push({
-              start: index,
-              end: spanEnd,
-              color: palette.main,
-              priority: 22,
-            });
-            index = spanEnd;
-          } else {
-            index = cmdEnd;
-          }
-          continue;
-        }
-
-        if (MATH_PARAMETERS.has(name)) {
-          if (options?.taxonomyParameters !== false) {
-            spans.push({
-              start: index,
-              end: cmdEnd,
-              color: palette.parameter || palette.derivative,
-              priority: 20,
-            });
-          }
-          index = cmdEnd;
-          continue;
         }
 
         if (FONT_STYLE_MACROS.has(name)) {

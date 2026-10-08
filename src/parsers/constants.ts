@@ -2,6 +2,7 @@
 
 import { ColorPalette, COLORS } from "../config";
 import { ColorSpan } from "../utils/spans";
+import { lookupCatalog, matchBareSymbol } from "./catalog";
 
 function isPartOfCommand(body: string, index: number): boolean {
   let b = index;
@@ -65,8 +66,28 @@ export function isImaginaryUnit(body: string, index: number): boolean {
   // Followed by ^2 or ^{2}: i^2 = -1
   if (body.slice(next).startsWith("^2") || body.slice(next).startsWith("^{2}")) return true;
 
-  // Followed by constant or greek: \pi, \theta, \omega, \hbar, ℏ, π, θ, ω, ϕ, ψ, 𝜓, 𝝍
-  if (body.slice(next).match(/^(?:\\(?:pi|theta|omega|hbar|phi|psi)|[ℏπθωϕψΨ]|𝜓|𝝍)/)) return true;
+  // Followed by constant or greek: \pi, \alpha, \omega, ℏ, etc. via MPHF catalog
+  if (next < body.length) {
+    if (body[next] === "\\") {
+      const cmdMatch = body.slice(next).match(/^(\\[A-Za-z]+)/);
+      if (cmdMatch) {
+        const entry = lookupCatalog(cmdMatch[1]);
+        if (entry && (entry.role === "constant" || entry.role === "parameter")) return true;
+      }
+    } else {
+      const bare = matchBareSymbol(body, next);
+      if (bare && (bare.entry.role === "constant" || bare.entry.role === "parameter")) return true;
+
+      const charCode = body.charCodeAt(next);
+      if (charCode > 127) {
+        const isSurrogate = charCode >= 0xd800 && charCode <= 0xdbff;
+        const charLen = isSurrogate && next + 1 < body.length ? 2 : 1;
+        const glyph = body.slice(next, next + charLen);
+        const entry = lookupCatalog(glyph);
+        if (entry && (entry.role === "constant" || entry.role === "parameter")) return true;
+      }
+    }
+  }
 
   // Followed by variable like y in x + iy, or in exponent
   if (next < body.length && /[xyz\\]/.test(body[next])) {

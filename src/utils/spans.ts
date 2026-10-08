@@ -14,18 +14,64 @@ function crosses(left: ColorSpan, right: ColorSpan): boolean {
   );
 }
 
+const ATOMIC_DELIM_RE =
+  /\\(?:left|right|middle|(?:Bigg|bigg|Big|big)[lrm]?)\s*(?:\\[A-Za-z]+|\\.|[^\s])|\\\|/g;
+
 export function selectColorSpans(source: string, spans: ColorSpan[]): ColorSpan[] {
   const candidates = new Map<string, ColorSpan>();
 
+  const atomicRanges: { start: number; end: number; isSized: boolean }[] = [];
+  ATOMIC_DELIM_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = ATOMIC_DELIM_RE.exec(source)) !== null) {
+    const isSized = /^\\(?:big|Big|bigg|Bigg)/.test(m[0]);
+    atomicRanges.push({ start: m.index, end: m.index + m[0].length, isSized });
+  }
+
   for (const span of spans) {
+    let spanStart = span.start;
+    let spanEnd = span.end;
+    let skip = false;
+
+    for (const r of atomicRanges) {
+      if (spanStart >= r.start && spanEnd <= r.end) {
+        if (spanStart === r.start && spanEnd === r.end) {
+          break;
+        }
+        if (r.isSized) {
+          spanStart = r.start;
+          spanEnd = r.end;
+          break;
+        } else {
+          skip = true;
+          break;
+        }
+      }
+
+      if (
+        (spanStart > r.start && spanStart < r.end) ||
+        (spanEnd > r.start && spanEnd < r.end)
+      ) {
+        skip = true;
+        break;
+      }
+    }
+
+    if (skip) continue;
+
+    // Ensure span ends include any following combining diacritical marks
+    while (spanEnd < source.length && /[\u0300-\u036F\u1DC0-\u1DFF\u20D0-\u20FF]/.test(source[spanEnd])) {
+      spanEnd++;
+    }
+
     const priority = span.priority ?? 0;
-    if (!(0 <= span.start && span.start < span.end && span.end <= source.length)) {
+    if (!(0 <= spanStart && spanStart < spanEnd && spanEnd <= source.length)) {
       continue;
     }
-    const key = `${span.start}:${span.end}`;
+    const key = `${spanStart}:${spanEnd}`;
     const previous = candidates.get(key);
     if (!previous || priority > (previous.priority ?? 0)) {
-      candidates.set(key, { ...span, priority });
+      candidates.set(key, { ...span, start: spanStart, end: spanEnd, priority });
     }
   }
 

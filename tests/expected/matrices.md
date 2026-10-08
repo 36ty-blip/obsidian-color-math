@@ -63,7 +63,7 @@ $$
 $$
 \textcolor{#7aa2f7}{\|\mathbf{A}\|_{F}}
 \textcolor{white}{=}
-\textcolor{#9d7cd8}{\sqrt{\textcolor{#e0af68}{\sum_{i=1}^{m}}\textcolor{#e0af68}{\sum_{j=1}^{n}}a_{ij}^{2}}}
+\textcolor{#9d7cd8}{\sqrt{\textcolor{#e0af68}{\sum}_{i=1}^{m}\textcolor{#e0af68}{\sum}_{j=1}^{n}a_{ij}^{2}}}
 $$
 
 ---
@@ -95,7 +95,7 @@ $$
 $$
 \textcolor{#7aa2f7}{\mathcal{Y}_{ijk}}
 \textcolor{white}{=}
-\textcolor{#e0af68}{\sum_{p=1}^{P}}\textcolor{#e0af68}{\sum_{q=1}^{Q}}\textcolor{#e0af68}{\sum_{r=1}^{R}}
+\textcolor{#e0af68}{\sum}_{p=1}^{P}\textcolor{#e0af68}{\sum}_{q=1}^{Q}\textcolor{#e0af68}{\sum}_{r=1}^{R}
 \textcolor{#9d7cd8}{\mathcal{A}_{pqr}}
 \textcolor{#9ece6a}{\mathbf{U}_{ip}}
 \textcolor{#9ece6a}{\mathbf{V}_{jq}}
@@ -109,7 +109,7 @@ $$
 $$
 \textcolor{#7aa2f7}{\mathbf{C}_{ij}}
 \textcolor{white}{=}
-\textcolor{#e0af68}{\sum_{k=1}^{n}}
+\textcolor{#e0af68}{\sum}_{k=1}^{n}
 \textcolor{#9d7cd8}{\mathcal{T}_{ijk}}\textcolor{#9ece6a}{\mathbf{x}_{k}}
 $$
 

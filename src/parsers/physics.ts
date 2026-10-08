@@ -3,29 +3,47 @@
 import { ColorPalette, ColorMathOptions, CUSTOM_QUANTUM_OPERATORS } from "../config";
 import { ColorSpan } from "../utils/spans";
 
+// All indexed font variants for \nabla: \nabla, \vec{\nabla}, \boldsymbol{\nabla}, ∇, 𝛁, 𝜵, 𝝯, 𝞩
+const NABLA_VARIANTS =
+  "(?:\\\\boldsymbol\\{\\\\nabla\\}|\\\\vec\\{\\\\nabla\\}|\\\\nabla|∇|𝛁|𝜵|𝝯|𝞩)";
+
+// All indexed font variants for \partial: \partial, \mathrm{d}, ∂, 𝜕, 𝝏, 𝞉, 𝟃
+const PARTIAL_VARIANTS =
+  "(?:\\\\partial|\\\\mathrm\\{d\\}|∂|𝜕|𝝏|𝞉|𝟃)";
+
+// All indexed font variants for \hbar: \hbar, \hslash, ℏ, ħ
+const HBAR_VARIANTS =
+  "(?:\\\\hbar|\\\\hslash|ℏ|ħ)";
+
 /**
  * Regex for quantum energy operator:
  * i\hbar\frac{\partial}{\partial t}, i\hbar\dfrac{\partial}{\partial t},
  * i\hbar\partial_t, \mathrm{i}\hbar\frac{\partial}{\partial t},
  * Unicode iℏ\frac{∂}{∂t}, iℏ∂_t, etc.
  */
-const ENERGY_OPERATOR_REGEX =
-  /(?:\\mathrm\{i\}|i)\s*(?:\\hbar|\\hslash|ℏ)\s*(?:\\(?:d|t)?frac\{\s*(?:\\partial|∂)\s*\}\{\s*(?:\\partial|∂)\s*t\s*\}|\\partial_\{?t\}?|∂_\{?t\}?)/g;
+const ENERGY_OPERATOR_REGEX = new RegExp(
+  `(?:\\\\mathrm\\{i\\}|i)\\s*${HBAR_VARIANTS}\\s*(?:\\\\(?:d|t)?frac\\{\\s*${PARTIAL_VARIANTS}\\s*\\}\\{\\s*${PARTIAL_VARIANTS}\\s*t\\s*\\}|${PARTIAL_VARIANTS}_\\{?t\\}?)`,
+  "gu"
+);
 
 /**
  * Regex for quantum momentum operator:
  * -i\hbar\nabla, -i\hbar\vec{\nabla}, -i\hbar\frac{\partial}{\partial x},
  * -i\hbar\partial_x, and Unicode -iℏ∇, -iℏ∂_x
  */
-const MOMENTUM_OPERATOR_REGEX =
-  /-\s*(?:\\mathrm\{i\}|i)\s*(?:\\hbar|\\hslash|ℏ)\s*(?:\\(?:d|t)?frac\{\s*(?:\\partial|∂)\s*\}\{\s*(?:\\partial|∂)\s*[xyz]\s*\}|\\partial_\{?[xyz]\}?|∂_\{?[xyz]\}?|\\nabla|\\vec\{\\nabla\}|∇)/g;
+const MOMENTUM_OPERATOR_REGEX = new RegExp(
+  `-\\s*(?:\\\\mathrm\\{i\\}|i)\\s*${HBAR_VARIANTS}\\s*(?:\\\\(?:d|t)?frac\\{\\s*${PARTIAL_VARIANTS}\\s*\\}\\{\\s*${PARTIAL_VARIANTS}\\s*[xyz]\\s*\\}|${PARTIAL_VARIANTS}_\\{?[xyz]\\}?|${NABLA_VARIANTS})`,
+  "gu"
+);
 
 /**
  * Regex for quantum kinetic energy operator:
  * -\frac{\hbar^2}{2m}\nabla^2, -\frac{\hbar^2}{2m}\Delta, -\frac{\hbar^2}{2m}\frac{\partial^2}{\partial x^2}
  */
-const KINETIC_OPERATOR_REGEX =
-  /-\s*\\(?:d|t)?frac\{\s*(?:\\hbar|\\hslash|ℏ)\^\{?2\}?\s*\}\{\s*2\s*m\s*\}\s*(?:\\nabla\^\{?2\}?|∇\^\{?2\}?|\\Delta|\\(?:d|t)?frac\{\s*(?:\\partial|∂)\^\{?2\}?\s*\}\{\s*(?:\\partial|∂)\s*[xyz]\^\{?2\}?\s*\})/g;
+const KINETIC_OPERATOR_REGEX = new RegExp(
+  `-\\s*\\\\(?:d|t)?frac\\{\\s*${HBAR_VARIANTS}\\^\\{?2\\}?\\s*\\}\\{\\s*2\\s*m\\s*\\}\\s*(?:${NABLA_VARIANTS}\\^\\{?2\\}?|\\\\Delta|\\\\(?:d|t)?frac\\{\\s*${PARTIAL_VARIANTS}\\^\\{?2\\}?\\s*\\}\\{\\s*${PARTIAL_VARIANTS}\\s*[xyz]\\^\\{?2\\}?\\s*\\})`,
+  "gu"
+);
 
 /**
  * Regex for ladder creation/annihilation operator:

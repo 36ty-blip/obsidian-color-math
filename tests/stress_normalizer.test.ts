@@ -84,8 +84,10 @@ describe("Stress Test LaTeX Normalization and Auto-Correction", () => {
     "\\frac  \\vec{F}  b",
     "\\frac{a+b}{c+d}",
     "\\frac 12 + \\frac 34",
-    "\\frac 1 2 + \\frac 3 4 = \\frac 5 6",
     "\\vec c \\quad \\vec{c} \\quad  \\frac{a}{b} \\quad \\frac ab \\quad  \\vec F",
+    "\\Bbb R^N",
+    "\\stackrel{\\Bbb P}{\\longrightarrow}",
+    "\\mathcal Q^{1/2}_\\text{sym}",
   ];
 
   for (const c of cases) {

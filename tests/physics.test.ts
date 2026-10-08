@@ -59,6 +59,16 @@ describe("Quantum Mechanics Operators", () => {
     expect(converted).toContain("\\textcolor{#2ac3de}{\\hat{a}^{\\dagger}}");
   });
 
+  it("colors physics operators with font variants \\boldsymbol{\\nabla}, 𝛁, and 𝜕_t", () => {
+    const rawBold = "$$\\hat{\\mathbf{p}} = -i\\hbar\\boldsymbol{\\nabla}$$";
+    const convertedBold = convertMathBlock(rawBold, quantumPalette, quantumOptions);
+    expect(convertedBold).toContain("\\textcolor{#2ac3de}{-i\\hbar\\boldsymbol{\\nabla}}");
+
+    const rawUni = "$$\\hat{\\mathbf{p}} = -iℏ𝛁$$";
+    const convertedUni = convertMathBlock(rawUni, quantumPalette, quantumOptions);
+    expect(convertedUni).toContain("\\textcolor{#2ac3de}{-iℏ𝛁}");
+  });
+
   it("does NOT color energy operator with quantum hue when quantum options are disabled", () => {
     const raw = "$$i\\hbar\\frac{\\partial}{\\partial t}\\psi$$";
     const standardConverted = convertMathBlock(raw, DEFAULT_COLORS, {

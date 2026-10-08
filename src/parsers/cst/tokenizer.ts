@@ -16,6 +16,8 @@ export const CHAR_COLON = 58;     // ':'
 export const CHAR_HASH = 35;      // '#'
 export const CHAR_PIPE = 124;     // '|'
 
+import { lookupCatalog } from "../catalog";
+
 export const GREEK_COMMANDS = new Set([
   "\\alpha", "\\beta", "\\gamma", "\\delta", "\\epsilon", "\\varepsilon",
   "\\zeta", "\\eta", "\\theta", "\\vartheta", "\\iota", "\\kappa",
@@ -25,6 +27,19 @@ export const GREEK_COMMANDS = new Set([
   "\\Gamma", "\\Delta", "\\Theta", "\\Lambda", "\\Xi", "\\Pi",
   "\\Sigma", "\\Upsilon", "\\Phi", "\\Psi", "\\Omega",
 ]);
+
+export function isGreekCommand(cmd: string): boolean {
+  return lookupCatalog(cmd)?.role === "parameter" || GREEK_COMMANDS.has(cmd);
+}
+
+export function isQuantifier(cmd: string): boolean {
+  return lookupCatalog(cmd)?.role === "relation" || QUANTIFIER_COMMANDS.has(cmd);
+}
+
+export function isSubgroupOrMorphism(cmd: string): boolean {
+  const role = lookupCatalog(cmd)?.role;
+  return role === "relation" || SUBGROUP_COMMANDS.has(cmd) || MORPHISM_COMMANDS.has(cmd);
+}
 
 export const OPTIONAL_BRACKET_COMMANDS = new Set([
   "\\sqrt", "\\\\", "\\tag", "\\xleftarrow", "\\xrightarrow",

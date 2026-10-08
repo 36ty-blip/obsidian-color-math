@@ -10,12 +10,13 @@ import {
   MATH_PARAMETERS,
 } from "../config";
 import { readOperand } from "./latex_spans";
-import { readBraced, readColorCommand, skipEnvironmentHead } from "../utils/latex_helpers";
+import { readBraced, readColorCommand, skipEnvironmentHead, matchCommand } from "../utils/latex_helpers";
 import { ColorSpan } from "../utils/spans";
 import { findDifferentialSpans, DifferentialSpan, findBoundarySpans, BoundarySpan } from "./differentials";
 import { findDimensionlessSpans, DimensionlessSpan } from "./dimensionless";
 import { findUnitSpans, UnitSpan } from "./units";
 import { isEulerConstant, isImaginaryUnit } from "./constants";
+import { matchBareSymbol, matchBareFunction, lookupCatalog } from "./catalog";
 
 const VARIABLE_OPAQUE_MACROS = new Set([
   "text",
@@ -246,6 +247,45 @@ export function collectVariableSpans(
           }
         }
 
+        // Definition commands: \newcommand, \renewcommand, \providecommand, \DeclareMathOperator, \def, \let
+        if (
+          cmdName === "\\newcommand" ||
+          cmdName === "\\renewcommand" ||
+          cmdName === "\\providecommand" ||
+          cmdName === "\\DeclareMathOperator"
+        ) {
+          let afterCmd = cmdEnd;
+          if (afterCmd < body.length && body[afterCmd] === "*") afterCmd++;
+          while (afterCmd < body.length && /\s/.test(body[afterCmd])) afterCmd++;
+          if (afterCmd < body.length && body[afterCmd] === "{") {
+            const braced = readBraced(body, afterCmd);
+            if (braced) afterCmd = braced[1];
+          } else if (afterCmd < body.length && body[afterCmd] === "\\") {
+            const m = matchCommand(body, afterCmd);
+            if (m) afterCmd += m.length;
+          }
+          index = afterCmd;
+          continue;
+        }
+
+        if (cmdName === "\\def" || cmdName === "\\let") {
+          let afterCmd = cmdEnd;
+          while (afterCmd < body.length && /\s/.test(body[afterCmd])) afterCmd++;
+          if (afterCmd < body.length && body[afterCmd] === "\\") {
+            const m = matchCommand(body, afterCmd);
+            if (m) afterCmd += m.length;
+          }
+          while (afterCmd < body.length && body[afterCmd] !== "{") {
+            afterCmd++;
+          }
+          if (afterCmd < body.length && body[afterCmd] === "{") {
+            const braced = readBraced(body, afterCmd);
+            if (braced) afterCmd = braced[1];
+          }
+          index = afterCmd;
+          continue;
+        }
+
         if (VARIABLE_OPAQUE_MACROS.has(cmdName.slice(1))) {
           let afterCmd = cmdEnd;
           while (afterCmd < body.length && /\s/.test(body[afterCmd])) {
@@ -260,7 +300,11 @@ export function collectVariableSpans(
           }
         }
 
-        if (MATH_PARAMETERS.has(cmdName)) {
+        const catalogEntry = lookupCatalog(cmdName);
+        if (
+          MATH_PARAMETERS.has(cmdName) ||
+          (catalogEntry && (catalogEntry.role === "parameter" || catalogEntry.role === "variable"))
+        ) {
           const color = hashStringToColor(cmdName, hashPalette);
           spans.push({
             start: index,
@@ -273,6 +317,71 @@ export function collectVariableSpans(
         }
 
         index = cmdEnd;
+        continue;
+      }
+    }
+
+    // 1. Bare functions via MPHF catalog (sin, cos, rank(A), relu(z))
+    const bareFn = matchBareFunction(body, index);
+    if (bareFn) {
+      index += bareFn.length;
+      continue;
+    }
+
+    // 2. Bare mathematical symbols (Greek letters, constants, operators like hbar, nabla, alpha, arrow.r)
+    const bareSymbol = matchBareSymbol(body, index);
+    if (bareSymbol) {
+      const afterBare = body.slice(index + bareSymbol.length).trimStart();
+      const hasArgs = afterBare.startsWith("(") || afterBare.startsWith("\\left(");
+      if (hasArgs && bareSymbol.length <= 3 && !bareFunctions.has(body.slice(index, index + bareSymbol.length).toLowerCase())) {
+        // Fall through to 2-3 letter variable multiplication (e.g. ax(y+z), sp(v))
+      } else {
+        const entry = bareSymbol.entry;
+        if (entry.role === "constant") {
+          const constColor =
+            typeof palette === "object" && !Array.isArray(palette) && palette.orange
+              ? palette.orange
+              : "#e0af68";
+          spans.push({
+            start: index,
+            end: index + bareSymbol.length,
+            color: constColor,
+            priority: 22,
+          });
+        } else if (entry.role === "differential") {
+          const diffColor =
+            typeof palette === "object" && !Array.isArray(palette) && palette.derivative
+              ? palette.derivative
+              : "#2ac3de";
+          spans.push({
+            start: index,
+            end: index + bareSymbol.length,
+            color: diffColor,
+            priority: 24,
+          });
+        } else if (entry.role === "operator" || entry.role === "relation") {
+          const opColor =
+            typeof palette === "object" && !Array.isArray(palette) && (palette.chain || palette.derivative)
+              ? (palette.chain || palette.derivative)
+              : "#9ece6a";
+          spans.push({
+            start: index,
+            end: index + bareSymbol.length,
+            color: opColor,
+            priority: 25,
+          });
+        } else {
+          const word = body.slice(index, index + bareSymbol.length);
+          const baseWord = word.replace(/'/g, "");
+          const hashKey = entry.canonical || baseWord;
+          spans.push({
+            start: index,
+            end: index + bareSymbol.length,
+            color: hashStringToColor(hashKey, hashPalette),
+            priority: 26,
+          });
+        }
+        index += bareSymbol.length;
         continue;
       }
     }
@@ -322,10 +431,14 @@ export function collectVariableSpans(
 
     // Single-character constants 'e' and 'i'/'j'
     if (isEulerConstant(body, index) || isImaginaryUnit(body, index)) {
+      const constColor =
+        typeof palette === "object" && !Array.isArray(palette) && palette.orange
+          ? palette.orange
+          : "#e0af68";
       spans.push({
         start: index,
         end: index + 1,
-        color: "#e0af68",
+        color: constColor,
         priority: 22,
       });
       index++;

@@ -153,7 +153,7 @@ export function collectSpansFromCST(
         }
 
         // 2. Open delimiter / Whole \left...\right wrap for LaTeX
-        if (node.isSyntaxError && highlightUnmatched) {
+        if (node.isSyntaxError && highlightUnmatched && !forLatexWrap) {
           spans.push({
             start: node.openStart,
             end: node.openEnd,
@@ -236,7 +236,7 @@ export function collectSpansFromCST(
               priority: 25,
             });
           }
-        } else if (strict && highlightUnmatched && node.openEnd > node.openStart && !node.isSyntaxError) {
+        } else if (strict && highlightUnmatched && node.openEnd > node.openStart && !node.isSyntaxError && !forLatexWrap) {
           spans.push({
             start: node.openStart,
             end: node.openEnd,

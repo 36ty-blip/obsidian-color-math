@@ -697,6 +697,7 @@ export interface ColorMathOptions {
   field?: "quantum" | "physics" | "math" | (string & {});
   activeMode?: ActiveMathMode;
   autoDetectNoteMode?: boolean;
+  padMatrixPadding?: boolean;
 }
 
 export const DEFAULT_OPTIONS: ColorMathOptions = {
@@ -729,5 +730,6 @@ export const DEFAULT_OPTIONS: ColorMathOptions = {
   enableQuickMenuOnAmbiguity: false,
   activeMode: "analysis",
   autoDetectNoteMode: true,
+  padMatrixPadding: false,
 };
 

@@ -41,7 +41,7 @@ $$`;
     // Ensure A is hashed to cyan (#7dcfff)
     expect(baked).toContain("\\textcolor{#7dcfff}{A}");
     // Ensure sin and adj are recognized as functions
-    expect(baked).toContain("\\textcolor{#7aa2f7}{sin}");
+    expect(baked).toContain("\\textcolor{#7aa2f7}{\\sin}");
     expect(baked).toContain("\\textcolor{#7aa2f7}{adj}");
     // Ensure \begin{bmatrix} is clean (not wrapped in outer color)
     expect(baked).toContain("\\begin{bmatrix}");

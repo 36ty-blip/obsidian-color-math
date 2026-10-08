@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { findDelimiterPairs, collectDelimiterSpans, findDelimiterScan } from "../src/parsers/delimiters";
 import { colorLatexBody } from "../src/converters/generic";
+import { autoSealUnclosedDelimiters } from "../src/utils/latex_helpers";
 import { RAINBOW_DELIMITER_COLORS } from "../src/config";
 
 describe("Rainbow Delimiters Parser", () => {
@@ -242,5 +243,92 @@ describe("Rainbow Delimiters Parser", () => {
       `\\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{(}\\textcolor{#bb9af7}{a},\\textcolor{#f7768e}{b}\\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{]}`
     );
   });
+
+  describe("Crash Immunity Delimiter Auto-Sealing", () => {
+    it("heals unbalanced and in-progress delimiters safely", () => {
+      // 1. Fully matched \left[ a + b \right. remains valid
+      expect(autoSealUnclosedDelimiters("\\left[ a + b \\right.")).toBe("\\left[ a + b \\right.");
+
+      // 2. Unclosed brace inside \left auto-closes before \right.
+      expect(autoSealUnclosedDelimiters("\\left[ {a + b \\right.")).toBe("\\left[ {a + b }\\right.");
+
+      // 3. Unmatched \right delimiters prepend \left.
+      expect(autoSealUnclosedDelimiters("x \\right)")).toBe("\\left. x \\right)");
+      expect(autoSealUnclosedDelimiters("a + b \\right]")).toBe("\\left. a + b \\right]");
+
+      // 4. Bare \left and \right during active typing
+      expect(autoSealUnclosedDelimiters("\\left")).toBe("\\left. \\right.");
+      expect(autoSealUnclosedDelimiters("\\right")).toBe("\\left. \\right.");
+      expect(autoSealUnclosedDelimiters("\\left( x \\right")).toBe("\\left( x \\right.");
+
+      // 5. Scoped group boundaries and macro arguments
+      expect(autoSealUnclosedDelimiters("{\\left( x}")).toBe("{\\left( x \\right.}");
+      expect(autoSealUnclosedDelimiters("\\frac{\\left( a}{b}")).toBe("\\frac{\\left( a \\right.}{b}");
+
+      // 6. Delimiter auto-sealing for unclosed \left
+      expect(autoSealUnclosedDelimiters("\\left( x")).toBe("\\left( x \\right.");
+      expect(autoSealUnclosedDelimiters("\\left[ a + b")).toBe("\\left[ a + b \\right.");
+      expect(autoSealUnclosedDelimiters("\\left\\{ x")).toBe("\\left\\{ x \\right.");
+      expect(autoSealUnclosedDelimiters("\\left| x")).toBe("\\left| x \\right.");
+
+      // 7. Substack line breaks inside matrices do not get split into \\right. \\\\ \\left.
+      expect(autoSealUnclosedDelimiters("\\sum_{\\substack{0 < i < m \\\\ 0 < j < n}} a_{i,j}")).toBe(
+        "\\sum_{\\substack{0 < i < m \\\\ 0 < j < n}} a_{i,j}"
+      );
+    });
+
+    it("detects unmatched \right and \left for red wavy error decoration", () => {
+      const spansRightWithDelim = collectDelimiterSpans("x \\right)", {
+        highlightUnmatched: true,
+        onlyUnmatched: true,
+      });
+      expect(spansRightWithDelim.length).toBe(1);
+      expect(spansRightWithDelim[0].priority).toBe(99);
+      expect(spansRightWithDelim[0].color).toBe("#f7768e");
+
+      const spansBareRight = collectDelimiterSpans("x \\right", {
+        highlightUnmatched: true,
+        onlyUnmatched: true,
+      });
+      expect(spansBareRight.length).toBe(1);
+      expect(spansBareRight[0].priority).toBe(99);
+      expect(spansBareRight[0].color).toBe("#f7768e");
+
+      const spansBareLeft = collectDelimiterSpans("x \\left", {
+        highlightUnmatched: true,
+        onlyUnmatched: true,
+      });
+      expect(spansBareLeft.length).toBe(1);
+      expect(spansBareLeft[0].priority).toBe(99);
+      expect(spansBareLeft[0].color).toBe("#f7768e");
+    });
+  });
+
+  describe("Unicode & Typst Delimiters", () => {
+    it("recognizes Unicode bracket pairs and angle brackets", () => {
+      const pairs1 = findDelimiterPairs("⟦ x + y ⟧");
+      expect(pairs1.length).toBe(1);
+      expect(pairs1[0].open.type).toBe("bracket");
+      expect(pairs1[0].close.type).toBe("bracket");
+
+      const pairs2 = findDelimiterPairs("⟨ \\phi | \\psi ⟩");
+      expect(pairs2.length).toBe(1);
+      expect(pairs2[0].open.type).toBe("angle");
+      expect(pairs2[0].close.type).toBe("angle");
+
+      const pairs3 = findDelimiterPairs("⦃ a, b ⦄");
+      expect(pairs3.length).toBe(1);
+      expect(pairs3[0].open.type).toBe("brace");
+      expect(pairs3[0].close.type).toBe("brace");
+    });
+
+    it("supports extensible and sized Unicode brackets", () => {
+      const pairs = findDelimiterPairs("\\left⟦ \\frac{a}{b} \\right⟧");
+      expect(pairs.length).toBe(1);
+      expect(pairs[0].open.isLeftRight).toBe(true);
+      expect(pairs[0].open.type).toBe("bracket");
+    });
+  });
 });
+
 

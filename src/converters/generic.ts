@@ -14,7 +14,7 @@ import { collectDomainOperatorSpans, generateModeAwareDerivativeSpans } from "..
 import { collectUnitSpans, findUnitSpans } from "../parsers/units";
 import { collectVariableSpans } from "../parsers/variable_hash";
 import { parseMathWithCST } from "../parsers/cst/index";
-import { containsColorWrapper, normalizeLatexBraces, normalizeMathSyntax } from "../utils/latex_helpers";
+import { containsColorWrapper, normalizeLatexBraces, normalizeMathSyntax, autoSealUnclosedDelimiters } from "../utils/latex_helpers";
 import { ColorSpan, applyColorSpans } from "../utils/spans";
 import { uncolorFragment } from "../undo";
 import { LruCache } from "../utils/lru_cache";
@@ -88,6 +88,154 @@ function getOptionsHash(palette: ColorPalette, options?: ColorMathOptions): stri
   ].join(";");
 }
 
+export function computeSemanticMathSpans(
+  body: string,
+  palette: ColorPalette = COLORS,
+  options?: ColorMathOptions,
+  forLatexWrap: boolean = false
+): ColorSpan[] {
+  const needUnits = options?.colorUnits !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
+  const needDiffs = options?.colorDifferentials !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
+  const needDims = options?.colorDimensionless !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
+
+  const unitSpans = needUnits ? findUnitSpans(body, {
+    allowSingleLetterUnits: options?.allowSingleLetterUnits,
+    activeMode: options?.activeMode,
+    colorUnits: options?.colorUnits,
+  }) : [];
+  const diffSpans = needDiffs ? findDifferentialSpans(body) : [];
+  const dimSpans = needDims ? findDimensionlessSpans(body) : [];
+  const boundarySpans = findBoundarySpans(body);
+
+  const bareFunctions = getBareFunctions(options);
+
+  const spans: ColorSpan[] = [
+    ...collectFunctionSpans(body, palette, bareFunctions, options),
+    ...collectScannerSpans(body, palette, forLatexWrap),
+  ];
+
+  // Domain boundary surfaces (\partial\Omega, \partial V, ∂D, etc.) -> operator in palette.chain (#9ece6a)
+  for (const b of boundarySpans) {
+    spans.push({
+      start: b.start,
+      end: b.end,
+      color: palette.chain || "#9ece6a",
+      priority: 25,
+    });
+  }
+
+  if (options?.colorUnits !== false) {
+    spans.push(...collectUnitSpans(body, palette, unitSpans));
+  }
+
+  if (options?.colorDifferentials !== false) {
+    if (options?.activeMode) {
+      spans.push(
+        ...generateModeAwareDerivativeSpans(body, palette, diffSpans, options.activeMode, options)
+      );
+    } else {
+      spans.push(...collectDifferentialSpans(body, palette, diffSpans, options));
+    }
+  }
+
+  if (options?.colorDimensionless !== false) {
+    spans.push(...collectDimensionlessSpans(body, palette, dimSpans));
+  }
+
+  if (options?.colorBraKet !== false) {
+    spans.push(...collectBraKetDelimiterSpans(body, palette));
+  }
+
+  if (options?.colorSingleConstants !== false) {
+    spans.push(...collectSingleConstantSpans(body, palette));
+  }
+
+  if (options?.rainbowDelimiters) {
+    spans.push(
+      ...collectDelimiterSpans(body, {
+        forLatexWrap,
+        palette: options?.rainbowColors,
+        includeBareBraces: !forLatexWrap && options?.rainbowBareBraces !== false,
+        highlightUnmatched: options?.highlightUnmatchedBraces !== false,
+        strictBracketWarnings: options?.strictBracketWarnings === true,
+      })
+    );
+  } else if (!forLatexWrap && options?.highlightUnmatchedBraces !== false) {
+    spans.push(
+      ...collectDelimiterSpans(body, {
+        forLatexWrap: false,
+        includeBareBraces: true,
+        onlyUnmatched: true,
+        highlightUnmatched: true,
+        strictBracketWarnings: options?.strictBracketWarnings === true,
+      })
+    );
+  }
+
+  if (options?.enableTaxonomy) {
+    spans.push(
+      ...collectTaxonomySpans(body, palette, unitSpans, diffSpans, dimSpans, options)
+    );
+  }
+
+  if (options?.variableDataFlow) {
+    spans.push(
+      ...collectVariableSpans(
+        body,
+        undefined,
+        unitSpans,
+        diffSpans,
+        dimSpans,
+        bareFunctions,
+        boundarySpans
+      )
+    );
+  }
+
+  if (options?.activeMode) {
+    const domainSpans = collectDomainOperatorSpans(body, palette, options.activeMode);
+    if (domainSpans.length > 0) {
+      const filtered = spans.filter(
+        (s) => !domainSpans.some((d) => d.start <= s.start && s.end <= d.end)
+      );
+      spans.length = 0;
+      spans.push(...filtered, ...domainSpans);
+    }
+  }
+
+  const isQuantumMode = options?.activeMode === "quantum" || options?.activeMode === "quantum_stochastic";
+  if (options?.colorQuantumOperators || options?.field === "quantum" || options?.field === "physics" || isQuantumMode) {
+    const quantumSpans = collectQuantumOperatorSpans(body, palette, options);
+    if (quantumSpans.length > 0) {
+      const filtered = spans.filter(
+        (s) => !quantumSpans.some((q) => q.start <= s.start && s.end <= q.end)
+      );
+      spans.length = 0;
+      spans.push(...filtered, ...quantumSpans);
+    }
+  }
+
+  if (options?.useCST) {
+    try {
+      const cstSpans = parseMathWithCST(body, {
+        palette,
+        rainbowColors: options?.rainbowColors,
+        highlightUnmatched: options?.highlightUnmatchedBraces !== false,
+        strictBracketWarnings: options?.strictBracketWarnings === true,
+        activeMode: options?.activeMode,
+        forLatexWrap,
+      });
+      if (cstSpans.length > 0) {
+        spans.push(...cstSpans);
+      }
+    } catch {
+      // Graceful fallback to legacy spans
+    }
+  }
+
+  return spans;
+}
+
 export function colorLatexBody(
   body: string,
   palette: ColorPalette = COLORS,
@@ -102,138 +250,14 @@ export function colorLatexBody(
     return cached;
   }
 
-  const normalized =
-    options?.previewLatexNormalization !== false
-      ? normalizeMathSyntax(cleanBody, options)
-      : cleanBody;
-
-  const needUnits = options?.colorUnits !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
-  const needDiffs = options?.colorDifferentials !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
-  const needDims = options?.colorDimensionless !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
-
-  const unitSpans = needUnits ? findUnitSpans(normalized, {
-    allowSingleLetterUnits: options?.allowSingleLetterUnits,
-    activeMode: options?.activeMode,
-    colorUnits: options?.colorUnits,
-  }) : [];
-  const diffSpans = needDiffs ? findDifferentialSpans(normalized) : [];
-  const dimSpans = needDims ? findDimensionlessSpans(normalized) : [];
-  const boundarySpans = findBoundarySpans(normalized);
-
-  const bareFunctions = getBareFunctions(options);
-
-  const spans: ColorSpan[] = [
-    ...collectFunctionSpans(normalized, palette, bareFunctions, options),
-    ...collectScannerSpans(normalized, palette),
-  ];
-
-  // 0.4 Domain boundary surfaces (\partial\Omega, \partial V, ∂D, etc.) -> operator in palette.chain (#9ece6a)
-  for (const b of boundarySpans) {
-    spans.push({
-      start: b.start,
-      end: b.end,
-      color: palette.chain || "#9ece6a",
-      priority: 25,
-    });
+  let normalized = cleanBody;
+  if (options?.previewLatexNormalization !== false) {
+    normalized = normalizeMathSyntax(cleanBody, options);
+  } else if (options?.crashImmunityAutoSeal === true) {
+    normalized = autoSealUnclosedDelimiters(cleanBody);
   }
 
-  if (options?.colorUnits !== false) {
-    spans.push(...collectUnitSpans(normalized, palette, unitSpans));
-  }
-
-  if (options?.colorDifferentials !== false) {
-    if (options?.activeMode) {
-      spans.push(
-        ...generateModeAwareDerivativeSpans(normalized, palette, diffSpans, options.activeMode, options)
-      );
-    } else {
-      spans.push(...collectDifferentialSpans(normalized, palette, diffSpans, options));
-    }
-  }
-
-  if (options?.colorDimensionless !== false) {
-    spans.push(...collectDimensionlessSpans(normalized, palette, dimSpans));
-  }
-
-  if (options?.colorBraKet !== false) {
-    spans.push(...collectBraKetDelimiterSpans(normalized, palette));
-  }
-
-  if (options?.colorSingleConstants !== false) {
-    spans.push(...collectSingleConstantSpans(normalized, palette));
-  }
-
-  if (options?.rainbowDelimiters) {
-    spans.push(
-      ...collectDelimiterSpans(normalized, {
-        forLatexWrap: true,
-        palette: options?.rainbowColors,
-      })
-    );
-  }
-
-  if (options?.enableTaxonomy) {
-    spans.push(
-      ...collectTaxonomySpans(normalized, palette, unitSpans, diffSpans, dimSpans, options)
-    );
-  }
-
-  if (options?.variableDataFlow) {
-    spans.push(
-      ...collectVariableSpans(
-        normalized,
-        undefined,
-        unitSpans,
-        diffSpans,
-        dimSpans,
-        bareFunctions,
-        boundarySpans
-      )
-    );
-  }
-
-  if (options?.activeMode) {
-    const domainSpans = collectDomainOperatorSpans(normalized, palette, options.activeMode);
-    if (domainSpans.length > 0) {
-      const filtered = spans.filter(
-        (s) => !domainSpans.some((d) => d.start <= s.start && s.end <= d.end)
-      );
-      spans.length = 0;
-      spans.push(...filtered, ...domainSpans);
-    }
-  }
-
-  const isQuantumMode = options?.activeMode === "quantum" || options?.activeMode === "quantum_stochastic";
-  if (options?.colorQuantumOperators || options?.field === "quantum" || options?.field === "physics" || isQuantumMode) {
-    const quantumSpans = collectQuantumOperatorSpans(normalized, palette, options);
-    if (quantumSpans.length > 0) {
-      // Filter out any other spans strictly contained within quantum operators
-      const filtered = spans.filter(
-        (s) => !quantumSpans.some((q) => q.start <= s.start && s.end <= q.end)
-      );
-      spans.length = 0;
-      spans.push(...filtered, ...quantumSpans);
-    }
-  }
-
-  if (options?.useCST) {
-    try {
-      const cstSpans = parseMathWithCST(normalized, {
-        palette,
-        rainbowColors: options?.rainbowColors,
-        highlightUnmatched: options?.highlightUnmatchedBraces !== false,
-        strictBracketWarnings: options?.strictBracketWarnings === true,
-        activeMode: options?.activeMode,
-        forLatexWrap: true,
-      });
-      if (cstSpans.length > 0) {
-        spans.push(...cstSpans);
-      }
-    } catch {
-      // Graceful fallback to legacy spans
-    }
-  }
-
+  const spans = computeSemanticMathSpans(normalized, palette, options, true);
   const result = applyColorSpans(normalized, spans);
   latexBodyCache.set(cacheKey, result);
   return result;

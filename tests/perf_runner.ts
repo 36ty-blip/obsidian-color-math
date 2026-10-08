@@ -495,6 +495,8 @@ class BenchmarkSuite {
 
   runHigherStudiesCorpusBenchmark(): void {
     const possibleDirs = [
+      path.resolve(process.cwd(), "tests/corpus/Maths-Notes-extracted/Maths-Notes-md-main/Notes"),
+      path.resolve(__dirname, "../tests/corpus/Maths-Notes-extracted/Maths-Notes-md-main/Notes"),
       path.resolve(process.cwd(), "tests/corpus/extracted/Math-Notes-master"),
       path.resolve(__dirname, "../tests/corpus/extracted/Math-Notes-master"),
       path.resolve(__dirname, "corpus/extracted/Math-Notes-master"),
@@ -505,23 +507,27 @@ class BenchmarkSuite {
       return;
     }
 
-    this.logHeader("Workload 10: 157-File Real-World Higher Studies Math Corpus");
-
-    const getFiles = (dir: string): string[] => {
+    const minSizeBytes = 0; // Audit ALL 971 markdown documents across the entire university notes corpus
+    const getMultiPageFiles = (dir: string): string[] => {
       let res: string[] = [];
       for (const f of fs.readdirSync(dir)) {
         const full = path.join(dir, f);
-        if (fs.statSync(full).isDirectory()) {
-          res = res.concat(getFiles(full));
-        } else if (f.endsWith(".md")) {
+        const stat = fs.statSync(full);
+        if (stat.isDirectory()) {
+          res = res.concat(getMultiPageFiles(full));
+        } else if (f.endsWith(".md") && stat.size >= minSizeBytes) {
           res.push(full);
         }
       }
       return res;
     };
 
-    const files = getFiles(corpusDir);
-    console.log(`Found ${files.length} real-world master's mathematics notes.`);
+    let files = getMultiPageFiles(corpusDir);
+    // Sort descending by size to test the heaviest multi-page documents first
+    files.sort((a, b) => fs.statSync(b).size - fs.statSync(a).size);
+
+    this.logHeader(`Workload 10: Complete ${files.length}-Document University Math Corpus`);
+    console.log(`Auditing ${files.length} university mathematics documents (range: ${(fs.statSync(files[files.length - 1]).size / 1024).toFixed(1)} KB - ${(fs.statSync(files[0]).size / 1024).toFixed(1)} KB per document).`);
 
     const sampler = new LatencySampler();
     const cpuTracker = new CpuTracker();
@@ -685,13 +691,13 @@ class BenchmarkSuite {
     const stats = sampler.computeStats();
 
     this.results.push({
-      name: "157-File Higher Studies Corpus Bake",
+      name: `${files.length}-Document Multi-Page University Math Corpus`,
       category: "Real-World Stress",
       iterations: files.length,
       cpu,
       memory: memResult.metrics,
       latency: stats,
-      notes: `Audited ${files.length} master's notes containing ${totalEquationsScanned} equations (${totalEquationsValidated} KaTeX checks).`,
+      notes: `Audited ${files.length} multi-page university math documents containing ${totalEquationsScanned} equations (${totalEquationsValidated} KaTeX checks).`,
     });
 
     console.log(`Corpus audit complete: ${totalFilesPassed}/${files.length} files passed clean roundtrip.`);

@@ -72,13 +72,13 @@ describe("User Formula Test", () => {
     const eq1 = "# $$\\boxed{\\mathcal R=\\frac{I_{ph}}{P_{opt}}=\\eta\\frac{q}{h\\nu}=\\eta\\frac{q\\lambda}{hc}\\quad(\\text{A/W})}$$";
     const res1 = convertText(eq1, DEFAULT_COLORS, opts);
     expect(res1).toContain(`\\textcolor{${DEFAULT_COLORS.unit}}{\\text{A/W}}`);
-    expect(res1).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{\\mathcal R}`);
+    expect(res1).toMatch(new RegExp(`\\\\textcolor\\{${DEFAULT_COLORS.main}\\}\\{\\\\mathcal\\{?R\\}?}`));
 
     // 2. Inline boxed responsivity with value
     const eq2 = "$\\mathcal R=\\boxed{0.315\\,\\text{A/W}}$";
     const res2 = convertText(eq2, DEFAULT_COLORS, opts);
     expect(res2).toContain(`\\textcolor{${DEFAULT_COLORS.unit}}{\\text{A/W}}`);
-    expect(res2).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{\\mathcal R}`);
+    expect(res2).toMatch(new RegExp(`\\\\textcolor\\{${DEFAULT_COLORS.main}\\}\\{\\\\mathcal\\{?R\\}?}`));
 
     // 3. Four-point probe resistivity
     const eq3 = "$$\\rho=2\\pi s\\frac VI$$";
@@ -140,7 +140,7 @@ describe("User Formula Test", () => {
     }
 
     const ravOut = convertText("$\\mathcal RAV$", DEFAULT_COLORS, optsUser);
-    expect(ravOut).toContain("\\mathcal R");
+    expect(ravOut).toMatch(/\\mathcal\{?R\}?/);
     expect(ravOut).not.toContain("\\mathcal RAV");
     expect(ravOut).not.toContain("\\mathcal{RAV}");
   });
@@ -197,20 +197,20 @@ describe("User Formula Test", () => {
     const coloredNoBackslash = convertText(noBackslashSin, DEFAULT_COLORS, opts);
     // sin must be wrapped as a whole function, never split into s, i, n
     expect(coloredNoBackslash).not.toMatch(/\\textcolor\{[^}]+\}\{s\}\\textcolor\{[^}]+\}\{i\}/);
-    expect(coloredNoBackslash).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{sin}`);
-    expect(coloredNoBackslash).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{cos}`);
+    expect(coloredNoBackslash).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{\\sin}`);
+    expect(coloredNoBackslash).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{\\cos}`);
 
     // 3. Bare sin(x) with parentheses
     const noBackslashParens = "$$y = sin(x) + ln(t)$$";
     const coloredNoBackslashParens = convertText(noBackslashParens, DEFAULT_COLORS, opts);
     expect(coloredNoBackslashParens).not.toMatch(/\\textcolor\{[^}]+\}\{s\}\\textcolor\{[^}]+\}\{i\}/);
-    expect(coloredNoBackslashParens).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{sin}`);
-    expect(coloredNoBackslashParens).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{ln}`);
+    expect(coloredNoBackslashParens).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{\\sin}`);
+    expect(coloredNoBackslashParens).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{\\ln}`);
 
     // 4. Power/exponent: sin^2 x and \sin^2(x)
     const sinSquared = "$$sin^2 x + \\cos^2(x) = 1$$";
     const coloredSinSquared = convertText(sinSquared, DEFAULT_COLORS, opts);
-    expect(coloredSinSquared).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{sin}`);
+    expect(coloredSinSquared).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{\\sin}`);
     expect(coloredSinSquared).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{\\cos}`);
 
     // 5. KaTeX validation on bare functions

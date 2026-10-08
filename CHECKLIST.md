@@ -140,7 +140,39 @@
 - [x] Preserved multi-space formatting in string literals (`\text{...}`) via LaTeX control spaces (`\ `) (v1.0.40)
 - [x] Remove Quick Suggestion (`Alt+Enter` / SuggestModal) toggle from Feature Previews in Settings tab (feature kept internal until fully developed) (v1.0.41)
 - [x] Comprehensive documentation update in `README.md` covering Typst syntax shortcuts, smart whitespace normalization, physical units grammar, vertical bar auto-scaling, and string literal isolation (v1.0.41)
-- [x] Version tracking (`1.0.41`)
+- [x] Standard Typst Symbol & Bare Function Alignment (v1.0.45):
+  - [x] Reclassify `zeta` and `\zeta` as parameter (`priority: 20`, `canonical: "\\zeta"`), resolving `zeta + eta` variable splitting
+  - [x] Unify `\nabla` as `operator` and `\partial` as `differential` (colored consistently via `palette.derivative`)
+  - [x] Classify arrow symbols as `relation` (`priority: 30`) per Typst UTR #25 standards
+  - [x] Eliminate legacy `BARE_GREEK_AND_CONSTANTS` fallback bandages in favor of clean Lemire MPHF lookups
+  - [x] Implement upright Roman KaTeX operator normalization (`normalizeBareFunctions` restricted to `STANDARD_LATEX_OPERATORS`)
+- [x] Version tracking (`1.0.46`)
+- [x] Multi-Threaded Corpus Audit Runner (`npm run test:corpus`) (v1.0.46):
+  - [x] Pinned worker pool (6 threads / 50% CPU limit on 12-core i5-13420H)
+  - [x] 100% Zero-Error SLA across 6,392 files and 172,823 mathematical equations in 17.14 seconds (0 regressions, 0 crashes)
+  - [x] Sized delimiter atomic coloring (`\big[`, `\bigg(`, `\Biggl\{`) preserving inner multicolored term expressions
+  - [x] Text-mode boundary shielding (`\text`, `\mathrm`, `\tag`, `\operatorname`) across spaced arguments (`\text { ... }`)
+  - [x] Scope-aware delimiter auto-scaling with brace & environment depth tracking across fraction bars and matrix cells
+  - [x] Unicode combining diacritics normalization (`x̂`, `T̂` $\to$ `\hat{x}`, `\hat{T}`) preventing macro argument truncation
+  - [x] `\underbrace` and `\overbrace` multi-colored inner content preservation
+  - [x] Configurable Matrix Padding & Cross-Cell Compiler Protection (v1.0.56):
+  - [x] Setting toggle `padMatrixPadding` (defaults to false / opt-in) in Settings tab UI and config
+  - [x] Matrix cross-cell curly brace healing (`autoSealUnclosedDelimiters`), preventing fatal syntax crashes when `{` or `}` crosses `&`, `\\\\`, or `\\end`
+  - [x] Operator display limits preservation in KaTeX/MathJax display math mode (`\sum`, `\prod` limits remain top and bottom)
+  - [x] Multi-worker execution rules and CPU allocation limits (up to 50% CPU / 6 worker threads on Intel i5-13420H when baseline $\le 36\%$)
+- [x] Delimiter Warning Squiggles & Auto-Sealing Normalization (v1.0.57):
+  - [x] Unclosed string quote (`"`) delimiter tracking in `delimiters.ts` with Live Preview red squiggly error underline (`.color-math-unmatched-delimiter`)
+  - [x] Stray closing brace (`}`) balanced as empty group `{}` (e.g. `\sum_{n=1}^{\infty}{}`) to preserve KaTeX compatibility without compiler crashes
+  - [x] Unclosed quote (`"`) auto-sealed at the end of math block/line in `autoSealUnclosedDelimiters`
+  - [x] Baseline CPU check standardized to 3-second average via PowerShell counters
+- [x] Live Preview Quote Squiggly Warning Preservation & Auto-Conversion to `\text{...}` (v1.0.58):
+  - [x] Fixed string literal span filtering in `live_preview.ts` so unmatched delimiter warnings (`priority >= 90`) are always preserved and render `.color-math-unmatched-delimiter` wavy red underline under unclosed `"`
+  - [x] Auto-converted unclosed quotes to `\text{...}` up to line/math boundary behind the scenes (`$$x = 1 " if  y = 0 $$` -> `$$x = 1 \text{ if  y = 0 }$$`)
+  - [x] Balanced stray closing braces inside unclosed quote text as `{}` (`x = 1 " if } y = 0` -> `x = 1 \text{ if {} y = 0}`)
+  - [x] Strict invariant preserved: unclosed `{` handling remains completely untouched
+  - [x] 100% green test suite: 476/476 tests passing across all 35 test files with 6 worker threads
+  - [x] Full Multi-Threaded Corpus Audit Runner: 100% Zero-Error SLA verified across all 6,392 markdown files and 172,823 mathematical equations in 27.68 seconds on 6 worker threads (6,244 eq/sec throughput, 0 critical regressions, 0 crashes)
+
 
 
 

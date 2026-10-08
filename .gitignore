@@ -13,3 +13,5 @@ wheelhouse/
 node_modules/
 tests/corpus/
 benchmark_results.json
+reports/
+CHECKPOINT.md

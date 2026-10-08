@@ -128,7 +128,12 @@ export class MathJaxInterceptor {
     const transform = (latex: string): string => {
       if (!this.isEnabled()) return latex;
       try {
-        return colorLatexBody(latex, this.getPalette(), this.getOptions());
+        const opts = this.getOptions();
+        const effectiveOpts = {
+          ...opts,
+          useCST: opts.useCST !== false,
+        };
+        return colorLatexBody(latex, this.getPalette(), effectiveOpts);
       } catch (err) {
         console.error("Color Math transformation error:", err);
         return latex;

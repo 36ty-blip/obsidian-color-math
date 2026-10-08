@@ -2,7 +2,7 @@
 
 import { COLORS, SORTED_COLOR_COMMANDS, ColorPalette } from "../config";
 import { commandColor } from "../utils/coloring";
-import { readColorCommand } from "../utils/latex_helpers";
+import { readColorCommand, skipEnvironmentHead } from "../utils/latex_helpers";
 import { ColorSpan, applyColorSpans } from "../utils/spans";
 import {
   findAllOperatorSpans,
@@ -14,15 +14,25 @@ export function collectOperatorSpans(
   body: string,
   start: number = 0,
   end?: number,
-  palette: ColorPalette = COLORS
+  palette: ColorPalette = COLORS,
+  forLatexWrap: boolean = false
 ): ColorSpan[] {
   const spans: ColorSpan[] = [];
   for (const operator of findAllOperatorSpans(body, start, end)) {
-    const match = body.slice(operator.start, operator.end).match(/^(\\[A-Za-z]+|\\.)/);
+    const match = body.slice(operator.start).match(/^(\\[A-Za-z]+|\\.)/);
     if (match) {
+      let opEnd = forLatexWrap ? operator.end : (operator.start + match[0].length);
+      if (!forLatexWrap) {
+        // Check for limits modifier e.g. \int\limits or \sum\displaylimits
+        const rest = body.slice(opEnd);
+        const limitMatch = rest.match(/^\s*\\(displaylimits|limits|nolimits)(?![A-Za-z])/);
+        if (limitMatch) {
+          opEnd += limitMatch[0].length;
+        }
+      }
       spans.push({
         start: operator.start,
-        end: operator.end,
+        end: opEnd,
         color: commandColor(match[0], palette),
         priority: 30,
       });
@@ -31,7 +41,11 @@ export function collectOperatorSpans(
   return spans;
 }
 
-export function collectScannerSpans(body: string, palette: ColorPalette = COLORS): ColorSpan[] {
+export function collectScannerSpans(
+  body: string,
+  palette: ColorPalette = COLORS,
+  forLatexWrap: boolean = false
+): ColorSpan[] {
   const scripts = findScriptArgumentSpans(body);
   const operators = findAllOperatorSpans(body);
 
@@ -42,7 +56,7 @@ export function collectScannerSpans(body: string, palette: ColorPalette = COLORS
     priority: 10,
   }));
 
-  spans.push(...collectOperatorSpans(body, 0, undefined, palette));
+  spans.push(...collectOperatorSpans(body, 0, undefined, palette, forLatexWrap));
 
   const scriptRanges = scripts.map((item) => [item.start, item.end] as const);
   const operatorRanges = operators.map((item) => [item.start, item.end] as const);
@@ -100,6 +114,14 @@ export function collectScannerSpans(body: string, palette: ColorPalette = COLORS
     if (cmdMatch) {
       const command = cmdMatch[0];
       let spanEnd = index + command.length;
+
+      // Skip environment arguments: \begin{bmatrix}, \end{cases}, \begin{align*}, \end{align*}
+      const envEnd = skipEnvironmentHead(body, command, spanEnd);
+      if (envEnd !== null) {
+        index = envEnd;
+        continue;
+      }
+
       if (SORTED_COLOR_COMMANDS.includes(command)) {
         const rem = body.slice(spanEnd);
         const limitMatch = rem.match(/^(\\(?:limits|nolimits|displaylimits))(?![a-zA-Z])/);

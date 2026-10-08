@@ -43,4 +43,31 @@ describe("Mathematical Symbol Taxonomy", () => {
     expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.parameter}}{\\theta}`);
     expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.orange}}{\\pi}`);
   });
+
+  it("skips macro definitions like \\def and \\newcommand without coloring macro internals", () => {
+    const input1 = "\\def \\dom{\\text{dom}\\,}";
+    const result1 = colorLatexBody(input1, DEFAULT_COLORS, { enableTaxonomy: true });
+    expect(result1).toBe(input1);
+
+    const input2 = "\\def\\by#1{#1 \\times #1}\\by n";
+    const result2 = colorLatexBody(input2, DEFAULT_COLORS, { enableTaxonomy: true });
+    expect(result2.startsWith("\\def\\by#1{#1 \\times #1}")).toBe(true);
+    expect(result2).toContain("\\by{");
+  });
+
+  it("does not wrap \\underbrace with arity-1 wide span", () => {
+    const input = "\\underbrace{a+b+c}_{\\text{three terms}}";
+    const spans = collectTaxonomySpans(input);
+    // Should NOT have a span covering index 0 to 18 (spanning over the body)
+    const wideSpan = spans.find((s) => s.start === 0 && s.end >= 18);
+    expect(wideSpan).toBeUndefined();
+  });
+
+  it("resolves mathematical functions directly through the Lemire MPHF catalog", () => {
+    const input = "\\sin(x)";
+    const spans = collectTaxonomySpans(input, DEFAULT_COLORS);
+    // \sin is in the MPHF catalog, resolving with priority 22
+    expect(spans.some((s) => s.color === DEFAULT_COLORS.main && s.priority === 22)).toBe(true);
+  });
 });
+

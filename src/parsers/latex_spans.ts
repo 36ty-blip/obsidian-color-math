@@ -1,6 +1,8 @@
 // src/parsers/latex_spans.ts
 
 import { BARE_FUNCTIONS } from "../config";
+import { skipMacroDefinition } from "../utils/latex_helpers";
+import { lookupCatalog } from "./catalog";
 
 export const STYLE_MACROS = new Set([
   "mathbf",
@@ -201,6 +203,52 @@ export const SYMBOL_MACROS = new Set([
   "zeta",
 ]);
 
+export function isFunctionMacro(name: string): boolean {
+  if (FUNCTION_MACROS.has(name)) return true;
+  if (UNARY_MACROS.has(name) || STYLE_MACROS.has(name) || SYMBOL_MACROS.has(name) || OPERATOR_COMMANDS.has(name)) {
+    return false;
+  }
+  return lookupCatalog("\\" + name)?.role === "function";
+}
+
+export function isOperatorCommand(name: string): boolean {
+  if (
+    UNARY_MACROS.has(name) ||
+    STYLE_MACROS.has(name) ||
+    SYMBOL_MACROS.has(name) ||
+    NON_OPERAND_COMMANDS.has(name)
+  ) {
+    return false;
+  }
+  if (OPERATOR_COMMANDS.has(name)) return true;
+  const entry = lookupCatalog("\\" + name);
+  if (entry && (entry.role === "operator" || entry.role === "bigop")) {
+    if (name === "nabla" || name === "partial" || name.startsWith("triangle")) return false;
+    return /^(?:big|int|iint|iiint|iiiint|idotsint|oint|smallint|coprod|prod|sum)/.test(name);
+  }
+  return false;
+}
+
+export function isSymbolMacro(name: string): boolean {
+  if (UNARY_MACROS.has(name) || STYLE_MACROS.has(name) || OPERATOR_COMMANDS.has(name)) return false;
+  if (SYMBOL_MACROS.has(name)) return true;
+  const role = lookupCatalog("\\" + name)?.role;
+  return role === "parameter" || role === "constant";
+}
+
+export function isNonOperandCommand(name: string): boolean {
+  if (
+    UNARY_MACROS.has(name) ||
+    STYLE_MACROS.has(name) ||
+    SYMBOL_MACROS.has(name) ||
+    OPERATOR_COMMANDS.has(name)
+  ) {
+    return false;
+  }
+  if (NON_OPERAND_COMMANDS.has(name)) return true;
+  return lookupCatalog("\\" + name)?.role === "relation";
+}
+
 export const DELIMITER_SIZE_COMMANDS = new Set([
   "Big",
   "Bigg",
@@ -230,6 +278,13 @@ export const OPAQUE_MACROS = new Set([
   "textit",
   "textrm",
   "texttt",
+  "textnormal",
+  "textsf",
+  "textsl",
+  "textsc",
+  "mbox",
+  "tag",
+  "mathrm",
   "verb",
 ]);
 
@@ -554,6 +609,31 @@ export function readEnvironmentEnd(
 function readArgumentEnd(source: string, start: number, end: number): number | null {
   start = skipIgnorable(source, start, end);
   if (start >= end) return null;
+  if (source.charCodeAt(start) === 34) {
+    let j = start + 1;
+    let depth = 0;
+    while (j < end) {
+      if (source.startsWith("$$", j)) break;
+      if (source[j] === "\\") {
+        j += 2;
+        continue;
+      }
+      if (source.charCodeAt(j) === 34) {
+        return j + 1;
+      }
+      if (source[j] === "{") {
+        depth++;
+      } else if (source[j] === "}") {
+        if (depth > 0) {
+          depth--;
+        } else {
+          return j + 1;
+        }
+      }
+      j++;
+    }
+    return end;
+  }
   if (source[start] === "{" || source[start] === "(" || source[start] === "[") {
     return readGroupEnd(source, start, end);
   }
@@ -735,6 +815,7 @@ export function readOperand(
 
   if (source.charCodeAt(start) === 34) {
     let j = start + 1;
+    let depth = 0;
     while (j < end) {
       if (source.startsWith("$$", j)) break;
       if (source[j] === "\\") {
@@ -744,6 +825,16 @@ export function readOperand(
       if (source.charCodeAt(j) === 34) {
         j++;
         break;
+      }
+      if (source[j] === "{") {
+        depth++;
+      } else if (source[j] === "}") {
+        if (depth > 0) {
+          depth--;
+        } else {
+          j++;
+          break;
+        }
       }
       j++;
     }
@@ -755,6 +846,11 @@ export function readOperand(
   }
 
   if (source[start] === "\\") {
+    const macroEnd = skipMacroDefinition(source, start, end);
+    if (macroEnd !== null) {
+      return { kind: "opaque", start, end: macroEnd };
+    }
+
     const command = readCommand(source, start, end);
     if (command === null) return null;
     let [name, commandEnd] = command;
@@ -819,7 +915,7 @@ export function readOperand(
       };
     }
 
-    if (OPERATOR_COMMANDS.has(name)) {
+    if (isOperatorCommand(name)) {
       return {
         kind: "operator",
         start,
@@ -843,7 +939,7 @@ export function readOperand(
       return { kind: "structural", start, end: layoutEnd };
     }
 
-    if (NON_OPERAND_COMMANDS.has(name)) {
+    if (isNonOperandCommand(name)) {
       return { kind: "structural", start, end: commandEnd };
     }
 
@@ -856,7 +952,7 @@ export function readOperand(
       };
     }
 
-    if (SYMBOL_MACROS.has(name)) {
+    if (isSymbolMacro(name)) {
       return {
         kind: "symbol",
         start,
@@ -903,7 +999,13 @@ export function readOperand(
     let argumentCount = 0;
     if (name === "frac" || name === "dfrac" || name === "tfrac") {
       argumentCount = 2;
-    } else if (STYLE_MACROS.has(name) || name === "boxed") {
+    } else if (
+      STYLE_MACROS.has(name) ||
+      OPAQUE_MACROS.has(name) ||
+      name === "boxed" ||
+      name === "operatorname" ||
+      lookupCatalog("\\" + name)?.arity === 1
+    ) {
       argumentCount = 1;
     } else if (name === "sqrt") {
       const optional = skipIgnorable(source, commandEnd, end);
@@ -928,14 +1030,14 @@ export function readOperand(
       atomEnd = argumentsEnd;
     }
 
-    if (!argumentCount && !FUNCTION_MACROS.has(name)) {
+    if (!argumentCount && !isFunctionMacro(name)) {
       // Unknown commands have unknown arity, but hiding the remaining
       // equation is worse than leaving their arguments unclassified.
       return { kind: "structural", start, end: commandEnd };
     }
 
     const scriptedEnd = consumeScripts(source, atomEnd, end);
-    if (FUNCTION_MACROS.has(name)) {
+    if (isFunctionMacro(name)) {
       const groupStart = skipIgnorable(source, scriptedEnd, end);
       if (groupStart < end && (source[groupStart] === "(" || source[groupStart] === "[")) {
         const groupEnd = readGroupEnd(source, groupStart, end);
@@ -957,7 +1059,7 @@ export function readOperand(
 
     const kind = OPAQUE_MACROS.has(name)
       ? "opaque"
-      : FUNCTION_MACROS.has(name)
+      : isFunctionMacro(name)
       ? "function"
       : "operand";
     return {

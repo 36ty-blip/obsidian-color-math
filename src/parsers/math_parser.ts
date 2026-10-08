@@ -1,7 +1,7 @@
 // src/parsers/math_parser.ts
 
 import { BARE_FUNCTIONS, MATH_FUNCTIONS, MATH_ACCENTS, FONT_STYLE_MACROS } from "../config";
-import { readBraced, skipEnvironmentHead } from "../utils/latex_helpers";
+import { readBraced, skipEnvironmentHead, skipMacroDefinition } from "../utils/latex_helpers";
 import { readOperand, OPAQUE_MACROS } from "./latex_spans";
 import { scanMarkdown } from "./markdown_scanner";
 
@@ -257,6 +257,11 @@ function collectSemanticSpansInternal(
       continue;
     }
     if (text[index] === "\\") {
+      const macroEnd = skipMacroDefinition(text, index, end);
+      if (macroEnd !== null) {
+        index = macroEnd;
+        continue;
+      }
       const operand = readOperand(text, index, end);
       if (operand !== null && operand.kind === "opaque") {
         index = operand.end;
@@ -280,7 +285,7 @@ function collectSemanticSpansInternal(
         }
 
         // Custom operators: \operatorname{rank}(A)
-        if (name === "\\operatorname") {
+        if (name === "\\operatorname" || name === "operatorname") {
           let afterCmd = commandEnd;
           if (afterCmd < end && text[afterCmd] === "*") {
             afterCmd++;
@@ -329,6 +334,36 @@ function collectSemanticSpansInternal(
               index = opEnd;
               continue;
             }
+          }
+        }
+
+        if (name === "\\mod" || name === "\\pmod" || name === "\\pod") {
+          let targetStart = commandEnd;
+          while (targetStart < end && /\s/.test(text[targetStart])) {
+            targetStart++;
+          }
+          let targetEnd = targetStart;
+          if (targetStart < end && text[targetStart] === "{") {
+            const group = readBraced(text, targetStart);
+            if (group !== null && group[1] <= end) {
+              targetEnd = group[1];
+            }
+          } else if (targetStart < end && text[targetStart] === "\\") {
+            const subCmd = readCommand(text, targetStart, end);
+            if (subCmd) targetEnd = subCmd[1];
+          } else if (targetStart < end && /[a-zA-Z0-9]/.test(text[targetStart])) {
+            targetEnd = targetStart + 1;
+          }
+          if (targetEnd > commandEnd) {
+            spans.push({
+              kind: "function",
+              value: text.slice(index, targetEnd),
+              start: index,
+              end: targetEnd,
+              depth,
+            });
+            index = targetEnd;
+            continue;
           }
         }
 

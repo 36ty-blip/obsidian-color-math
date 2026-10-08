@@ -28,8 +28,8 @@ describe("Phase 1: Lexical Isolation & Quoted Strings", () => {
     expect(normalizeQuotedStrings("f''(x) + f'(x)")).toBe("f''(x) + f'(x)");
   });
 
-  it("leaves unclosed quotes untouched to prevent swallowing following lines", () => {
-    expect(normalizeQuotedStrings('"unclosed text')).toBe('"unclosed text');
+  it("auto-converts unclosed quotes to \\text{...} at boundary with squiggly warning", () => {
+    expect(normalizeQuotedStrings('"unclosed text')).toBe('\\text{unclosed text}');
   });
 });
 
@@ -116,13 +116,13 @@ describe("Phase 3: Structural Expressions & Infix Division", () => {
 
 describe("Phase 4: Typst Auto-Scaling Delimiters & Crash Immunity", () => {
   it("auto-scales parentheses and brackets containing fractions", () => {
-    expect(normalizeAutoScaledDelimiters("( \\frac{a}{b} )")).toBe("\\left( \\frac{a}{b} \\right)");
-    expect(normalizeAutoScaledDelimiters("[ \\frac{1}{2} ]")).toBe("\\left[ \\frac{1}{2} \\right]");
+    expect(normalizeAutoScaledDelimiters("( \\frac{a}{b} )")).toBe("\\Bigl( \\frac{a}{b} \\Bigr)");
+    expect(normalizeAutoScaledDelimiters("[ \\frac{1}{2} ]")).toBe("\\Bigl[ \\frac{1}{2} \\Bigr]");
   });
 
   it("auto-scales nested parentheses levels", () => {
     expect(normalizeAutoScaledDelimiters("( 1 + ( \\frac{a}{b} ) )")).toBe(
-      "\\left( 1 + \\left( \\frac{a}{b} \\right) \\right)"
+      "\\Bigl( 1 + \\Bigl( \\frac{a}{b} \\Bigr) \\Bigr)"
     );
   });
 
@@ -139,11 +139,11 @@ describe("Phase 4: Typst Auto-Scaling Delimiters & Crash Immunity", () => {
 
   it("auto-scales big operators and matrices", () => {
     expect(normalizeAutoScaledDelimiters("( \\sum_{i=1}^n x_i )")).toBe(
-      "\\left( \\sum_{i=1}^n x_i \\right)"
+      "\\biggl( \\sum_{i=1}^n x_i \\biggr)"
     );
     expect(
       normalizeAutoScaledDelimiters("[ \\begin{matrix} 1 & 0 \\\\ 0 & 1 \\end{matrix} ]")
-    ).toBe("\\left[ \\begin{matrix} 1 & 0 \\\\ 0 & 1 \\end{matrix} \\right]");
+    ).toBe("\\Biggl[ \\begin{matrix} 1 & 0 \\\\ 0 & 1 \\end{matrix} \\Biggr]");
   });
 
   it("auto-seals unclosed \\left delimiters with \\right. for crash immunity", () => {
@@ -203,20 +203,20 @@ describe("Master Pipeline: normalizeMathSyntax", () => {
   it("auto-scales delimiters in full pipeline", () => {
     const input = '( {a} / {b} )';
     const output = normalizeMathSyntax(input, { autoScaleDelimiters: true });
-    expect(output).toBe("\\left( \\frac{a}{b} \\right)");
+    expect(output).toBe("\\Bigl( \\frac{a}{b} \\Bigr)");
   });
 
   it("auto-scales single vertical bars | ... | enclosing tall fractions or matrices", () => {
     const frac = '| \\frac{a}{b} |';
-    expect(normalizeAutoScaledDelimiters(frac)).toBe("\\left| \\frac{a}{b} \\right|");
+    expect(normalizeAutoScaledDelimiters(frac)).toBe("\\Bigl| \\frac{a}{b} \\Bigr|");
 
     const mat = '| \\begin{matrix} a & b \\\\ c & d \\end{matrix} |';
-    expect(normalizeAutoScaledDelimiters(mat)).toBe("\\left| \\begin{matrix} a & b \\\\ c & d \\end{matrix} \\right|");
+    expect(normalizeAutoScaledDelimiters(mat)).toBe("\\Biggl| \\begin{matrix} a & b \\\\ c & d \\end{matrix} \\Biggr|");
   });
 
   it("auto-scales double vertical bars \\| ... \\| enclosing tall elements", () => {
     const norm = '\\| \\frac{a}{b} \\|';
-    expect(normalizeAutoScaledDelimiters(norm)).toBe("\\left\\| \\frac{a}{b} \\right\\|");
+    expect(normalizeAutoScaledDelimiters(norm)).toBe("\\Bigl\\| \\frac{a}{b} \\Bigr\\|");
   });
 
   it("preserves lone vertical bars in conditional probability and set-builder notation without scaling", () => {
@@ -247,16 +247,17 @@ describe("Master Pipeline: normalizeMathSyntax", () => {
   it("normalizes and colors matrices enclosed in quotes and vertical bars properly", () => {
     const raw = '"matrices:"|\\begin{pmatrix} \\cfrac{1}{2} & \\cfrac{3}{4} \\\\ \\cfrac{5}{6} & \\cfrac{7}{8} \\end{pmatrix}|';
     const norm = normalizeMathSyntax(raw, { autoScaleDelimiters: true });
-    expect(norm).toBe("\\text{matrices:}\\left|\\begin{pmatrix} \\cfrac{1}{2} & \\cfrac{3}{4} \\\\ \\cfrac{5}{6} & \\cfrac{7}{8} \\end{pmatrix}\\right|");
+    expect(norm).toBe("\\text{matrices:}\\Biggl|\\begin{pmatrix} \\cfrac{1}{2} & \\cfrac{3}{4} \\\\ \\cfrac{5}{6} & \\cfrac{7}{8} \\end{pmatrix}\\Biggr|");
 
     const colored = colorLatexBody(raw, DEFAULT_COLORS, {
       previewLatexNormalization: true,
       autoScaleDelimiters: true,
       rainbowDelimiters: true,
     });
-    // Ensure the matrix is NOT wrapped in an outer delimiter \\textcolor and vertical bars scale
-    expect(colored).toContain("\\text{matrices:}\\left|\\begin{pmatrix}");
-    expect(colored).not.toMatch(/\\textcolor\{[^}]+\}\{\\left\|\\begin\{pmatrix\}/);
+    // Ensure the matrix is NOT wrapped in an outer delimiter \textcolor and vertical bars scale
+    expect(colored).toContain("\\text{matrices:}\\textcolor{");
+    expect(colored).toContain("\\Biggl|}\\begin{pmatrix}");
+    expect(colored).not.toMatch(/\\textcolor\{[^}]+\}\{\\Biggl\|\\begin\{pmatrix\}/);
   });
 
   it("preserves multiple spaces inside quoted strings and shields characters from math coloring", async () => {
@@ -276,6 +277,56 @@ describe("Master Pipeline: normalizeMathSyntax", () => {
     });
     expect(colored).toBe("\\text{abcdefg\\ \\ \\ \\ \\ \\ \\ \\ \\ b}");
     expect(colored).not.toContain("\\textcolor");
+  });
+});
+
+describe("Phase 6: Lemire MPHF Bare Symbol Token Unification & Dotted Typst Syntax", () => {
+  it("treats bare hbar as a single atomic constant token in variable data flow (no character splitting)", async () => {
+    const { collectVariableSpans } = await import("../src/parsers/variable_hash");
+    const spans = collectVariableSpans("hbar");
+    expect(spans).toHaveLength(1);
+    expect(spans[0].start).toBe(0);
+    expect(spans[0].end).toBe(4);
+    expect(spans[0].priority).toBe(22);
+  });
+
+  it("treats bare hbar as a constant in taxonomy spans", async () => {
+    const { collectTaxonomySpans } = await import("../src/parsers/taxonomy");
+    const spans = collectTaxonomySpans("hbar", DEFAULT_COLORS);
+    expect(spans).toHaveLength(1);
+    expect(spans[0].start).toBe(0);
+    expect(spans[0].end).toBe(4);
+    expect(spans[0].color).toBe(DEFAULT_COLORS.orange);
+  });
+
+  it("handles dotted Typst symbols (arrow.r, harpoons.rtrb) atomically without splitting at dot", async () => {
+    const { collectVariableSpans } = await import("../src/parsers/variable_hash");
+    const { collectTaxonomySpans } = await import("../src/parsers/taxonomy");
+    
+    const arrowSpans = collectVariableSpans("arrow.r");
+    expect(arrowSpans).toHaveLength(1);
+    expect(arrowSpans[0].start).toBe(0);
+    expect(arrowSpans[0].end).toBe(7);
+
+    const taxArrow = collectTaxonomySpans("arrow.r", DEFAULT_COLORS);
+    expect(taxArrow).toHaveLength(1);
+    expect(taxArrow[0].start).toBe(0);
+    expect(taxArrow[0].end).toBe(7);
+  });
+
+  it("consumes trailing primes on bare symbols (alpha', hbar'')", async () => {
+    const { collectVariableSpans } = await import("../src/parsers/variable_hash");
+    const spans = collectVariableSpans("alpha' + hbar''");
+    // alpha' is 0..6, hbar'' is 9..15
+    expect(spans[0].start).toBe(0);
+    expect(spans[0].end).toBe(6);
+    expect(spans[1].start).toBe(9);
+    expect(spans[1].end).toBe(15);
+  });
+
+  it("normalizes bare nabla, hbar, and arrow.r to canonical LaTeX macros", () => {
+    expect(normalizeBareGreekInMath("nabla u = hbar omega")).toBe("\\nabla u = \\hbar \\omega");
+    expect(normalizeBareGreekInMath("arrow.r")).toBe("\\rightarrow");
   });
 });
 
