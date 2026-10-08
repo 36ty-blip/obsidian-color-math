@@ -330,6 +330,18 @@ describe("Typst Standards & User Issues Diagnostics", () => {
     const expr2 = "\\lim_{x→0} f(x)";
     const colored2 = colorLatexBody(expr2, DEFAULT_PALETTE, { variableDataFlow: true, enableTaxonomy: true });
     expect(() => katex.renderToString(colored2, { displayMode: true, throwOnError: true })).not.toThrow();
+    // \lim must remain plain and uncolored
+    expect(colored2.startsWith("\\lim_{")).toBe(true);
+    expect(colored2).not.toContain("\\textcolor{#7aa2f7}{\\lim");
+  });
+
+  it("handles extensible annotations like \\underbrace without mono-coloring the inner expression", () => {
+    const expr = "\\underbrace{a+b+c}_{\\text{ three terms}}";
+    const colored = colorLatexBody(expr, DEFAULT_PALETTE, { variableDataFlow: true, enableTaxonomy: true });
+    expect(() => katex.renderToString(colored, { displayMode: true, throwOnError: true })).not.toThrow();
+    // \underbrace must not wrap {a+b+c} into a single \textcolor
+    expect(colored.startsWith("\\underbrace{")).toBe(true);
+    expect(colored).not.toContain("\\textcolor{#7aa2f7}{\\underbrace");
   });
 });
 

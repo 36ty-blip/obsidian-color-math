@@ -201,10 +201,7 @@ export function convertLatexToUnicode(
         if (!replacement) {
           const catalogEntry = lookupCatalog(cmd);
           if (catalogEntry && (catalogEntry.role === "parameter" || catalogEntry.role === "constant")) {
-            replacement =
-              options?.greekStyle === "standard"
-                ? (catalogEntry.unicode || catalogEntry.plane1)
-                : (catalogEntry.plane1 || catalogEntry.unicode);
+            replacement = catalogEntry.unicode;
           }
         }
 

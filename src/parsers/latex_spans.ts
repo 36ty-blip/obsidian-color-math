@@ -62,7 +62,6 @@ export const OPERATOR_COMMANDS = new Set([
   "iint",
   "iiint",
   "inf",
-  "lim",
   "max",
   "min",
   "oint",

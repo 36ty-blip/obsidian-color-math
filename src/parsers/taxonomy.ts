@@ -342,23 +342,6 @@ export function collectTaxonomySpans(
           }
         }
 
-const EXTENSIBLE_ANNOTATIONS = new Set([
-  "\\underbrace",
-  "\\overbrace",
-  "\\underbracket",
-  "\\overbracket",
-  "\\underline",
-  "\\overline",
-  "\\overleftarrow",
-  "\\overrightarrow",
-  "\\lim",
-  "\\limsup",
-  "\\liminf",
-  "lim",
-  "limsup",
-  "liminf",
-]);
-
         // Query O(1) MPHF catalog first
         const catalogEntry = lookupCatalog(name);
         if (
@@ -366,7 +349,7 @@ const EXTENSIBLE_ANNOTATIONS = new Set([
           name === "\\mod" ||
           name === "\\pmod" ||
           name === "\\pod" ||
-          (catalogEntry && catalogEntry.arity === 1 && !EXTENSIBLE_ANNOTATIONS.has(name))
+          (catalogEntry && catalogEntry.arity === 1 && !catalogEntry.extensible)
         ) {
           let targetStart = cmdEnd;
           while (targetStart < body.length && /\s/.test(body[targetStart])) {
@@ -408,6 +391,12 @@ const EXTENSIBLE_ANNOTATIONS = new Set([
             continue;
           }
           if (catalogEntry.role === "function") {
+            if (catalogEntry.uncolored) {
+              const remaining = body.slice(cmdEnd);
+              const limitModifierMatch = remaining.match(/^(\s*\\(?:limits|nolimits|displaylimits))(?![a-zA-Z])/);
+              index = limitModifierMatch ? cmdEnd + limitModifierMatch[0].length : cmdEnd;
+              continue;
+            }
             if (options?.taxonomyFunctions !== false) {
               let spanEnd = cmdEnd;
               const remaining = body.slice(cmdEnd);

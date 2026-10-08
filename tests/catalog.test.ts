@@ -45,20 +45,47 @@ describe("Minimal Perfect Hash (MPHF) Catalog Engine", () => {
     expect(lookupCatalog("\\sin", DOMAIN_CORE)).not.toBeNull();
   });
 
-  describe("Unicode & Plane 1 character mapping", () => {
-    it("maps standard BMP unicode and Plane 1 italic glyphs for Greek letters", () => {
+  describe("Unicode character mapping", () => {
+    it("maps Unicode glyphs for Greek letters", () => {
       const alpha = lookupCatalog("\\alpha");
       expect(alpha).not.toBeNull();
       expect(alpha?.unicode).toBe("α");
-      expect(alpha?.plane1).toBe("𝛼");
 
       const beta = lookupCatalog("\\beta");
       expect(beta?.unicode).toBe("β");
-      expect(beta?.plane1).toBe("𝛽");
 
       const gamma = lookupCatalog("\\Gamma");
       expect(gamma?.unicode).toBe("Γ");
-      expect(gamma?.plane1).toBe("𝛤");
+    });
+
+    it("verifies native uncolored flag on limit operators", () => {
+      const lim = lookupCatalog("\\lim");
+      expect(lim).not.toBeNull();
+      expect(lim?.uncolored).toBe(true);
+
+      const limsup = lookupCatalog("\\limsup");
+      expect(limsup).not.toBeNull();
+      expect(limsup?.uncolored).toBe(true);
+
+      const bareLim = lookupCatalog("lim");
+      expect(bareLim).not.toBeNull();
+      expect(bareLim?.uncolored).toBe(true);
+    });
+
+    it("verifies native extensible flag on extensible annotations", () => {
+      const overbrace = lookupCatalog("\\overbrace");
+      expect(overbrace).not.toBeNull();
+      expect(overbrace?.extensible).toBe(true);
+      expect(overbrace?.arity).toBeUndefined();
+
+      const underbrace = lookupCatalog("\\underbrace");
+      expect(underbrace).not.toBeNull();
+      expect(underbrace?.extensible).toBe(true);
+      expect(underbrace?.arity).toBeUndefined();
+
+      const underline = lookupCatalog("\\underline");
+      expect(underline).not.toBeNull();
+      expect(underline?.extensible).toBe(true);
     });
 
     it("maps Unicode characters for operators and relations", () => {

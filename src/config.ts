@@ -122,7 +122,6 @@ export const INTEGRALS = new Set([
 ]);
 
 export const LIMIT_OPERATORS = new Set([
-  "\\lim",
   "\\sup",
   "\\inf",
   "\\max",
