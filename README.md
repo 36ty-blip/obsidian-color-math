@@ -18,7 +18,11 @@ Monochrome LaTeX equations are visually dense and mentally exhausting to parse. 
 ### 1. Calculus & Chain Rule
 
 **Before (Monochrome LaTeX):**
-$$ \frac{d}{dx} f(g(y)) = f'(g(y)) \cdot g'(y)y' $$
+``` latex + typst
+{d}/{dx} f'(g(y)) = f'(g(y)) \cdot g'(y)y' " Now double quotes can be used for text. "
+% {}/{} can be used for fractions. 
+```
+$$ \frac{d}{dx} f(g(y)) = f'(g(y)) \cdot g'(y)y' \text{ Now double quotes can be used for text. } $$
 
 **After (Semantic Color Math):**
 $$ \textcolor{#bb9af7}{\frac{d}{dx}} \textcolor{#7aa2f7}{f}\textcolor{#e0af68}{(}\textcolor{#bb9af7}{g}\textcolor{#7aa2f7}{(}\textcolor{#e0af68}{y}\textcolor{#7aa2f7}{)}\textcolor{#e0af68}{)} = \textcolor{#7aa2f7}{f'}\textcolor{#e0af68}{(}\textcolor{#bb9af7}{g}\textcolor{#7aa2f7}{(}\textcolor{#e0af68}{y}\textcolor{#7aa2f7}{)}\textcolor{#e0af68}{)} \cdot \textcolor{#7aa2f7}{g'}\textcolor{#e0af68}{(}\textcolor{#e0af68}{y}\textcolor{#e0af68}{)}\textcolor{#e0af68}{y'} $$
@@ -35,15 +39,17 @@ $$ \textcolor{#e0af68}{i}\textcolor{#e0af68}{\hbar} \textcolor{#bb9af7}{\frac{\p
 
 ## ✨ Features & Ergonomics
 
+### Typst Features
+
+- **Backslash-Free Greek & Constants**: Write bare Greek letters (`alpha`, `beta`, `gamma`, `pi`, `omega`, `Delta`) and symbols (`oo` $\to \infty$, `hbar` $\to \hbar$, `nabla` $\to \nabla$, `partial` $\to \partial$, `ell` $\to \ell$) without tedious backslashes. Supports dotted Typst identifiers (`arrow.r`) and trailing primes (`hbar''`, `alpha'`).
+- **Typst Font Callouts**: Clean font macros like `bb(R)` $\to \mathbb{R}$, `cal(L)` $\to \mathcal{L}$, `bold(v)` $\to \mathbf{v}$, `frak(g)` $\to \mathfrak{g}$, `scr(F)` $\to \mathscr{F}$, with full support for nested expressions (`bold(f(x))`, `bb(R^n)`).
+- **Infix Inverted Division**: Visual-first slash divisions like `{a + b} / {c + d}` or `12 / 3` are rendered as vertical fractions ($\frac{a+b}{c+d}$, $\frac{12}{3}$) directly on screen in Live Preview without mutating raw markdown text on disk.
+- **Double-Quoted String Literals (`"..."`)**: Typst-style string literals (`"..."`) and `\text{...}` blocks are completely shielded from mathematical variable coloring, supporting script coloring and upright styling in exponents (`x^"exp"`) and subscripts (`x_"label"`), while preserving consecutive spaces via LaTeX control spaces (`\ `).
+- **Delimiter Auto-Scaling**: Standard parentheses `( \frac{a}{b} )`, single vertical bars `| \frac{a}{b} |`, and double bars `\| \mathbf{M} \|` automatically scale to matching `\left ... \right` heights for fractions, determinants, norms, and absolute values.
+
+### Core Features
+
 - **Zero Note Modification (Live Interceptor)**: Hooks directly into Obsidian's internal MathJax rendering engine. Equations appear in full color in **Live Preview** and **Reading View** without altering your raw markdown notes on disk.
-- **Typst Syntax Shortcuts & Modern Notation**:
-  - **Backslash-Free Greek & Constants**: Write bare Greek letters (`alpha`, `beta`, `gamma`, `pi`, `omega`, `Delta`) and symbols (`oo` $\to \infty$, `hbar` $\to \hbar$, `nabla` $\to \nabla$, `partial` $\to \partial$, `ell` $\to \ell$) without backslashes. Supports dotted Typst identifiers (`arrow.r`) and trailing primes (`hbar''`, `alpha'`).
-  - **Typst Font Callouts**: Clean font macros like `bb(R)` $\to \mathbb{R}$, `cal(L)` $\to \mathcal{L}$, `bold(v)` $\to \mathbf{v}$, `frak(g)` $\to \mathfrak{g}$, `scr(F)` $\to \mathscr{F}$, with full support for nested expressions (`bold(f(x))`, `bb(R^n)`).
-  - **Infix Inverted Division**: Visual-first slash divisions like `{a + b} / {c + d}` or `12 / 3` are rendered as vertical fractions ($\frac{a+b}{c+d}$, $\frac{12}{3}$) directly on screen without mutating raw markdown text.
-- **Double-Quoted String Literals (`"..."`) & Prose Isolation**:
-  - Typst-style string literals (`"..."`) and `\text{...}` blocks are shielded from mathematical variable coloring.
-  - Native script coloring and upright font styling in exponents (`x^"exp"`) and subscripts (`x_"label"`).
-  - Preserves consecutive spaces inside string literals using LaTeX control spaces (`\ `).
 - **Live Syntax Warnings & Compiler Crash Immunity**:
   - **Live Preview Squiggly Warnings**: Unclosed quotes (`"`), stray braces (`}`), and unbalanced delimiters receive subtle red wavy underlines directly in Live Preview to flag syntax mistakes without interrupting your typing.
   - **Auto-Healing & Compiler Crash Immunity**: Automatically auto-seals unclosed delimiters, converts unclosed quotes (`$x = 1 " if y = 0$`) into `\text{...}`, balances stray braces as `{}`, and heals unclosed `\left` with ghost closing tags so MathJax and KaTeX never throw fatal rendering errors while you type.
@@ -58,9 +64,7 @@ $$ \textcolor{#e0af68}{i}\textcolor{#e0af68}{\hbar} \textcolor{#bb9af7}{\frac{\p
   - **Whitespace Affinity**: Tight spacing ($\le 1$ space / 0 spaces) treats expressions as dimensional units with automatic LaTeX thin spacing ($12\text{ m/s}^2 \to 12 \; \mathrm{m/s^2}$), while wide spacing ($\ge 2$ spaces) and arithmetic operators ($12 + m$) preserve standalone algebraic variables.
   - **Single-Letter Safety**: Single letters (`m`, `s`, `g`, `N`, `A`) are protected from accidental unit collision by default; activatable per-note via YAML frontmatter (`units: physics`), settings, or Typst quotes (`12 "m"`).
   - **Nested Unit Exponents**: Unit powers and exponents are colored harmoniously (`\textcolor{unit}{m/s^{\textcolor{upper}{2}}}`).
-- **Delimiter Auto-Scaling & Rainbow Depth Coloring**:
-  - Standard parentheses `( \frac{a}{b} )`, single vertical bars `| \frac{a}{b} |`, and double bars `\| \mathbf{M} \|` automatically scale to matching `\left ... \right` heights for fractions, determinants, norms, and absolute values.
-  - Nested parentheses, brackets, and braces `(((...)))` receive recursive rainbow depth coloring so you never lose your place in deep algebraic expressions.
+- **Rainbow Depth Coloring**: Nested parentheses, brackets, and braces `(((...)))` receive recursive rainbow depth coloring so you never lose your place in deep algebraic expressions.
 - **Smart Mathematical Disambiguation**:
   - **Calculus Differentials**: Identifies infinitesimal differentials (`dx`, `dt`, `d\theta`) and derivative fractions (`\frac{df}{dx}`, `\frac{\partial u}{\partial t}`) while leaving standalone variables like distance `$d$` untouched.
   - **Quantum Bra-Ket**: Formats Dirac state vectors and expectation values (`|\psi\rangle`, `\langle\phi|`, `\langle\phi|\psi\rangle`).
