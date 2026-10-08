@@ -351,6 +351,12 @@ const EXTENSIBLE_ANNOTATIONS = new Set([
   "\\overline",
   "\\overleftarrow",
   "\\overrightarrow",
+  "\\lim",
+  "\\limsup",
+  "\\liminf",
+  "lim",
+  "limsup",
+  "liminf",
 ]);
 
         // Query O(1) MPHF catalog first

@@ -65,6 +65,82 @@
 - [x] Delimiter Warning Squiggles & Auto-Sealing Normalization: Added unclosed quote (`"`) delimiter tracking in `delimiters.ts` with Live Preview red squiggly error underlines, balanced stray closing braces (`}`) as `{}` (e.g. `\sum_{n=1}^{\infty}{}`), auto-sealed unclosed quotes at end of expression, and standardized system CPU baseline check to a 3-second average (v1.0.57)
 - [x] Live Preview Quote Squiggly Warning Preservation & Auto-Conversion to `\text{...}`: Fixed string literal span filtering in `live_preview.ts` so unmatched delimiter warnings (`priority >= 90`) are always preserved and render `.color-math-unmatched-delimiter` wavy red underline under unclosed `"`, auto-converted unclosed quotes to `\text{...}` up to line/math boundary behind the scenes (`$$x = 1 " if  y = 0 $$` -> `$$x = 1 \text{ if  y = 0 }$$`), balanced stray closing braces inside unclosed quote text as `{}` (`x = 1 " if } y = 0` -> `x = 1 \text{ if {} y = 0}`), strictly preserved unclosed `{` behavior, and verified 100% green test suite (476/476 tests across 35 files) (v1.0.58)
 
+#### 🛠️ Source code
+
+- [ ] **Warning**: Unsafe assignment of an `error` or `any` typed value
+  - `@typescript-eslint/no-unsafe-assignment`
+  - `src/converters/generic.ts:102`, `src/parsers/cst/parser.ts:1374-1376`, `src/parsers/cst/parser.ts:1819`, `src/parsers/cst/parser.ts:1821`, `src/parsers/cst/parser.ts:1831`, `src/utils/latex_helpers.ts:2367`, `src/utils/latex_helpers.ts:2477`, `src/utils/latex_helpers.ts:2480`
+- [ ] **Warning**: Unexpected any. Specify a different type.
+  - `src/editor/mathjax_interceptor.ts:61`, `src/editor/mathjax_interceptor.ts:62`, `src/editor/mathjax_interceptor.ts:69`, `src/editor/mathjax_interceptor.ts:70`, `src/editor/mathjax_interceptor.ts:76`, `src/editor/mathjax_interceptor.ts:77`, `src/parsers/cst/parser.ts:1376`, `src/parsers/cst/parser.ts:1818`, `src/parsers/cst/parser.ts:1819`, `src/parsers/cst/parser.ts:1820`, `src/parsers/cst/parser.ts:1821`, `src/parsers/cst/parser.ts:1831`, `src/parsers/cst/parser.ts:1831`, `src/parsers/cst/parser.ts:1930`, `src/parsers/engine_bridge.ts:39`, `src/parsers/engine_bridge.ts:40`
+- [ ] **Warning**: Unsafe member access on an `error` or `any` typed value
+  - `@typescript-eslint/no-unsafe-member-access`
+  - `src/editor/mathjax_interceptor.ts:61`, `src/editor/mathjax_interceptor.ts:62`, `src/editor/mathjax_interceptor.ts:69`, `src/editor/mathjax_interceptor.ts:70`, `src/editor/mathjax_interceptor.ts:76`, `src/editor/mathjax_interceptor.ts:77`, `src/parsers/cst/parser.ts:1376`, `src/parsers/cst/parser.ts:1818`, `src/parsers/cst/parser.ts:1819`, `src/parsers/cst/parser.ts:1820`, `src/parsers/cst/parser.ts:1821`, `src/parsers/cst/parser.ts:1831`, `src/parsers/cst/parser.ts:1831`, `src/parsers/cst/parser.ts:1930`, `src/parsers/engine_bridge.ts:39`, `src/parsers/engine_bridge.ts:40`, `src/utils/latex_helpers.ts:2477`, `src/utils/latex_helpers.ts:2480`
+- [ ] **Warning**: Unsafe call of an `error` or `any` typed value
+  - `@typescript-eslint/no-unsafe-call`
+  - `src/editor/mathjax_interceptor.ts:62`, `src/editor/mathjax_interceptor.ts:70`, `src/editor/mathjax_interceptor.ts:77`, `src/parsers/engine_bridge.ts:40`, `src/utils/latex_helpers.ts:2477`, `src/utils/latex_helpers.ts:2480`
+- [ ] **Warning**: Passes unsafe values into typed parameters
+  - `@typescript-eslint/no-unsafe-argument`
+  - `src/editor/mathjax_interceptor.ts:77`, `src/parsers/cst/parser.ts:1873`, `src/parsers/cst/parser.ts:1882`, `src/parsers/cst/parser.ts:1885`, `src/parsers/cst/parser.ts:1891`, `src/parsers/cst/parser.ts:1903`, `src/parsers/cst/parser.ts:1908`, `src/parsers/cst/parser.ts:1914`, `src/parsers/cst/parser.ts:1916`, `src/parsers/cst/parser.ts:1918`, `src/utils/latex_helpers.ts:2476`
+- [ ] **Warning**: Don't provide a default hotkey, as they might conflict with other hotkeys the user has already set, or that are included with Obsidian by default.
+  - `src/main.ts:267`
+- [ ] **Warning**: This PluginSettingTab does not implement getSettingDefinitions(); its settings will not appear in Obsidian's settings search for users on 1.13.0 or later. Consider adopting the declarative settings API.
+  - `src/main.ts:1148`
+- [ ] **Warning**: This assertion is unnecessary since it does not change the type of the expression.
+  - `src/parsers/cst/parser.ts:1232`, `src/parsers/cst/parser.ts:1756`, `src/parsers/cst/parser.ts:1857`, `src/parsers/cst/parser.ts:1927`, `src/parsers/cst/parser.ts:2110`
+- [ ] **Warning**: Unnecessary escape character: `\-`.
+  - `src/parsers/cst/parser.ts:1344`, `src/parsers/cst/tokenizer.ts:105`
+- [ ] **Warning**: Unnecessary escape character: `\}`.
+  - `src/parsers/cst/parser.ts:1454`
+- [ ] **Warning**: Unnecessary escape character: `\a`.
+  - `src/parsers/cst/tokenizer.ts:105`
+- [ ] **Warning**: Unnecessary escape character: `\m`.
+  - `src/parsers/cst/tokenizer.ts:105`
+- [ ] **Warning**: Returns unsafe values from typed code
+  - `@typescript-eslint/no-unsafe-return`
+  - `src/parsers/engine_bridge.ts:40`
+- [ ] **Warning**: Empty block statement.
+  - `src/parsers/engine_bridge.ts:97`
+- [ ] **Warning**: Unnecessary escape character: `\^`.
+  - `src/parsers/units.ts:176`
+- [ ] **Recommendation**: 'normalizeLatexBraces' is defined but never used.
+  - `src/converters/generic.ts:17`
+- [ ] **Recommendation**: 'bareFunctions' is assigned a value but never used.
+  - `src/editor/live_preview.ts:109`
+- [ ] **Recommendation**: `display` is deprecated. Since 1.13.0. Use `{@link getSettingDefinitions}` instead.
+  - `src/main.ts:1271`, `src/main.ts:1342`, `src/main.ts:1362`, `src/main.ts:1382`, `src/main.ts:1469`, `src/main.ts:1484`, `src/main.ts:1648`, `src/main.ts:1712`, `src/main.ts:1955`
+- [ ] **Recommendation**: `setWarning` is deprecated. Use `{@link setDestructive}` for a destructive button, or `setDestructive().setCta()` for a destructive primary action.
+  - `src/main.ts:1952`
+- [ ] **Recommendation**: 'M' is assigned a value but never used.
+  - `src/parsers/catalog.ts:46`
+- [ ] **Recommendation**: 'GroupNode' is defined but never used.
+  - `src/parsers/cst/collector.ts:5`
+- [ ] **Recommendation**: 'ScriptNode' is defined but never used.
+  - `src/parsers/cst/collector.ts:5`
+- [ ] **Recommendation**: 'FractionNode' is defined but never used.
+  - `src/parsers/cst/collector.ts:5`
+- [ ] **Recommendation**: 'NumberNode' is defined but never used.
+  - `src/parsers/cst/parser.ts:13`
+- [ ] **Recommendation**: 'PunctuationNode' is defined but never used.
+  - `src/parsers/cst/parser.ts:14`
+- [ ] **Recommendation**: 'CommentNode' is defined but never used.
+  - `src/parsers/cst/parser.ts:15`
+- [ ] **Recommendation**: 'GREEK_COMMANDS' is defined but never used.
+  - `src/parsers/cst/parser.ts:30`
+- [ ] **Recommendation**: 'isQuantifier' is defined but never used.
+  - `src/parsers/cst/parser.ts:32`
+- [ ] **Recommendation**: 'isSubgroupOrMorphism' is defined but never used.
+  - `src/parsers/cst/parser.ts:33`
+- [ ] **Recommendation**: 'DIFF_RESERVED_COMMANDS' is assigned a value but never used.
+  - `src/parsers/differentials.ts:14`
+- [ ] **Recommendation**: 'RAINBOW_DELIMITER_COLORS' is defined but never used.
+  - `src/parsers/engine_bridge.ts:1`
+- [ ] **Recommendation**: 'DelimiterCollectorOptions' is defined but never used.
+  - `src/parsers/engine_bridge.ts:2`
+- [ ] **Recommendation**: 'isTallMath' is defined but never used.
+  - `src/utils/latex_helpers.ts:1516`
+- [ ] **Recommendation**: 'getDelimSizingLevel' is defined but never used.
+  - `src/utils/latex_helpers.ts:1619`
+
 
 
 

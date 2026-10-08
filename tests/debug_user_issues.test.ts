@@ -321,5 +321,15 @@ describe("Typst Standards & User Issues Diagnostics", () => {
     const balancedSpans = computeSemanticMathSpans(balanced, DEFAULT_PALETTE, { rainbowDelimiters: true, highlightUnmatchedBraces: true }, false);
     expect(balancedSpans.find(s => (s.priority ?? 0) >= 90 && s.start === 6)).toBeUndefined();
   });
+
+  it("handles \\lim_{x\\to 0} and \\lim_{x→0} without breaking extensible annotations or baseline", () => {
+    const expr1 = "\\lim_{x \\to 0} \\frac{\\sin x}{x}";
+    const colored1 = colorLatexBody(expr1, DEFAULT_PALETTE, { variableDataFlow: true, enableTaxonomy: true });
+    expect(() => katex.renderToString(colored1, { displayMode: true, throwOnError: true })).not.toThrow();
+
+    const expr2 = "\\lim_{x→0} f(x)";
+    const colored2 = colorLatexBody(expr2, DEFAULT_PALETTE, { variableDataFlow: true, enableTaxonomy: true });
+    expect(() => katex.renderToString(colored2, { displayMode: true, throwOnError: true })).not.toThrow();
+  });
 });
 

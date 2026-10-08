@@ -83556,7 +83556,13 @@ function collectTaxonomySpans(body, palette = COLORS, unitSpans, diffSpans, dimS
           "\\underline",
           "\\overline",
           "\\overleftarrow",
-          "\\overrightarrow"
+          "\\overrightarrow",
+          "\\lim",
+          "\\limsup",
+          "\\liminf",
+          "lim",
+          "limsup",
+          "liminf"
         ]);
         const catalogEntry = lookupCatalog(name);
         if (name === "\\Bbb" || name === "\\mod" || name === "\\pmod" || name === "\\pod" || catalogEntry && catalogEntry.arity === 1 && !EXTENSIBLE_ANNOTATIONS.has(name)) {
