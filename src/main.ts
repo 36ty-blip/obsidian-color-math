@@ -2072,7 +2072,7 @@ class ColorMathSettingTab extends PluginSettingTab {
       .addButton((button) =>
         button
           .setButtonText("Reset to Factory Defaults")
-          .setDestructive()
+          .setWarning()
           .onClick(async () => {
             await this.plugin.resetSettingsToDefaults();
             this.refresh();

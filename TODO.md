@@ -99,6 +99,11 @@
 - [ ] Custom High-Fidelity RGB/HSL Popover Color Picker (Roadmap 1.10):
   - [ ] Replace Chromium native OS `input[type="color"]` dialog with an in-app Obsidian-themed popover (Figma / VS Code style)
   - [ ] Support saturation/value 2D spectrum canvas, hue/alpha sliders, quick palette swatches, and hex/RGB/HSL direct editing
+- [ ] Automated Multi-Core Release Pipeline (`npm run release`):
+  - [ ] Implement a streamlined release orchestrator (`scripts/release.mjs` triggered via `npm run release`) to automate the end-to-end publishing workflow.
+  - [ ] Run pre-release test suites and corpus validation utilizing performance cores (up to 50% CPU / 6 worker threads on Intel i5-13420H per system policy).
+  - [ ] Synchronize and assert version parity across `package.json`, `manifest.json`, and `versions.json`.
+  - [ ] Automate staging, semantic release commit creation (`feat(release): vX.Y.Z`), annotated Git tag creation (`vX.Y.Z`), and remote push (`git push origin main --follow-tags`) to trigger the GitHub Actions release builder.
 - [ ] Real-Time Settings Reactivity & Multi-Tier Cache Eviction (Roadmap 1.11 - Zero-Lag Settings Updates):
   - [ ] Implement CodeMirror 6 `forceColorMathRefreshEffect` (`StateEffect.define<void>()`) in `live_preview.ts` so `cm.dispatch({ effects: forceRefresh })` forces an immediate editor syntax repaint without requiring user clicks or keystrokes
   - [ ] Evict MathJax DOM element cache (`interceptor.clearCache()`) and CST syntax span cache (`clearMathSpanCache()`) inside `saveSettings()` and `rerenderMath()`

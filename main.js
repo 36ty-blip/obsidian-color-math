@@ -45946,7 +45946,7 @@ var ColorMathSettingTab = class extends import_obsidian5.PluginSettingTab {
       })
     );
     new import_obsidian5.Setting(domainBody).setName("Restore all factory defaults").setDesc("Reset all plugin settings, Unicode conversion rules, and palette back to default.config.json.").addButton(
-      (button) => button.setButtonText("Reset to Factory Defaults").setDestructive().onClick(async () => {
+      (button) => button.setButtonText("Reset to Factory Defaults").setWarning().onClick(async () => {
         await this.plugin.resetSettingsToDefaults();
         this.refresh();
       })
