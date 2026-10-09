@@ -23,7 +23,7 @@ __export(main_exports, {
   default: () => ColorMathPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 
 // src/config/unicode.ts
 var UNICODE_DIFFERENTIALS = {
@@ -1636,7 +1636,7 @@ function findUnitSpans(body, options) {
         }
       }
     }
-    const tokenMatch = /^[A-Za-z°℃%ΩμÅ](?:[A-Za-z°℃%ΩμÅ0-9\-\^/{}])*/.exec(candidateRest);
+    const tokenMatch = /^[A-Za-z°℃%ΩμÅ](?:[A-Za-z°℃%ΩμÅ0-9\-^/{}])*/.exec(candidateRest);
     if (!tokenMatch)
       continue;
     let candidate = tokenMatch[0];
@@ -14873,28 +14873,43 @@ function padMatrixEnvironment(source) {
   );
 }
 function normalizeMathSyntax(source, options) {
-  let text = source.replace(/[\u200B-\u200D\uFEFF]/g, "");
-  text = text.replace(/([A-Za-z])\u0302/g, "\\hat{$1}");
-  text = text.replace(/([A-Za-z])\u0304/g, "\\bar{$1}");
-  text = text.replace(/([A-Za-z])\u0307/g, "\\dot{$1}");
-  text = text.replace(/([A-Za-z])\u0308/g, "\\ddot{$1}");
-  text = text.replace(/([A-Za-z])\u0303/g, "\\tilde{$1}");
-  text = text.replace(/([A-Za-z])\u20D7/g, "\\vec{$1}");
-  text = text.replace(/([A-Za-z])\u030C/g, "\\check{$1}");
-  text = normalizeQuotedStrings(text);
-  text = normalizeTypstFontShortcuts(text);
-  text = normalizeTypstArrows(text);
-  text = normalizeInfixDivision(text, options?.requireBracesForSlashDivision);
-  text = normalizeBareGreekInMath(text);
-  text = normalizeBareFunctions(text);
-  if (options?.autoScaleDelimiters !== false) {
+  let text = source;
+  if (/[\u200B-\u200D\uFEFF]/.test(text)) {
+    text = text.replace(/[\u200B-\u200D\uFEFF]/g, "");
+  }
+  if (/[\u0300-\u036F\u20D0-\u20FF]/.test(text)) {
+    text = text.replace(/([A-Za-z])\u0302/g, "\\hat{$1}");
+    text = text.replace(/([A-Za-z])\u0304/g, "\\bar{$1}");
+    text = text.replace(/([A-Za-z])\u0307/g, "\\dot{$1}");
+    text = text.replace(/([A-Za-z])\u0308/g, "\\ddot{$1}");
+    text = text.replace(/([A-Za-z])\u0303/g, "\\tilde{$1}");
+    text = text.replace(/([A-Za-z])\u20D7/g, "\\vec{$1}");
+    text = text.replace(/([A-Za-z])\u030C/g, "\\check{$1}");
+  }
+  if (text.includes('"')) {
+    text = normalizeQuotedStrings(text);
+  }
+  if (/\b(?:bb|cal|bold|frak|scr)\s*\(/.test(text)) {
+    text = normalizeTypstFontShortcuts(text);
+  }
+  if (text.includes("-") || text.includes("=")) {
+    text = normalizeTypstArrows(text);
+  }
+  if (text.includes("/")) {
+    text = normalizeInfixDivision(text, options?.requireBracesForSlashDivision);
+  }
+  if (/[a-zA-Z]/.test(text)) {
+    text = normalizeBareGreekInMath(text);
+    text = normalizeBareFunctions(text);
+  }
+  if (options?.autoScaleDelimiters !== false && (text.includes("(") || text.includes("[") || text.includes("|"))) {
     text = normalizeAutoScaledDelimiters(text);
   }
   text = normalizeLatexBraces(text);
-  if (options?.padMatrixPadding === true) {
+  if (options?.padMatrixPadding === true && text.includes("\\begin") && text.includes("matrix")) {
     text = padMatrixEnvironment(text);
   }
-  if (options?.colorUnits === true) {
+  if (options?.colorUnits === true && /\d/.test(text)) {
     text = normalizePhysicalUnitSpacing(text, options);
   }
   if (options?.crashImmunityAutoSeal !== false) {
@@ -16241,6 +16256,10 @@ function applyColorSpans(source, spans) {
 }
 
 // src/parsers/scanner.ts
+var NON_SLASH_COLOR_COMMANDS = Array.from(COLOR_COMMANDS).filter((cand) => !cand.startsWith("\\")).sort((a, b) => b.length - a.length);
+var NON_SLASH_FIRST_CHARS = new Set(
+  NON_SLASH_COLOR_COMMANDS.map((cand) => cand.charCodeAt(0))
+);
 function collectOperatorSpans(body, start = 0, end, palette = COLORS, forLatexWrap = false) {
   const spans = [];
   for (const operator of findAllOperatorSpans(body, start, end)) {
@@ -16324,7 +16343,7 @@ function collectScannerSpans(body, palette = COLORS, forLatexWrap = false) {
         index = envEnd;
         continue;
       }
-      if (SORTED_COLOR_COMMANDS.includes(command)) {
+      if (COLOR_COMMANDS.has(command)) {
         const rem = body.slice(spanEnd);
         const limitMatch = rem.match(/^(\\(?:limits|nolimits|displaylimits))(?![a-zA-Z])/);
         if (limitMatch) {
@@ -16342,17 +16361,19 @@ function collectScannerSpans(body, palette = COLORS, forLatexWrap = false) {
       }
       continue;
     }
-    const nonSlashCommand = SORTED_COLOR_COMMANDS.find(
-      (cand) => !cand.startsWith("\\") && body.startsWith(cand, index)
-    );
-    if (nonSlashCommand !== void 0) {
-      spans.push({
-        start: index,
-        end: index + nonSlashCommand.length,
-        color: commandColor(nonSlashCommand, palette)
-      });
-      index += nonSlashCommand.length;
-      continue;
+    if (NON_SLASH_FIRST_CHARS.has(body.charCodeAt(index))) {
+      const nonSlashCommand = NON_SLASH_COLOR_COMMANDS.find(
+        (cand) => body.startsWith(cand, index)
+      );
+      if (nonSlashCommand !== void 0) {
+        spans.push({
+          start: index,
+          end: index + nonSlashCommand.length,
+          color: commandColor(nonSlashCommand, palette)
+        });
+        index += nonSlashCommand.length;
+        continue;
+      }
     }
     index += 1;
   }
@@ -17579,7 +17600,6 @@ function collectDelimiterSpans(text, options) {
 
 // src/parsers/differentials.ts
 var DIFF_FONT_COMMANDS = "mathbf|boldsymbol|pmb|vec|hat|bar|tilde|dot|ddot|mathit|mathrm|mathbb|mathcal|mathfrak|msf|Bbb|check|acute|grave|breve|overline|underline|widetilde|widehat";
-var DIFF_RESERVED_COMMANDS = "end|begin|right|left|frac|dfrac|tfrac|text|operatorname|limits|nolimits|displaylimits|sqrt|pmod|pod|mod|bmod|" + DIFF_FONT_COMMANDS;
 var DIFF_GREEK_COMMANDS = "alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|varkappa|lambda|mu|nu|xi|pi|varpi|rho|varrho|sigma|varsigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega|ell";
 var DIFF_VAR_PATTERN = "(?:\\\\(?:" + DIFF_FONT_COMMANDS + ")(?:\\{[^{}]+\\}|\\s+[a-zA-Z])|\\\\(?:" + DIFF_GREEK_COMMANDS + ")(?![a-zA-Z])|[a-zA-Z]|[\\u0370-\\u03FF]|\\uD835[\\uDC00-\\uDFFF])";
 var DERIV_FRAC_REGEX = new RegExp(
@@ -19673,7 +19693,7 @@ var MORPHISM_COMMANDS = /* @__PURE__ */ new Set(["\\hookrightarrow", "\\twoheadr
 var ARITHMETIC_FUNCTION_COMMANDS = /* @__PURE__ */ new Set(["\\phi", "\\varphi", "\\mu"]);
 var TENSOR_IDENTIFIER_PATTERN = /^(?:\\sigma|\\boldsymbol\{\\sigma\}|\\varepsilon|\\boldsymbol\{\\varepsilon\}|\\mathbf\{[A-Za-z]+\}|\\mathbb\{C\}|\\mathcal\{C\}|[CSFT])(?![a-z])/;
 var TENSOR_INDEX_PATTERN = /^(?:\\(?:mu|nu|alpha|beta|gamma|delta|rho|sigma|lambda|kappa|tau|eta|theta|phi|psi|omega|xi|zeta)|[ijklmnμναβγδρσλκτηθφψωξζ]){1,4}$/;
-var HIGHER_ORDER_DERIV_PATTERN = /^(?:\d+|[nkm\alpha\beta\mu\nu]|\w\s*[+\-]\s*\d+)$/;
+var HIGHER_ORDER_DERIV_PATTERN = /^(?:\d+|[nkmαβμν]|\\(?:alpha|beta|mu|nu)|\w\s*[+-]\s*\d+)$/;
 var PRIME_PATTERN = /^'+$/;
 var BACKSLASH_PRIME_PATTERN = /^\\prime+$/;
 var POISSON_CHARS_PATTERN = /[qpuvHA-Z]/;
@@ -20782,7 +20802,7 @@ var MathCSTParser = class _MathCSTParser {
         children: [child]
       };
     }
-    const padicMatch = rest.match(/^\|([a-zA-Z0-9+\-]+?)\|_p/);
+    const padicMatch = rest.match(/^\|([a-zA-Z0-9+-]+?)\|_p/);
     if (padicMatch) {
       this.index++;
       const openEnd = this.index;
@@ -20810,7 +20830,7 @@ var MathCSTParser = class _MathCSTParser {
     }
     this.index++;
     const prev = prevNodes.length > 0 ? prevNodes[prevNodes.length - 1] : void 0;
-    const isProb = this.inProbabilityContext || prev && "isProbabilityOperator" in prev && prev.isProbabilityOperator;
+    const isProb = this.inProbabilityContext || prev !== void 0 && prev.kind === "command" && Boolean(prev.isProbabilityOperator);
     if (isProb) {
       return {
         kind: "operator",
@@ -21196,10 +21216,12 @@ var MathCSTParser = class _MathCSTParser {
     let innerText;
     if (arg.length === 1) {
       const a0 = arg[0];
-      if ("text" in a0 && typeof a0.text === "string") {
+      if (a0.kind === "identifier" || a0.kind === "operator") {
         innerText = a0.text;
-      } else if ("name" in a0 && typeof a0.name === "string") {
+      } else if (a0.kind === "command") {
         innerText = a0.name;
+      } else if (a0.kind === "number") {
+        innerText = a0.value;
       } else {
         innerText = this.nodesToRawText(arg).trim();
       }
@@ -21208,7 +21230,7 @@ var MathCSTParser = class _MathCSTParser {
     } else {
       innerText = this.nodesToRawText(arg).trim();
     }
-    const prevText = prevNode && "text" in prevNode ? prevNode.text : prevNode && "name" in prevNode ? prevNode.name : "";
+    const prevText = prevNode?.kind === "identifier" || prevNode?.kind === "operator" ? prevNode.text : prevNode?.kind === "command" ? prevNode.name : prevNode?.kind === "number" ? prevNode.value : "";
     let isHigherOrderDerivative = false;
     let isConjugate = false;
     let isContravariantTensorIndex = false;
@@ -21278,7 +21300,7 @@ var MathCSTParser = class _MathCSTParser {
         isPauliMatrix = true;
       } else if (prevNode && prevNode.kind === "group" && prevNode.isStochasticVariation) {
         isStochasticVariation = true;
-      } else if (prevNode && "isChainBoundary" in prevNode && prevNode.isChainBoundary) {
+      } else if (prevNode && prevNode.kind === "command" && prevNode.isChainBoundary) {
         isChainBoundary = true;
       } else if (innerText.includes(";")) {
         isIndexCovariantDerivative = true;
@@ -23067,6 +23089,7 @@ function convertText(text, palette = COLORS, options) {
 // src/editor/live_preview.ts
 var import_state = require("@codemirror/state");
 var import_view = require("@codemirror/view");
+var import_obsidian = require("obsidian");
 
 // src/parsers/engine_bridge.ts
 var mathSpanCache = new LruCache(1e3);
@@ -23190,7 +23213,7 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
         if (update.docChanged) {
           this.decorations = this.decorations.map(update.changes);
         }
-        if (update.docChanged || update.viewportChanged) {
+        if (update.docChanged || update.viewportChanged || update.selectionSet) {
           this.decorations = this.buildDecorations(update.view);
         }
       }
@@ -23203,7 +23226,13 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
           const doc = view.state.doc;
           const palette = getPalette();
           const options = getOptions ? getOptions() : void 0;
-          const bareFunctions = getBareFunctions(options);
+          const isLivePreview = (() => {
+            try {
+              return typeof import_obsidian.editorLivePreviewField !== "undefined" && Boolean(view.state.field(import_obsidian.editorLivePreviewField, false));
+            } catch {
+              return false;
+            }
+          })();
           let text;
           let offset = 0;
           if (doc.length > 4e3 && view.visibleRanges.length > 0) {
@@ -23242,16 +23271,54 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
           const mathBlocks = options?.highlightDisplayMath !== false ? scan.mathBlocks : [];
           const mathInlines = options?.highlightInlineMath !== false ? scan.mathInlines : [];
           const allMath = [...mathBlocks, ...mathInlines].sort((a, b) => a.start - b.start);
-          const pendingDecorations = [];
+          const visibleMath = [];
           for (const block of allMath) {
+            const blockStart = offset + block.start;
+            const blockEnd = offset + block.end;
+            const isVisible = view.visibleRanges.length === 0 || view.visibleRanges.some(
+              (r) => Math.max(r.from, blockStart) <= Math.min(r.to, blockEnd)
+            );
+            if (isVisible) {
+              visibleMath.push(block);
+            }
+          }
+          let targetMath = visibleMath;
+          if (isLivePreview && visibleMath.length > 3) {
+            const cursor = view.state.selection.main.head;
+            let activeVisibleIdx = -1;
+            for (let i = 0; i < visibleMath.length; i++) {
+              const bStart = offset + visibleMath[i].start;
+              const bEnd = offset + visibleMath[i].end;
+              if (cursor >= bStart && cursor <= bEnd) {
+                activeVisibleIdx = i;
+                break;
+              }
+            }
+            if (activeVisibleIdx !== -1) {
+              const startIdx = Math.max(0, activeVisibleIdx - 1);
+              const endIdx = Math.min(visibleMath.length, activeVisibleIdx + 2);
+              targetMath = visibleMath.slice(startIdx, endIdx);
+            } else {
+              let closestIdx = 0;
+              let minDistance = Infinity;
+              for (let i = 0; i < visibleMath.length; i++) {
+                const bCenter = offset + (visibleMath[i].start + visibleMath[i].end) / 2;
+                const dist = Math.abs(cursor - bCenter);
+                if (dist < minDistance) {
+                  minDistance = dist;
+                  closestIdx = i;
+                }
+              }
+              const startIdx = Math.max(0, closestIdx - 1);
+              const endIdx = Math.min(visibleMath.length, closestIdx + 2);
+              targetMath = visibleMath.slice(startIdx, endIdx);
+            }
+          }
+          const pendingDecorations = [];
+          for (const block of targetMath) {
             try {
               const blockStart = offset + block.contentStart;
               const blockEnd = offset + block.contentEnd;
-              const isVisible = view.visibleRanges.length === 0 || view.visibleRanges.some(
-                (r) => Math.max(r.from, blockStart) <= Math.min(r.to, blockEnd)
-              );
-              if (!isVisible)
-                continue;
               const body = text.slice(block.contentStart, block.contentEnd);
               if (containsColorWrapper(body))
                 continue;
@@ -23374,7 +23441,7 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
 }
 
 // src/editor/mathjax_interceptor.ts
-var import_obsidian = require("obsidian");
+var import_obsidian2 = require("obsidian");
 function computeMathHash(latex, contextKey = "") {
   let h = 2166136261 >>> 0;
   const str = latex + "\0" + contextKey;
@@ -23390,6 +23457,7 @@ var MathJaxInterceptor = class {
   getOptions;
   isEnabled;
   getErrorMode;
+  isSourceMode;
   lastNoticeTime = 0;
   renderCache = /* @__PURE__ */ new Map();
   maxCacheEntries = 500;
@@ -23405,7 +23473,7 @@ var MathJaxInterceptor = class {
     const cached2 = this.renderCache.get(hash2);
     if (!cached2)
       return null;
-    if (typeof cached2.cloneNode === "function") {
+    if ("cloneNode" in cached2 && typeof cached2.cloneNode === "function") {
       return cached2.cloneNode(true);
     }
     return cached2;
@@ -23413,7 +23481,7 @@ var MathJaxInterceptor = class {
   cacheElement(hash2, el) {
     if (!el)
       return;
-    if (typeof el.setAttribute === "function") {
+    if ("setAttribute" in el && typeof el.setAttribute === "function") {
       el.setAttribute("data-math-hash", hash2);
     }
     if (this.renderCache.size >= this.maxCacheEntries) {
@@ -23421,23 +23489,24 @@ var MathJaxInterceptor = class {
       if (firstKey)
         this.renderCache.delete(firstKey);
     }
-    if (typeof el.cloneNode === "function") {
+    if ("cloneNode" in el && typeof el.cloneNode === "function") {
       this.renderCache.set(hash2, el.cloneNode(true));
     } else {
       this.renderCache.set(hash2, el);
     }
   }
-  constructor(getPalette, getOptions, isEnabled = () => true, getErrorMode = () => "inline") {
+  constructor(getPalette, getOptions, isEnabled = () => true, getErrorMode = () => "inline", isSourceMode) {
     this.getPalette = getPalette;
     this.getOptions = getOptions;
     this.isEnabled = isEnabled;
     this.getErrorMode = getErrorMode;
+    this.isSourceMode = isSourceMode;
   }
   notifyUserError(errorMsg) {
     const now = Date.now();
     if (now - this.lastNoticeTime > 4e3) {
       this.lastNoticeTime = now;
-      new import_obsidian.Notice(`Color Math: LaTeX syntax issue \u2014 ${errorMsg}`, 5e3);
+      new import_obsidian2.Notice(`Color Math: LaTeX syntax issue \u2014 ${errorMsg}`, 5e3);
     }
   }
   installed = false;
@@ -23451,7 +23520,7 @@ var MathJaxInterceptor = class {
       return true;
     }
     try {
-      await (0, import_obsidian.loadMathJax)();
+      await (0, import_obsidian2.loadMathJax)();
     } catch (e) {
       console.error("Color Math: Failed to load MathJax", e);
     }
@@ -23462,6 +23531,8 @@ var MathJaxInterceptor = class {
     }
     const transform2 = (latex) => {
       if (!this.isEnabled())
+        return latex;
+      if (this.isSourceMode && this.isSourceMode())
         return latex;
       try {
         const opts = this.getOptions();
@@ -23825,7 +23896,7 @@ function extractThemePalette(isLight) {
 }
 
 // src/mcp.ts
-var import_obsidian2 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -43576,7 +43647,7 @@ function registerColorMathMcpTools(plugin) {
         const path = String(args.path ?? "").trim();
         const undo = Boolean(args.undo ?? false);
         const file2 = plugin.app.vault.getAbstractFileByPath(path);
-        if (!(file2 instanceof import_obsidian2.TFile)) {
+        if (!(file2 instanceof import_obsidian3.TFile)) {
           throw new Error(`File not found or not a markdown note at path: "${path}"`);
         }
         const originalContent = await plugin.app.vault.read(file2);
@@ -44199,7 +44270,7 @@ function detectNoteField(content, frontmatterCache) {
 }
 
 // src/editor/quick_menu_modal.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 var AMBIGUOUS_RULES = [
   {
     name: "Multiplication / Asterisk",
@@ -44359,7 +44430,7 @@ function findAmbiguousTokenAtCursor(lineText, cursorCh, lineNumber) {
   }
   return null;
 }
-var QuickMenuModal = class extends import_obsidian3.SuggestModal {
+var QuickMenuModal = class extends import_obsidian4.SuggestModal {
   suggestions;
   editor;
   constructor(app, editor, suggestions) {
@@ -44429,11 +44500,11 @@ var DEFAULT_SETTINGS = {
   convertDefiniteIntegrals: false,
   convertBoundedOperators: false,
   greekStyle: "plane1",
-  convertProseToUnicode: false,
+  convertProseToUnicode: true,
   convertProseToLatex: false,
   autoDetectNoteField: true,
   defaultMode: "analysis",
-  autoDetectNoteMode: true,
+  autoDetectNoteMode: false,
   enableQuantumOperatorsGlobal: false,
   previewLatexNormalization: true,
   autoScaleDelimiters: true,
@@ -44473,11 +44544,12 @@ var COLOR_ROLE_DESCRIPTIONS = {
   unit: "Physical units and metric prefixes (e.g. \u03BCm, m/s, kg)",
   energyOperator: "Quantum operators (Energy: i\u210F\u2202/\u2202t, Momentum: -i\u210F\u2207, Kinetic: -\u210F\xB2/2m \u2207\xB2)"
 };
-var ColorMathPlugin = class extends import_obsidian4.Plugin {
+var ColorMathPlugin = class extends import_obsidian5.Plugin {
   settings = DEFAULT_SETTINGS;
   ribbonIconEl = null;
   interceptor = null;
   mcpCleanup = null;
+  noteModeCache = /* @__PURE__ */ new Map();
   async onload() {
     await this.loadSettings();
     setPalette(this.settings.palette);
@@ -44485,7 +44557,24 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
       () => this.settings.palette,
       () => this.getMathOptions(),
       () => this.settings.liveRendering,
-      () => this.settings.errorDisplayMode
+      () => this.settings.errorDisplayMode,
+      () => {
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
+        if (!view)
+          return false;
+        if (view.getMode() === "source") {
+          const cm = view.editor?.cm;
+          if (cm && typeof cm.state?.field === "function") {
+            try {
+              const isLive = cm.state.field(import_obsidian5.editorLivePreviewField, false);
+              return !isLive;
+            } catch {
+              return false;
+            }
+          }
+        }
+        return false;
+      }
     );
     await this.interceptor.install(() => this.rerenderMath());
     this.registerEditorExtension([
@@ -44501,11 +44590,25 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
         void this.handleThemeChange();
       })
     );
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", () => {
+        this.noteModeCache.clear();
+      })
+    );
+    this.registerEvent(
+      this.app.metadataCache.on("changed", (file2) => {
+        if (file2?.path) {
+          this.noteModeCache.delete(file2.path);
+        } else {
+          this.noteModeCache.clear();
+        }
+      })
+    );
     this.addCommand({
       id: "colorize-note",
       name: "Bake colors into note (Permanent)",
       checkCallback: (checking) => {
-        const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
         if (view) {
           if (!checking) {
             void this.colorizeActiveNote();
@@ -44519,7 +44622,7 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
       id: "undo-note",
       name: "Clean baked colors from note",
       checkCallback: (checking) => {
-        const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
         if (view) {
           if (!checking) {
             void this.uncolorActiveNote();
@@ -44553,7 +44656,6 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
     this.addCommand({
       id: "quick-menu-ambiguity",
       name: "Resolve ambiguous math notation (Quick Menu)",
-      hotkeys: [{ modifiers: ["Alt"], key: "Enter" }],
       editorCallback: (editor) => {
         if (!this.settings.enableQuickMenuOnAmbiguity)
           return;
@@ -44597,7 +44699,7 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
         this.settings.liveRendering = !this.settings.liveRendering;
         await this.saveSettings();
         this.rerenderMath();
-        new import_obsidian4.Notice(
+        new import_obsidian5.Notice(
           `Color Math: Dynamic live rendering is now ${this.settings.liveRendering ? "ON" : "OFF"}.`
         );
       }
@@ -44606,7 +44708,7 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
       id: "convert-math-to-unicode-note",
       name: "Convert math to Unicode in active note (Declutter LaTeX)",
       checkCallback: (checking) => {
-        const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
         if (view) {
           if (!checking) {
             void this.convertNoteMathToUnicode();
@@ -44620,7 +44722,7 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
       id: "convert-unicode-to-latex-note",
       name: "Convert Unicode math to LaTeX in active note (Restore TeX)",
       checkCallback: (checking) => {
-        const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
         if (view) {
           if (!checking) {
             void this.convertNoteMathToLatex();
@@ -44684,7 +44786,7 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
   }
   rerenderMath() {
     this.app.workspace.iterateAllLeaves((leaf) => {
-      if (leaf.view instanceof import_obsidian4.MarkdownView) {
+      if (leaf.view instanceof import_obsidian5.MarkdownView) {
         const previewMode = leaf.view.previewMode;
         previewMode?.rerender(true);
         const cm = leaf.view.editor?.cm;
@@ -44713,7 +44815,7 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
     }
   }
   showRibbonMenu(evt) {
-    const menu = new import_obsidian4.Menu();
+    const menu = new import_obsidian5.Menu();
     menu.addItem(
       (item) => item.setTitle("Bake colors into note (Permanent)").setIcon("file-text").onClick(() => this.colorizeActiveNote())
     );
@@ -44727,7 +44829,7 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
         this.settings.liveRendering = !this.settings.liveRendering;
         await this.saveSettings();
         this.rerenderMath();
-        new import_obsidian4.Notice(
+        new import_obsidian5.Notice(
           `Color Math: Dynamic live rendering is now ${this.settings.liveRendering ? "ON" : "OFF"}.`
         );
       })
@@ -44735,42 +44837,42 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
     menu.addSeparator();
     menu.addItem(
       (item) => item.setTitle("Bake colors into current math block").setIcon("box").onClick(() => {
-        const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
         if (view) {
           this.colorizeCurrentMathBlock(view.editor);
         } else {
-          new import_obsidian4.Notice("Color Math: No active Markdown note.");
+          new import_obsidian5.Notice("Color Math: No active Markdown note.");
         }
       })
     );
     menu.addItem(
       (item) => item.setTitle("Clean baked colors from current math block").setIcon("rotate-ccw").onClick(() => {
-        const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
         if (view) {
           this.uncolorCurrentMathBlock(view.editor);
         } else {
-          new import_obsidian4.Notice("Color Math: No active Markdown note.");
+          new import_obsidian5.Notice("Color Math: No active Markdown note.");
         }
       })
     );
     menu.addSeparator();
     menu.addItem(
       (item) => item.setTitle("Bake colors into selection").setIcon("highlighter").onClick(() => {
-        const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
         if (view) {
           this.colorizeSelection(view.editor);
         } else {
-          new import_obsidian4.Notice("Color Math: No active Markdown note.");
+          new import_obsidian5.Notice("Color Math: No active Markdown note.");
         }
       })
     );
     menu.addItem(
       (item) => item.setTitle("Clean baked colors from selection").setIcon("rotate-ccw").onClick(() => {
-        const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
         if (view) {
           this.uncolorSelection(view.editor);
         } else {
-          new import_obsidian4.Notice("Color Math: No active Markdown note.");
+          new import_obsidian5.Notice("Color Math: No active Markdown note.");
         }
       })
     );
@@ -44792,15 +44894,25 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
     }
     const appWithMeta = this.app;
     const file2 = appWithMeta.workspace?.getActiveFile?.();
-    const cache = file2 ? appWithMeta.metadataCache?.getFileCache?.(file2)?.frontmatter : void 0;
-    let text = content;
-    if (!text && !cache) {
-      const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
-      if (view) {
-        text = view.editor.getValue();
-      }
+    const filePath = file2?.path;
+    if (filePath && this.noteModeCache.has(filePath)) {
+      return this.noteModeCache.get(filePath);
     }
-    return detectNoteField(text || "", cache);
+    const fileCache = file2 ? appWithMeta.metadataCache?.getFileCache?.(file2) : null;
+    const frontmatter = fileCache?.frontmatter || {};
+    const tagsFromCache = fileCache?.tags?.map((t) => t.tag);
+    const combinedFrontmatter = tagsFromCache && tagsFromCache.length > 0 ? {
+      ...frontmatter,
+      tags: [
+        ...Array.isArray(frontmatter.tags) ? frontmatter.tags : frontmatter.tags ? [frontmatter.tags] : [],
+        ...tagsFromCache
+      ]
+    } : frontmatter;
+    const detection = detectNoteField(content || "", combinedFrontmatter);
+    if (filePath) {
+      this.noteModeCache.set(filePath, detection);
+    }
+    return detection;
   }
   getMathOptions(content) {
     const base = {
@@ -44857,7 +44969,7 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
       (span) => span.start <= offset && offset <= span.end
     );
     if (!currentBlock) {
-      new import_obsidian4.Notice("Color Math: Cursor is not inside a math block ($$...$$).");
+      new import_obsidian5.Notice("Color Math: Cursor is not inside a math block ($$...$$).");
       return;
     }
     const rawBlock = content.slice(currentBlock.start, currentBlock.end);
@@ -44867,13 +44979,13 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
       this.getMathOptions(content)
     );
     if (colored === rawBlock) {
-      new import_obsidian4.Notice("Color Math: Math block is already colorized.");
+      new import_obsidian5.Notice("Color Math: Math block is already colorized.");
       return;
     }
     const from = editor.offsetToPos(currentBlock.start);
     const to = editor.offsetToPos(currentBlock.end);
     editor.replaceRange(colored, from, to);
-    new import_obsidian4.Notice("Color Math: Colorized current math block! \u{1F3A8}");
+    new import_obsidian5.Notice("Color Math: Colorized current math block! \u{1F3A8}");
   }
   uncolorCurrentMathBlock(editor) {
     const content = editor.getValue();
@@ -44885,25 +44997,25 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
       (span) => span.start <= offset && offset <= span.end
     );
     if (!currentSpan) {
-      new import_obsidian4.Notice("Color Math: Cursor is not inside a math expression ($...$ or $$...$$).");
+      new import_obsidian5.Notice("Color Math: Cursor is not inside a math expression ($...$ or $$...$$).");
       return;
     }
     const rawSpan = content.slice(currentSpan.start, currentSpan.end);
     const uncolored = uncolorFragment(rawSpan);
     if (uncolored === rawSpan) {
-      new import_obsidian4.Notice("Color Math: No baked color wrappers found to remove in this equation.");
+      new import_obsidian5.Notice("Color Math: No baked color wrappers found to remove in this equation.");
       return;
     }
     const from = editor.offsetToPos(currentSpan.start);
     const to = editor.offsetToPos(currentSpan.end);
     editor.replaceRange(uncolored, from, to);
     if (this.settings.liveRendering) {
-      new import_obsidian4.Notice(
+      new import_obsidian5.Notice(
         "Color Math: Cleaned baked colors from math expression!\n(Live Preview dynamic coloring is currently ON in settings).",
         5e3
       );
     } else {
-      new import_obsidian4.Notice("Color Math: Reverted math expression to clean LaTeX.");
+      new import_obsidian5.Notice("Color Math: Reverted math expression to clean LaTeX.");
     }
   }
   colorizeSelection(editor) {
@@ -44916,9 +45028,9 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
         this.getMathOptions(content)
       );
       editor.replaceSelection(colored);
-      new import_obsidian4.Notice("Color Math: Colorized selection.");
+      new import_obsidian5.Notice("Color Math: Colorized selection.");
     } else {
-      new import_obsidian4.Notice("Color Math: Please select text to colorize.");
+      new import_obsidian5.Notice("Color Math: Please select text to colorize.");
     }
   }
   uncolorSelection(editor) {
@@ -44926,26 +45038,26 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
     if (selection) {
       const uncolored = uncolorFragment(selection);
       if (uncolored === selection) {
-        new import_obsidian4.Notice("Color Math: No baked color wrappers found to remove in selection.");
+        new import_obsidian5.Notice("Color Math: No baked color wrappers found to remove in selection.");
         return;
       }
       editor.replaceSelection(uncolored);
       if (this.settings.liveRendering) {
-        new import_obsidian4.Notice(
+        new import_obsidian5.Notice(
           "Color Math: Cleaned baked colors from selection!\n(Live Preview dynamic coloring is currently ON in settings).",
           5e3
         );
       } else {
-        new import_obsidian4.Notice("Color Math: Reverted selection to clean LaTeX.");
+        new import_obsidian5.Notice("Color Math: Reverted selection to clean LaTeX.");
       }
     } else {
-      new import_obsidian4.Notice("Color Math: Please select text to undo colors.");
+      new import_obsidian5.Notice("Color Math: Please select text to undo colors.");
     }
   }
   async colorizeActiveNote() {
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
     if (!view) {
-      new import_obsidian4.Notice("Color Math: No active Markdown note.");
+      new import_obsidian5.Notice("Color Math: No active Markdown note.");
       return;
     }
     const editor = view.editor;
@@ -44956,37 +45068,37 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
       this.getMathOptions(content)
     );
     if (colored === content) {
-      new import_obsidian4.Notice("Color Math: All math blocks are already colored.");
+      new import_obsidian5.Notice("Color Math: All math blocks are already colored.");
       return;
     }
     const cursor = editor.getCursor();
     editor.setValue(colored);
     editor.setCursor(cursor);
-    new import_obsidian4.Notice("Color Math: Successfully colorized note equations! \u{1F3A8}");
+    new import_obsidian5.Notice("Color Math: Successfully colorized note equations! \u{1F3A8}");
   }
   async uncolorActiveNote() {
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
     if (!view) {
-      new import_obsidian4.Notice("Color Math: No active Markdown note.");
+      new import_obsidian5.Notice("Color Math: No active Markdown note.");
       return;
     }
     const editor = view.editor;
     const content = editor.getValue();
     const uncolored = uncolorText(content);
     if (uncolored === content) {
-      new import_obsidian4.Notice("Color Math: No baked color wrappers found to remove.");
+      new import_obsidian5.Notice("Color Math: No baked color wrappers found to remove.");
       return;
     }
     const cursor = editor.getCursor();
     editor.setValue(uncolored);
     editor.setCursor(cursor);
     if (this.settings.liveRendering) {
-      new import_obsidian4.Notice(
+      new import_obsidian5.Notice(
         "Color Math: Cleaned all baked colors from note equations! \u{1F9F9}\n(Live Preview dynamic coloring is currently ON in settings).",
         6e3
       );
     } else {
-      new import_obsidian4.Notice("Color Math: Successfully cleaned colors from note! \u{1F9F9}");
+      new import_obsidian5.Notice("Color Math: Successfully cleaned colors from note! \u{1F9F9}");
     }
   }
   getVaultMathFiles() {
@@ -45012,11 +45124,11 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
   async colorizeVault() {
     const candidates = this.getVaultMathFiles();
     if (candidates.length === 0) {
-      new import_obsidian4.Notice("Color Math: No markdown notes with math found in vault.");
+      new import_obsidian5.Notice("Color Math: No markdown notes with math found in vault.");
       return;
     }
     let modifiedCount = 0;
-    const notice = new import_obsidian4.Notice(`Color Math: Scanning ${candidates.length} candidate notes...`, 0);
+    const notice = new import_obsidian5.Notice(`Color Math: Scanning ${candidates.length} candidate notes...`, 0);
     for (let i = 0; i < candidates.length; i++) {
       const file2 = candidates[i];
       try {
@@ -45037,7 +45149,7 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
       }
     }
     notice.hide();
-    new import_obsidian4.Notice(
+    new import_obsidian5.Notice(
       `Color Math: Vault bake complete! Colored equations in ${modifiedCount} notes. \u{1F3A8}`,
       6e3
     );
@@ -45045,11 +45157,11 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
   async uncolorVault() {
     const candidates = this.getVaultMathFiles();
     if (candidates.length === 0) {
-      new import_obsidian4.Notice("Color Math: No markdown notes with math found in vault.");
+      new import_obsidian5.Notice("Color Math: No markdown notes with math found in vault.");
       return;
     }
     let modifiedCount = 0;
-    const notice = new import_obsidian4.Notice(`Color Math: Scanning ${candidates.length} candidate notes...`, 0);
+    const notice = new import_obsidian5.Notice(`Color Math: Scanning ${candidates.length} candidate notes...`, 0);
     for (let i = 0; i < candidates.length; i++) {
       const file2 = candidates[i];
       try {
@@ -45066,7 +45178,7 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
       }
     }
     notice.hide();
-    new import_obsidian4.Notice(
+    new import_obsidian5.Notice(
       `Color Math: Vault clean complete! Cleaned baked colors from ${modifiedCount} notes. \u{1F9F9}`,
       6e3
     );
@@ -45081,9 +45193,9 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
     };
   }
   async convertNoteMathToUnicode() {
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
     if (!view) {
-      new import_obsidian4.Notice("Color Math: No active Markdown note.");
+      new import_obsidian5.Notice("Color Math: No active Markdown note.");
       return;
     }
     const editor = view.editor;
@@ -45097,7 +45209,7 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
       (processed, total) => {
         if (total > 15) {
           if (!progressNotice) {
-            progressNotice = new import_obsidian4.Notice(`Color Math: Converting math equations (${processed}/${total})...`, 0);
+            progressNotice = new import_obsidian5.Notice(`Color Math: Converting math equations (${processed}/${total})...`, 0);
           } else {
             progressNotice.setMessage(`Color Math: Converting math equations (${processed}/${total})...`);
           }
@@ -45108,18 +45220,18 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
       progressNotice.hide();
     }
     if (converted === content) {
-      new import_obsidian4.Notice("Color Math: No LaTeX math expressions needed conversion.");
+      new import_obsidian5.Notice("Color Math: No LaTeX math expressions needed conversion.");
       return;
     }
     const cursor = editor.getCursor();
     editor.setValue(converted);
     editor.setCursor(cursor);
-    new import_obsidian4.Notice("Color Math: Converted note math equations to Unicode! \u2728");
+    new import_obsidian5.Notice("Color Math: Converted note math equations to Unicode! \u2728");
   }
   async convertNoteMathToLatex() {
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
     if (!view) {
-      new import_obsidian4.Notice("Color Math: No active Markdown note.");
+      new import_obsidian5.Notice("Color Math: No active Markdown note.");
       return;
     }
     const editor = view.editor;
@@ -45133,7 +45245,7 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
       (processed, total) => {
         if (total > 15) {
           if (!progressNotice) {
-            progressNotice = new import_obsidian4.Notice(`Color Math: Converting math to LaTeX (${processed}/${total})...`, 0);
+            progressNotice = new import_obsidian5.Notice(`Color Math: Converting math to LaTeX (${processed}/${total})...`, 0);
           } else {
             progressNotice.setMessage(`Color Math: Converting math to LaTeX (${processed}/${total})...`);
           }
@@ -45144,13 +45256,13 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
       progressNotice.hide();
     }
     if (converted === content) {
-      new import_obsidian4.Notice("Color Math: No Unicode math symbols found to convert.");
+      new import_obsidian5.Notice("Color Math: No Unicode math symbols found to convert.");
       return;
     }
     const cursor = editor.getCursor();
     editor.setValue(converted);
     editor.setCursor(cursor);
-    new import_obsidian4.Notice("Color Math: Converted note Unicode math to LaTeX! \u{1F4D0}");
+    new import_obsidian5.Notice("Color Math: Converted note Unicode math to LaTeX! \u{1F4D0}");
   }
   convertCurrentMathBlockToUnicode(editor) {
     const content = editor.getValue();
@@ -45162,19 +45274,19 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
       (span) => span.start <= offset && offset <= span.end
     );
     if (!currentSpan) {
-      new import_obsidian4.Notice("Color Math: Cursor is not inside a math expression ($...$ or $$...$$).");
+      new import_obsidian5.Notice("Color Math: Cursor is not inside a math expression ($...$ or $$...$$).");
       return;
     }
     const mathContent = content.slice(currentSpan.contentStart, currentSpan.contentEnd);
     const converted = convertLatexToUnicode(mathContent, this.getUnicodeOptions());
     if (converted === mathContent) {
-      new import_obsidian4.Notice("Color Math: Math expression already uses Unicode or has no convertible symbols.");
+      new import_obsidian5.Notice("Color Math: Math expression already uses Unicode or has no convertible symbols.");
       return;
     }
     const from = editor.offsetToPos(currentSpan.contentStart);
     const to = editor.offsetToPos(currentSpan.contentEnd);
     editor.replaceRange(converted, from, to);
-    new import_obsidian4.Notice("Color Math: Converted math expression to Unicode! \u2728");
+    new import_obsidian5.Notice("Color Math: Converted math expression to Unicode! \u2728");
   }
   convertCurrentMathBlockToLatex(editor) {
     const content = editor.getValue();
@@ -45186,47 +45298,47 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
       (span) => span.start <= offset && offset <= span.end
     );
     if (!currentSpan) {
-      new import_obsidian4.Notice("Color Math: Cursor is not inside a math expression ($...$ or $$...$$).");
+      new import_obsidian5.Notice("Color Math: Cursor is not inside a math expression ($...$ or $$...$$).");
       return;
     }
     const mathContent = content.slice(currentSpan.contentStart, currentSpan.contentEnd);
     const converted = convertUnicodeToLatex(mathContent);
     if (converted === mathContent) {
-      new import_obsidian4.Notice("Color Math: No Unicode symbols found to convert in this equation.");
+      new import_obsidian5.Notice("Color Math: No Unicode symbols found to convert in this equation.");
       return;
     }
     const from = editor.offsetToPos(currentSpan.contentStart);
     const to = editor.offsetToPos(currentSpan.contentEnd);
     editor.replaceRange(converted, from, to);
-    new import_obsidian4.Notice("Color Math: Converted math expression to canonical LaTeX! \u{1F4D0}");
+    new import_obsidian5.Notice("Color Math: Converted math expression to canonical LaTeX! \u{1F4D0}");
   }
   convertSelectionToUnicode(editor) {
     const selection = editor.getSelection();
     if (!selection) {
-      new import_obsidian4.Notice("Color Math: Please select math text to convert.");
+      new import_obsidian5.Notice("Color Math: Please select math text to convert.");
       return;
     }
     const converted = selection.includes("$") ? convertDocumentMath(selection, "to-unicode", this.getUnicodeOptions()) : convertLatexToUnicode(selection, this.getUnicodeOptions());
     if (converted === selection) {
-      new import_obsidian4.Notice("Color Math: Selection already in Unicode or has no convertible symbols.");
+      new import_obsidian5.Notice("Color Math: Selection already in Unicode or has no convertible symbols.");
       return;
     }
     editor.replaceSelection(converted);
-    new import_obsidian4.Notice("Color Math: Converted selection to Unicode! \u2728");
+    new import_obsidian5.Notice("Color Math: Converted selection to Unicode! \u2728");
   }
   convertSelectionToLatex(editor) {
     const selection = editor.getSelection();
     if (!selection) {
-      new import_obsidian4.Notice("Color Math: Please select math text to convert.");
+      new import_obsidian5.Notice("Color Math: Please select math text to convert.");
       return;
     }
     const converted = selection.includes("$") ? convertDocumentMath(selection, "to-latex", this.getUnicodeOptions()) : convertUnicodeToLatex(selection);
     if (converted === selection) {
-      new import_obsidian4.Notice("Color Math: No Unicode symbols found to convert in selection.");
+      new import_obsidian5.Notice("Color Math: No Unicode symbols found to convert in selection.");
       return;
     }
     editor.replaceSelection(converted);
-    new import_obsidian4.Notice("Color Math: Converted selection to LaTeX! \u{1F4D0}");
+    new import_obsidian5.Notice("Color Math: Converted selection to LaTeX! \u{1F4D0}");
   }
   async handleThemeChange() {
     if (this.settings.autoSyncTheme) {
@@ -45249,7 +45361,7 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
       loadedData = await this.loadData();
     } catch (err) {
       console.warn("Color Math: Error reading user settings data.json, falling back to default configuration:", err);
-      new import_obsidian4.Notice("Color Math: Error loading user settings. Safely fell back to default configuration.", 5e3);
+      new import_obsidian5.Notice("Color Math: Error loading user settings. Safely fell back to default configuration.", 5e3);
       loadedData = null;
     }
     this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData || {});
@@ -45273,7 +45385,7 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
     });
     await this.saveSettings();
     this.rerenderMath();
-    new import_obsidian4.Notice("Color Math: Restored factory default settings from default.config.json! \u{1F504}");
+    new import_obsidian5.Notice("Color Math: Restored factory default settings from default.config.json! \u{1F504}");
   }
   async saveSettings() {
     await this.saveData(this.settings);
@@ -45281,7 +45393,7 @@ var ColorMathPlugin = class extends import_obsidian4.Plugin {
     this.app.workspace.updateOptions();
   }
 };
-var ColorMathSettingTab = class extends import_obsidian4.PluginSettingTab {
+var ColorMathSettingTab = class extends import_obsidian5.PluginSettingTab {
   plugin;
   constructor(app, plugin) {
     super(app, plugin);
@@ -45334,6 +45446,13 @@ var ColorMathSettingTab = class extends import_obsidian4.PluginSettingTab {
     this.containerEl.empty();
     this.buildTab(this.containerEl);
   }
+  refresh() {
+    if (typeof this.update === "function") {
+      this.update();
+    }
+    this.containerEl.empty();
+    this.buildTab(this.containerEl);
+  }
   buildTab(containerEl) {
     containerEl.createEl("p", {
       text: "Automatically apply semantic colors to LaTeX and MathJax equations in markdown notes.",
@@ -45342,46 +45461,46 @@ var ColorMathSettingTab = class extends import_obsidian4.PluginSettingTab {
     const coreBody = this.createCollapsible(
       containerEl,
       "section-core",
-      "\u26A1 Core & Live Rendering",
+      "\u26A1 Core & Viewport Rendering",
       true
     );
-    new import_obsidian4.Setting(coreBody).setName("Show ribbon icon").setDesc("Display the Color Math palette icon in the left ribbon for quick bake/clean actions.").addToggle(
+    new import_obsidian5.Setting(coreBody).setName("Show ribbon icon").setDesc("Display the Color Math palette icon in the left ribbon for quick bake/clean actions.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.showRibbonIcon).onChange(async (val) => {
         this.plugin.settings.showRibbonIcon = val;
         await this.plugin.saveSettings();
         this.plugin.refreshRibbonIcon();
       })
     );
-    new import_obsidian4.Setting(coreBody).setName("Live rendered math coloring").setDesc("Automatically colorize rendered MathJax equations in Reading View and Live Preview without modifying your raw Markdown notes.").addToggle(
+    new import_obsidian5.Setting(coreBody).setName("Live rendered math coloring").setDesc("Automatically colorize rendered MathJax equations in Reading View and Live Preview without modifying your raw Markdown notes.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.liveRendering).onChange(async (val) => {
         this.plugin.settings.liveRendering = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian4.Setting(coreBody).setName("Editor syntax highlighting (Live Preview)").setDesc("Live syntax highlighting inside the CodeMirror editor as you type.").addToggle(
+    new import_obsidian5.Setting(coreBody).setName("Editor syntax highlighting (Live Preview)").setDesc("Live syntax highlighting inside the CodeMirror editor as you type.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.livePreviewHighlighting).onChange(async (val) => {
         this.plugin.settings.livePreviewHighlighting = val;
         await this.plugin.saveSettings();
-        this.display();
+        this.refresh();
       })
     );
     if (this.plugin.settings.livePreviewHighlighting) {
-      new import_obsidian4.Setting(coreBody).setClass("color-math-sub-setting").setName("Highlight inline math ($...$)").setDesc("Apply real-time syntax coloring to inline math expressions inside the editor.").addToggle(
+      new import_obsidian5.Setting(coreBody).setClass("color-math-sub-setting").setName("Highlight inline math ($...$)").setDesc("Apply real-time syntax coloring to inline math expressions inside the editor.").addToggle(
         (toggle) => toggle.setValue(this.plugin.settings.highlightInlineMath).onChange(async (val) => {
           this.plugin.settings.highlightInlineMath = val;
           await this.plugin.saveSettings();
           this.plugin.rerenderMath();
         })
       );
-      new import_obsidian4.Setting(coreBody).setClass("color-math-sub-setting").setName("Highlight display blocks ($$...$$)").setDesc("Apply real-time syntax coloring to multiline display math blocks inside the editor.").addToggle(
+      new import_obsidian5.Setting(coreBody).setClass("color-math-sub-setting").setName("Highlight display blocks ($$...$$)").setDesc("Apply real-time syntax coloring to multiline display math blocks inside the editor.").addToggle(
         (toggle) => toggle.setValue(this.plugin.settings.highlightDisplayMath).onChange(async (val) => {
           this.plugin.settings.highlightDisplayMath = val;
           await this.plugin.saveSettings();
           this.plugin.rerenderMath();
         })
       );
-      new import_obsidian4.Setting(coreBody).setClass("color-math-sub-setting").setName("Matrix & tabular alignment tabs (&, \\\\)").setDesc("Highlight column separator tabs (&) and row breaks (\\\\) inside tabular environments.").addToggle(
+      new import_obsidian5.Setting(coreBody).setClass("color-math-sub-setting").setName("Matrix & tabular alignment tabs (&, \\\\)").setDesc("Highlight column separator tabs (&) and row breaks (\\\\) inside tabular environments.").addToggle(
         (toggle) => toggle.setValue(this.plugin.settings.colorAlignment).onChange(async (val) => {
           this.plugin.settings.colorAlignment = val;
           await this.plugin.saveSettings();
@@ -45394,44 +45513,6 @@ var ColorMathSettingTab = class extends import_obsidian4.PluginSettingTab {
       "section-theme-palettes",
       "\u{1F3A8} Theme & Color Palettes",
       true
-    );
-    new import_obsidian4.Setting(themeBody).setName("Sync with active theme").setDesc("Extract and apply matching colors from your currently active Obsidian theme.").addButton(
-      (button) => button.setButtonText("Sync with Theme").setCta().onClick(async () => {
-        this.plugin.settings.palette = extractThemePalette(
-          this.plugin.settings.autoLightDark ? isVaultLightMode() : false
-        );
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-        this.display();
-        new import_obsidian4.Notice("Color Math: Synced colors with active Obsidian theme!");
-      })
-    );
-    new import_obsidian4.Setting(themeBody).setName("Auto-match on theme change").setDesc("Automatically re-sync palette whenever you switch themes in Obsidian.").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.autoSyncTheme).onChange(async (val) => {
-        this.plugin.settings.autoSyncTheme = val;
-        if (val) {
-          this.plugin.settings.palette = extractThemePalette(
-            this.plugin.settings.autoLightDark ? isVaultLightMode() : false
-          );
-          this.plugin.rerenderMath();
-        }
-        await this.plugin.saveSettings();
-        this.display();
-      })
-    );
-    new import_obsidian4.Setting(themeBody).setName("Auto-adapt for light / dark mode").setDesc("Adjust operator contrast (e.g. '=' and '\\cdot') so math never washes out on light backgrounds.").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.autoLightDark).onChange(async (val) => {
-        this.plugin.settings.autoLightDark = val;
-        if (val) {
-          const light = isVaultLightMode();
-          this.plugin.settings.palette.relation = light ? "#1e293b" : "white";
-          this.plugin.settings.palette.dot = light ? "#334155" : "white";
-          this.plugin.settings.palette.spacing = light ? "#334155" : "white";
-          this.plugin.rerenderMath();
-        }
-        await this.plugin.saveSettings();
-        this.display();
-      })
     );
     const PRESET_THEMES = {
       tokyo: {
@@ -45497,7 +45578,7 @@ var ColorMathSettingTab = class extends import_obsidian4.PluginSettingTab {
         rainbow: ["#d97706", "#2563eb", "#7c3aed", "#dc2626"]
       }
     };
-    new import_obsidian4.Setting(themeBody).setName("Preset theme palettes").setDesc("Apply a curated palette across all 13 semantic roles and rainbow delimiters.").addDropdown((dropdown) => {
+    new import_obsidian5.Setting(themeBody).setName("Preset theme palettes").setDesc("Apply a curated palette across all 13 semantic roles and rainbow delimiters.").addDropdown((dropdown) => {
       dropdown.addOption("none", "Choose a preset theme...").addOption("tokyo", "Tokyo Night (Signature)").addOption("catppuccin", "Catppuccin Mocha").addOption("nord", "Nord").addOption("light", "Clean Light (High Contrast)").setValue("none").onChange(async (val) => {
         if (val !== "none" && PRESET_THEMES[val]) {
           const preset = PRESET_THEMES[val];
@@ -45505,19 +45586,47 @@ var ColorMathSettingTab = class extends import_obsidian4.PluginSettingTab {
           this.plugin.settings.rainbowColors = [...preset.rainbow];
           await this.plugin.saveSettings();
           this.plugin.rerenderMath();
-          this.display();
-          new import_obsidian4.Notice(`Color Math: Applied ${preset.name} palette!`);
+          this.refresh();
+          new import_obsidian5.Notice(`Color Math: Applied ${preset.name} palette!`);
         }
       });
     });
-    new import_obsidian4.Setting(themeBody).setName("Restore default Tokyo Night palette").setDesc("Revert all colors back to our signature Tokyo Night palette.").addButton(
-      (button) => button.setButtonText("Restore Defaults").onClick(async () => {
-        this.plugin.settings.palette = { ...DEFAULT_COLORS };
-        this.plugin.settings.rainbowColors = [...RAINBOW_DELIMITER_COLORS];
+    new import_obsidian5.Setting(themeBody).setName("Sync with active theme").setDesc("Extract and apply matching colors from your currently active Obsidian theme.").addButton(
+      (button) => button.setButtonText("Sync with Theme").setCta().onClick(async () => {
+        this.plugin.settings.palette = extractThemePalette(
+          this.plugin.settings.autoLightDark ? isVaultLightMode() : false
+        );
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
-        this.display();
-        new import_obsidian4.Notice("Color Math: Restored default Tokyo Night palette.");
+        this.refresh();
+        new import_obsidian5.Notice("Color Math: Synced colors with active Obsidian theme!");
+      })
+    );
+    new import_obsidian5.Setting(themeBody).setName("Auto-match on theme change").setDesc("Automatically re-sync palette whenever you switch themes in Obsidian.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.autoSyncTheme).onChange(async (val) => {
+        this.plugin.settings.autoSyncTheme = val;
+        if (val) {
+          this.plugin.settings.palette = extractThemePalette(
+            this.plugin.settings.autoLightDark ? isVaultLightMode() : false
+          );
+          this.plugin.rerenderMath();
+        }
+        await this.plugin.saveSettings();
+        this.refresh();
+      })
+    );
+    new import_obsidian5.Setting(themeBody).setName("Auto-adapt for light / dark mode").setDesc("Adjust operator contrast (e.g. '=' and '\\cdot') so math never washes out on light backgrounds.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.autoLightDark).onChange(async (val) => {
+        this.plugin.settings.autoLightDark = val;
+        if (val) {
+          const light = isVaultLightMode();
+          this.plugin.settings.palette.relation = light ? "#1e293b" : "white";
+          this.plugin.settings.palette.dot = light ? "#334155" : "white";
+          this.plugin.settings.palette.spacing = light ? "#334155" : "white";
+          this.plugin.rerenderMath();
+        }
+        await this.plugin.saveSettings();
+        this.refresh();
       })
     );
     const rolesBody = this.createSubCollapsible(
@@ -45528,7 +45637,7 @@ var ColorMathSettingTab = class extends import_obsidian4.PluginSettingTab {
     );
     const roles = Object.keys(DEFAULT_COLORS);
     for (const role of roles) {
-      const setting = new import_obsidian4.Setting(rolesBody).setName(ROLE_DISPLAY_NAMES[role] || role.charAt(0).toUpperCase() + role.slice(1)).setDesc(COLOR_ROLE_DESCRIPTIONS[role] || role);
+      const setting = new import_obsidian5.Setting(rolesBody).setName(ROLE_DISPLAY_NAMES[role] || role.charAt(0).toUpperCase() + role.slice(1)).setDesc(COLOR_ROLE_DESCRIPTIONS[role] || role);
       const currentColor = this.plugin.settings.palette[role] || DEFAULT_COLORS[role];
       if (currentColor.startsWith("#")) {
         setting.addColorPicker((picker) => {
@@ -45563,7 +45672,7 @@ var ColorMathSettingTab = class extends import_obsidian4.PluginSettingTab {
     ];
     for (let i = 0; i < 4; i++) {
       const currentTierColor = this.plugin.settings.rainbowColors[i] || RAINBOW_DELIMITER_COLORS[i];
-      const setting = new import_obsidian4.Setting(tiersBody).setName(TIER_NAMES[i]).setDesc(`Color for delimiter nesting depth ${i}.`);
+      const setting = new import_obsidian5.Setting(tiersBody).setName(TIER_NAMES[i]).setDesc(`Color for delimiter nesting depth ${i}.`);
       if (currentTierColor.startsWith("#")) {
         setting.addColorPicker((picker) => {
           picker.setValue(currentTierColor).onChange(async (val) => {
@@ -45583,6 +45692,79 @@ var ColorMathSettingTab = class extends import_obsidian4.PluginSettingTab {
         });
       });
     }
+    new import_obsidian5.Setting(themeBody).setName("Restore default Tokyo Night palette").setDesc("Revert all colors back to our signature Tokyo Night palette.").addButton(
+      (button) => button.setButtonText("Restore Defaults").onClick(async () => {
+        this.plugin.settings.palette = { ...DEFAULT_COLORS };
+        this.plugin.settings.rainbowColors = [...RAINBOW_DELIMITER_COLORS];
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+        this.refresh();
+        new import_obsidian5.Notice("Color Math: Restored default Tokyo Night palette.");
+      })
+    );
+    const qolBody = this.createCollapsible(
+      containerEl,
+      "section-quality-of-life",
+      "\u{1F496} Life Quality & Typing Ergonomics",
+      true
+    );
+    const bracketsBody = this.createSubCollapsible(
+      qolBody,
+      "sub-qol-brackets",
+      "\u{1F4E6} Brackets & Delimiters",
+      true
+    );
+    new import_obsidian5.Setting(bracketsBody).setName("Rainbow delimiters").setDesc("Color nested parentheses, brackets, and braces recursively by depth to prevent delimiter blindness.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.rainbowDelimiters).onChange(async (val) => {
+        this.plugin.settings.rainbowDelimiters = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+        this.refresh();
+      })
+    );
+    if (this.plugin.settings.rainbowDelimiters) {
+      new import_obsidian5.Setting(bracketsBody).setClass("color-math-sub-setting").setName("Rainbow grouping braces ({})").setDesc("Include LaTeX grouping braces { and } in rainbow depth coloring in Live Preview.").addToggle(
+        (toggle) => toggle.setValue(this.plugin.settings.rainbowBareBraces).onChange(async (val) => {
+          this.plugin.settings.rainbowBareBraces = val;
+          await this.plugin.saveSettings();
+          this.plugin.rerenderMath();
+        })
+      );
+    }
+    new import_obsidian5.Setting(bracketsBody).setName("Highlight unmatched delimiters & braces").setDesc("Highlight unclosed { or stray } with a high-visibility warning in Live Preview to catch MathJax syntax errors while typing.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.highlightUnmatchedBraces).onChange(async (val) => {
+        this.plugin.settings.highlightUnmatchedBraces = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian5.Setting(bracketsBody).setName("Compiler crash immunity").setDesc("Automatically seal unclosed \\left delimiters with \\right. and unclosed { scopes with } at equation boundaries to prevent red MathJax syntax crash boxes while typing unfinished formulas.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.crashImmunityAutoSeal).onChange(async (val) => {
+        this.plugin.settings.crashImmunityAutoSeal = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian5.Setting(bracketsBody).setName("Auto-scaling delimiters (Typst style)").setDesc("Automatically scale balanced parentheses ( ... ), brackets [ ... ], and sets \\{ ... \\} with \\left and \\right when they enclose tall math structures like fractions, sums, integrals, and matrices.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.autoScaleDelimiters).onChange(async (val) => {
+        this.plugin.settings.autoScaleDelimiters = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    const matricesBody = this.createSubCollapsible(
+      qolBody,
+      "sub-qol-matrices",
+      "\u{1F4D0} Matrices & Layout Ergonomics",
+      true
+    );
+    new import_obsidian5.Setting(matricesBody).setName("Ergonomic matrix padding (&)").setDesc("Automatically adds extra & spacing before the first column and at the end of the last row in matrix environments (pmatrix, bmatrix, etc.) for comfortable typing breathing room.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.padMatrixPadding).onChange(async (val) => {
+        this.plugin.settings.padMatrixPadding = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
     const mathBody = this.createCollapsible(
       containerEl,
       "section-math-syntax",
@@ -45592,63 +45774,19 @@ var ColorMathSettingTab = class extends import_obsidian4.PluginSettingTab {
     const calculusBody = this.createSubCollapsible(
       mathBody,
       "sub-math-calculus",
-      "\u{1F4D0} Calculus & Differentials",
+      "\u{1F4D0} Calculus & Analysis",
       false
     );
-    new import_obsidian4.Setting(calculusBody).setName("Derivative fractions & partials").setDesc("Color derivative fractions (df/dx, \u2202\u03C8/\u2202t, \u2207) with the derivative role to protect 'd' from being mistaken for a variable.").addToggle(
+    new import_obsidian5.Setting(calculusBody).setName("Derivative fractions & partials").setDesc("Color derivative fractions (df/dx, \u2202\u03C8/\u2202t, \u2207) with the derivative role to protect 'd' from being mistaken for a variable.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.colorDerivativeFractions).onChange(async (val) => {
         this.plugin.settings.colorDerivativeFractions = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian4.Setting(calculusBody).setName("Infinitesimal differentials").setDesc("Highlight trailing differentials (dx, dt, d\u03B8) at the end of integrals and expressions.").addToggle(
+    new import_obsidian5.Setting(calculusBody).setName("Infinitesimal differentials").setDesc("Highlight trailing differentials (dx, dt, d\u03B8) at the end of integrals and expressions.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.colorInfinitesimals).onChange(async (val) => {
         this.plugin.settings.colorInfinitesimals = val;
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-      })
-    );
-    new import_obsidian4.Setting(calculusBody).setName("Enable quantum operators globally").setDesc("Always highlight quantum differential operators (Energy: i\u210F\u2202/\u2202t, Momentum: -i\u210F\u2207, Kinetic: -\u210F\xB2/2m \u2207\xB2) across all notes without requiring YAML frontmatter.").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.enableQuantumOperatorsGlobal).onChange(async (val) => {
-        this.plugin.settings.enableQuantumOperatorsGlobal = val;
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-      })
-    );
-    const delimitersBody = this.createSubCollapsible(
-      mathBody,
-      "sub-math-delimiters",
-      "\u{1F4E6} Delimiters & Brackets",
-      false
-    );
-    new import_obsidian4.Setting(delimitersBody).setName("Rainbow delimiters").setDesc("Color nested parentheses, brackets, and braces recursively by depth to prevent delimiter blindness.").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.rainbowDelimiters).onChange(async (val) => {
-        this.plugin.settings.rainbowDelimiters = val;
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-        this.display();
-      })
-    );
-    if (this.plugin.settings.rainbowDelimiters) {
-      new import_obsidian4.Setting(delimitersBody).setClass("color-math-sub-setting").setName("Rainbow grouping braces ({})").setDesc("Include LaTeX grouping braces { and } in rainbow depth coloring in Live Preview.").addToggle(
-        (toggle) => toggle.setValue(this.plugin.settings.rainbowBareBraces).onChange(async (val) => {
-          this.plugin.settings.rainbowBareBraces = val;
-          await this.plugin.saveSettings();
-          this.plugin.rerenderMath();
-        })
-      );
-    }
-    new import_obsidian4.Setting(delimitersBody).setName("Highlight unmatched delimiters & braces").setDesc("Highlight unclosed { or stray } with a high-visibility warning in Live Preview to catch MathJax syntax errors while typing.").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.highlightUnmatchedBraces).onChange(async (val) => {
-        this.plugin.settings.highlightUnmatchedBraces = val;
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-      })
-    );
-    new import_obsidian4.Setting(delimitersBody).setName("Quantum bra-ket notation").setDesc("Highlight Dirac bra-ket state vectors (|\u03C8\u27E9, \u27E8\u03D5|, \u27E8\u03D5|\u03C8\u27E9) with clean delimiter styling.").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.colorBraKet).onChange(async (val) => {
-        this.plugin.settings.colorBraKet = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
@@ -45659,37 +45797,37 @@ var ColorMathSettingTab = class extends import_obsidian4.PluginSettingTab {
       "\u{1F3F7}\uFE0F Symbol Taxonomy & Constants",
       false
     );
-    new import_obsidian4.Setting(taxonomyBody).setName("Mathematical symbol taxonomy").setDesc("Semantically categorize and color constants, standard functions, parameters, and bound indices.").addToggle(
+    new import_obsidian5.Setting(taxonomyBody).setName("Mathematical symbol taxonomy").setDesc("Semantically categorize and color constants, standard functions, parameters, and bound indices.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.enableTaxonomy).onChange(async (val) => {
         this.plugin.settings.enableTaxonomy = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
-        this.display();
+        this.refresh();
       })
     );
     if (this.plugin.settings.enableTaxonomy) {
-      new import_obsidian4.Setting(taxonomyBody).setClass("color-math-sub-setting").setName("Standard math functions").setDesc("Color sin, cos, ln, exp, and operator functions with the main role.").addToggle(
+      new import_obsidian5.Setting(taxonomyBody).setClass("color-math-sub-setting").setName("Standard math functions").setDesc("Color sin, cos, ln, exp, and operator functions with the main role.").addToggle(
         (toggle) => toggle.setValue(this.plugin.settings.taxonomyFunctions).onChange(async (val) => {
           this.plugin.settings.taxonomyFunctions = val;
           await this.plugin.saveSettings();
           this.plugin.rerenderMath();
         })
       );
-      new import_obsidian4.Setting(taxonomyBody).setClass("color-math-sub-setting").setName("Greek parameters & coefficients").setDesc("Color Greek angles and coefficients (\u03B1, \u03B2, \u03B8, \u03BB, \u03C9) with the parameter role.").addToggle(
+      new import_obsidian5.Setting(taxonomyBody).setClass("color-math-sub-setting").setName("Greek parameters & coefficients").setDesc("Color Greek angles and coefficients (\u03B1, \u03B2, \u03B8, \u03BB, \u03C9) with the parameter role.").addToggle(
         (toggle) => toggle.setValue(this.plugin.settings.taxonomyParameters).onChange(async (val) => {
           this.plugin.settings.taxonomyParameters = val;
           await this.plugin.saveSettings();
           this.plugin.rerenderMath();
         })
       );
-      new import_obsidian4.Setting(taxonomyBody).setClass("color-math-sub-setting").setName("Mathematical constants").setDesc("Color mathematical constants (\u03C0, \u210F, \u221E) with the orange role.").addToggle(
+      new import_obsidian5.Setting(taxonomyBody).setClass("color-math-sub-setting").setName("Mathematical constants").setDesc("Color mathematical constants (\u03C0, \u210F, \u221E) with the orange role.").addToggle(
         (toggle) => toggle.setValue(this.plugin.settings.taxonomyConstants).onChange(async (val) => {
           this.plugin.settings.taxonomyConstants = val;
           await this.plugin.saveSettings();
           this.plugin.rerenderMath();
         })
       );
-      new import_obsidian4.Setting(taxonomyBody).setClass("color-math-sub-setting").setName("Bound iteration indices").setDesc("Color summation/limit index variables (e.g. index i in \\sum_{i=1}^n or x in \\lim_{x\\to 0}) with the chain role.").addToggle(
+      new import_obsidian5.Setting(taxonomyBody).setClass("color-math-sub-setting").setName("Bound iteration indices").setDesc("Color summation/limit index variables (e.g. index i in \\sum_{i=1}^n or x in \\lim_{x\\to 0}) with the chain role.").addToggle(
         (toggle) => toggle.setValue(this.plugin.settings.taxonomyIndices).onChange(async (val) => {
           this.plugin.settings.taxonomyIndices = val;
           await this.plugin.saveSettings();
@@ -45697,7 +45835,7 @@ var ColorMathSettingTab = class extends import_obsidian4.PluginSettingTab {
         })
       );
     }
-    new import_obsidian4.Setting(taxonomyBody).setName("Euler's number (e) & Imaginary units (i, j)").setDesc("Intelligently recognize Euler's constant (e^x, e^{i\u03C0}) and imaginary numbers (i, j), while leaving indexed variables (e_1, x_i) distinct.").addToggle(
+    new import_obsidian5.Setting(taxonomyBody).setName("Euler's number (e) & Imaginary units (i, j)").setDesc("Intelligently recognize Euler's constant (e^x, e^{i\u03C0}) and imaginary numbers (i, j), while leaving indexed variables (e_1, x_i) distinct.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.colorSingleConstants).onChange(async (val) => {
         this.plugin.settings.colorSingleConstants = val;
         await this.plugin.saveSettings();
@@ -45706,32 +45844,52 @@ var ColorMathSettingTab = class extends import_obsidian4.PluginSettingTab {
     );
     const physicsBody = this.createSubCollapsible(
       mathBody,
-      "sub-math-physics",
-      "\u2699\uFE0F Physics, Engineering & Variables",
+      "sub-math-physics-quantum",
+      "\u269B\uFE0F Physics & Quantum Mechanics",
       false
     );
-    new import_obsidian4.Setting(physicsBody).setName("Color physical units").setDesc("Distinguish physical units and metric prefixes (e.g. \u03BCm, m/s, kg) from algebraic variables. Turn off to keep units in natural text color.").addToggle(
+    new import_obsidian5.Setting(physicsBody).setName("Enable quantum operators globally").setDesc("Always highlight quantum differential operators (Energy: i\u210F\u2202/\u2202t, Momentum: -i\u210F\u2207, Kinetic: -\u210F\xB2/2m \u2207\xB2) across all notes without requiring YAML frontmatter.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.enableQuantumOperatorsGlobal).onChange(async (val) => {
+        this.plugin.settings.enableQuantumOperatorsGlobal = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian5.Setting(physicsBody).setName("Quantum bra-ket notation").setDesc("Highlight Dirac bra-ket state vectors (|\u03C8\u27E9, \u27E8\u03D5|, \u27E8\u03D5|\u03C8\u27E9) with clean delimiter styling.").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.colorBraKet).onChange(async (val) => {
+        this.plugin.settings.colorBraKet = val;
+        await this.plugin.saveSettings();
+        this.plugin.rerenderMath();
+      })
+    );
+    new import_obsidian5.Setting(physicsBody).setName("Color physical units").setDesc("Distinguish physical units and metric prefixes (e.g. \u03BCm, m/s, kg) from algebraic variables. Turn off to keep units in natural text color.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.colorUnits).onChange(async (val) => {
         this.plugin.settings.colorUnits = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian4.Setting(physicsBody).setName("Engineering dimensionless numbers").setDesc("Recognize contiguous dimensionless numbers (Re, Ma, Pr, Nu) as unified coefficients. Separate letters like 'R e' remain separate variables.").addToggle(
+    new import_obsidian5.Setting(physicsBody).setName("Engineering dimensionless numbers").setDesc("Recognize contiguous dimensionless numbers (Re, Ma, Pr, Nu) as unified coefficients. Separate letters like 'R e' remain separate variables.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.colorDimensionless).onChange(async (val) => {
         this.plugin.settings.colorDimensionless = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian4.Setting(physicsBody).setName("Extended 2\u20133 letter functions").setDesc("Recognize shorthand 2\u20133 letter math functions (adj, var, cov, im, sp, div, rot, sh, ch) before parentheses.").addToggle(
+    const advancedBody = this.createSubCollapsible(
+      mathBody,
+      "sub-math-advanced",
+      "\u2699\uFE0F Advanced Functions & Data Flow",
+      false
+    );
+    new import_obsidian5.Setting(advancedBody).setName("Extended 2\u20133 letter functions").setDesc("Recognize shorthand 2\u20133 letter math functions (adj, var, cov, im, sp, div, rot, sh, ch) before parentheses.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.extendedFunctions).onChange(async (val) => {
         this.plugin.settings.extendedFunctions = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian4.Setting(physicsBody).setName("Variable data-flow hashing").setDesc("Deterministically assign a unique color to each variable in an expression to visually trace its flow.").addToggle(
+    new import_obsidian5.Setting(advancedBody).setName("Variable data-flow hashing").setDesc("Deterministically assign a unique color to each variable in an expression to visually trace its flow.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.variableDataFlow).onChange(async (val) => {
         this.plugin.settings.variableDataFlow = val;
         await this.plugin.saveSettings();
@@ -45744,31 +45902,31 @@ var ColorMathSettingTab = class extends import_obsidian4.PluginSettingTab {
       "\u{1F524} Unicode Math & Typography",
       false
     );
-    new import_obsidian4.Setting(unicodeBody).setName("Greek letter style").setDesc("Choose between Mathematical Italic (Plane 1, e.g. \u{1D74D}, \u{1D770}) and Standard Greek (e.g. \u03C8, \u03B1) when converting to Unicode.").addDropdown(
+    new import_obsidian5.Setting(unicodeBody).setName("Greek letter style").setDesc("Choose between Mathematical Italic (Plane 1, e.g. \u{1D74D}, \u{1D770}) and Standard Greek (e.g. \u03C8, \u03B1) when converting to Unicode.").addDropdown(
       (dropdown) => dropdown.addOption("plane1", "Mathematical Italic (Plane 1: \u{1D74D}, \u{1D770}) \u2014 Recommended for math").addOption("standard", "Standard Greek (\u03C8, \u03B1) \u2014 Standard Unicode alphabet").setValue(this.plugin.settings.greekStyle || "plane1").onChange(async (val) => {
         this.plugin.settings.greekStyle = val;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian4.Setting(unicodeBody).setName("Convert definite / bounded integrals").setDesc("Convert bounded integrals (e.g. \\int_a^b) to Unicode (\u222B_a^b). When OFF (recommended), bounded integrals remain LaTeX commands to preserve vertical limit placement in TeX engines.").addToggle(
+    new import_obsidian5.Setting(unicodeBody).setName("Convert definite / bounded integrals").setDesc("Convert bounded integrals (e.g. \\int_a^b) to Unicode (\u222B_a^b). When OFF (recommended), bounded integrals remain LaTeX commands to preserve vertical limit placement in TeX engines.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.convertDefiniteIntegrals).onChange(async (val) => {
         this.plugin.settings.convertDefiniteIntegrals = val;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian4.Setting(unicodeBody).setName("Convert bounded operators").setDesc("Convert bounded summation/product operators (e.g. \\sum_{i=1}^n) to Unicode (\u2211_{i=1}^n). When OFF (recommended), preserves LaTeX commands for proper displaystyle limits.").addToggle(
+    new import_obsidian5.Setting(unicodeBody).setName("Convert bounded operators").setDesc("Convert bounded summation/product operators (e.g. \\sum_{i=1}^n) to Unicode (\u2211_{i=1}^n). When OFF (recommended), preserves LaTeX commands for proper displaystyle limits.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.convertBoundedOperators).onChange(async (val) => {
         this.plugin.settings.convertBoundedOperators = val;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian4.Setting(unicodeBody).setName("Convert LaTeX in prose to Unicode").setDesc("Convert LaTeX math commands like \\psi to \u{1D713} in regular text outside math blocks and lines (default: OFF to protect prose). Code blocks and inline code are strictly protected.").addToggle(
+    new import_obsidian5.Setting(unicodeBody).setName("Convert LaTeX in prose to Unicode").setDesc("Convert LaTeX math commands like \\psi to \u{1D713} in regular text outside math blocks and lines when running the conversion command (Code blocks and inline code are strictly protected).").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.convertProseToUnicode).onChange(async (val) => {
         this.plugin.settings.convertProseToUnicode = val;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian4.Setting(unicodeBody).setName("Convert Unicode in prose to LaTeX").setDesc("Convert Unicode symbols like \u{1D74D} back to \\psi in regular text outside math blocks (default: OFF). When OFF, Unicode symbols in your notes prose are preserved.").addToggle(
+    new import_obsidian5.Setting(unicodeBody).setName("Convert Unicode in prose to LaTeX").setDesc("Convert Unicode symbols like \u{1D74D} back to \\psi in regular text outside math blocks when running the restore command (Code blocks and inline code are strictly protected).").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.convertProseToLatex).onChange(async (val) => {
         this.plugin.settings.convertProseToLatex = val;
         await this.plugin.saveSettings();
@@ -45777,71 +45935,50 @@ var ColorMathSettingTab = class extends import_obsidian4.PluginSettingTab {
     const domainBody = this.createCollapsible(
       containerEl,
       "section-domain-diagnostics",
-      "\u{1F6E0}\uFE0F Domain Presets & Diagnostics",
+      "\u{1F6E0}\uFE0F Diagnostics & Maintenance",
       false
     );
-    new import_obsidian4.Setting(domainBody).setName("Syntax error display mode").setDesc("Choose how to display errors when an equation has broken syntax.").addDropdown(
+    new import_obsidian5.Setting(domainBody).setName("Syntax error display mode").setDesc("Choose how to display errors when an equation has broken syntax.").addDropdown(
       (dropdown) => dropdown.addOption("inline", "Inline error message (e.g. \\text{LaTeX Error: ...})").addOption("fallback", "Render original formula (Silent & clean with hover tooltip)").addOption("notice", "Obsidian notice popup & original formula").addOption("native", "Native MathJax error box (Default MathJax behavior)").setValue(this.plugin.settings.errorDisplayMode || "inline").onChange(async (val) => {
         this.plugin.settings.errorDisplayMode = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian4.Setting(domainBody).setName("Restore all factory defaults").setDesc("Reset all plugin settings, Unicode conversion rules, and palette back to default.config.json.").addButton(
-      (button) => button.setButtonText("Reset to Factory Defaults").setWarning().onClick(async () => {
+    new import_obsidian5.Setting(domainBody).setName("Restore all factory defaults").setDesc("Reset all plugin settings, Unicode conversion rules, and palette back to default.config.json.").addButton(
+      (button) => button.setButtonText("Reset to Factory Defaults").setDestructive().onClick(async () => {
         await this.plugin.resetSettingsToDefaults();
-        this.display();
+        this.refresh();
       })
     );
     const previewBody = this.createCollapsible(
       containerEl,
       "section-feature-previews",
-      "\u{1F9EA} Feature Previews",
+      "\u{1F9EA} Feature Previews & Experimental",
       false
     );
-    new import_obsidian4.Setting(previewBody).setName("LaTeX syntax auto-normalization").setDesc("Pre-process and normalize unbraced macro arguments (e.g. \\frac a b \u2192 \\frac{a}{b}, \\frac \\vec F b \u2192 \\frac{\\vec F}{b}, x^2 \u2192 x^{2}) before coloring to prevent LaTeX syntax errors from casual or unbraced notation.").addToggle(
+    new import_obsidian5.Setting(previewBody).setName("LaTeX syntax auto-normalization").setDesc("Pre-process and normalize unbraced macro arguments (e.g. \\frac a b \u2192 \\frac{a}{b}, \\frac \\vec F b \u2192 \\frac{\\vec F}{b}, x^2 \u2192 x^{2}) before coloring to prevent LaTeX syntax errors from casual or unbraced notation.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.previewLatexNormalization).onChange(async (val) => {
         this.plugin.settings.previewLatexNormalization = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian4.Setting(previewBody).setName("Auto-scaling delimiters (Typst style)").setDesc("Automatically scale balanced parentheses ( ... ), brackets [ ... ], and sets \\{ ... \\} with \\left and \\right when they enclose tall math structures like fractions, sums, integrals, and matrices.").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.autoScaleDelimiters).onChange(async (val) => {
-        this.plugin.settings.autoScaleDelimiters = val;
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-      })
-    );
-    new import_obsidian4.Setting(previewBody).setName("Compiler crash immunity").setDesc("Automatically seal unclosed \\left delimiters with \\right. and unclosed { scopes with } at equation boundaries to prevent red MathJax syntax crash boxes while typing unfinished formulas.").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.crashImmunityAutoSeal).onChange(async (val) => {
-        this.plugin.settings.crashImmunityAutoSeal = val;
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-      })
-    );
-    new import_obsidian4.Setting(previewBody).setName("Require braces for infix slash division").setDesc("When enabled, infix slash division requires grouped braces {a} / {b}. When disabled, raw whitespace-bounded numbers like 12 / 3 are also converted to vertical fractions.").addToggle(
+    new import_obsidian5.Setting(previewBody).setName("Require braces for infix slash division").setDesc("When enabled, infix slash division requires grouped braces {a} / {b}. When disabled, raw whitespace-bounded numbers like 12 / 3 are also converted to vertical fractions.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.requireBracesForSlashDivision).onChange(async (val) => {
         this.plugin.settings.requireBracesForSlashDivision = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian4.Setting(previewBody).setName("Ergonomic matrix padding (&)").setDesc("Automatically adds extra & spacing before the first column and at the end of the last row in matrix environments (pmatrix, bmatrix, etc.) for comfortable typing breathing room.").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.padMatrixPadding).onChange(async (val) => {
-        this.plugin.settings.padMatrixPadding = val;
-        await this.plugin.saveSettings();
-        this.plugin.rerenderMath();
-      })
-    );
-    new import_obsidian4.Setting(previewBody).setName("Default mathematical mode").setDesc("Select the global mathematical discipline mode. Notes without specific tags or frontmatter properties will use this mode.").addDropdown(
+    new import_obsidian5.Setting(previewBody).setName("Default mathematical mode").setDesc("Select the global mathematical discipline mode. Notes without specific tags or frontmatter properties will use this mode.").addDropdown(
       (dropdown) => dropdown.addOption("analysis", "\u{1F4D0} Analysis & Calculus (Super-Family)").addOption("pde", "\u{1F30A} Fields & PDEs (Super-Family)").addOption("dynamics", "\u23F1\uFE0F Dynamics & Optimization (Super-Family)").addOption("geometry", "\u{1F310} Geometry & Tensors (Super-Family)").addOption("algebra", "\u{1F523} Algebra & Discrete (Super-Family)").addOption("quantum_stochastic", "\u269B\uFE0F Quantum & Stochastics (Super-Family)").addOption("calculus", "\u2014 Classical Calculus & Real Analysis").addOption("complex", "\u2014 Complex Analysis & Residues").addOption("pde_transport", "\u2014 Transport & Fluid PDEs").addOption("continuum", "\u2014 Continuum & Wave Mechanics").addOption("ode_dynamics", "\u2014 Dynamical Systems & State-Space ODEs").addOption("optimization", "\u2014 Optimization & Variational Calculus").addOption("geometry_tensors", "\u2014 Differential Geometry & Tensors").addOption("topology", "\u2014 Topology & Invariants").addOption("linear_algebra", "\u2014 Linear Algebra & Matrix Theory").addOption("abstract_algebra", "\u2014 Abstract Algebra & Category Theory").addOption("number_theory", "\u2014 Discrete Math & Number Theory").addOption("logic_sets", "\u2014 Logic & Set Theory").addOption("quantum", "\u2014 Quantum Mechanics & Information").addOption("probability", "\u2014 Probability & Statistics").addOption("stochastic", "\u2014 Stochastic Calculus (It\xF4 / Finance)").setValue(this.plugin.settings.defaultMode || "analysis").onChange(async (val) => {
         this.plugin.settings.defaultMode = val;
         await this.plugin.saveSettings();
         this.plugin.rerenderMath();
       })
     );
-    new import_obsidian4.Setting(previewBody).setName("Auto-detect note mode from tags & YAML").setDesc("Automatically switch mathematical mode per note when native tags (e.g. #pde, #geometry, #ode, #quantum, #stochastic) or metadata (topic, subject, field, category) are present.").addToggle(
+    new import_obsidian5.Setting(previewBody).setName("Auto-detect note mode from tags & YAML").setDesc("Automatically switch mathematical mode per note when native tags (e.g. #pde, #geometry, #ode, #quantum, #stochastic) or metadata (topic, subject, field, category) are present.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.autoDetectNoteMode !== false).onChange(async (val) => {
         this.plugin.settings.autoDetectNoteMode = val;
         await this.plugin.saveSettings();

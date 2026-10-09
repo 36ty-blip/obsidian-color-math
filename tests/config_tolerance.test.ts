@@ -25,7 +25,7 @@ describe("Configuration & Fault Tolerance Tests", () => {
     expect(parsed.convertDefiniteIntegrals).toBe(false);
     expect(parsed.convertBoundedOperators).toBe(false);
     expect(parsed.greekStyle).toBe("plane1");
-    expect(parsed.convertProseToUnicode).toBe(false);
+    expect(parsed.convertProseToUnicode).toBe(true);
     expect(parsed.convertProseToLatex).toBe(false);
   });
 
@@ -57,7 +57,7 @@ describe("Configuration & Fault Tolerance Tests", () => {
     // All omitted keys safely retain default values
     expect(merged.palette.orange).toBe(defaultConfig.palette.orange);
     expect(merged.liveRendering).toBe(true);
-    expect(merged.convertProseToUnicode).toBe(false);
+    expect(merged.convertProseToUnicode).toBe(true);
     expect(merged.convertProseToLatex).toBe(false);
   });
 });

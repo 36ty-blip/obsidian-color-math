@@ -173,7 +173,7 @@ export function findUnitSpans(body: string, options?: UnitOptions): UnitSpan[] {
 
     // Case C: Raw unit token
     // Must start with a letter or unit symbol
-    const tokenMatch = /^[A-Za-z°℃%ΩμÅ](?:[A-Za-z°℃%ΩμÅ0-9\-\^/{}])*/.exec(candidateRest);
+    const tokenMatch = /^[A-Za-z°℃%ΩμÅ](?:[A-Za-z°℃%ΩμÅ0-9\-^/{}])*/.exec(candidateRest);
     if (!tokenMatch) continue;
 
     let candidate = tokenMatch[0];

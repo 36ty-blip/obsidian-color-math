@@ -2,7 +2,7 @@
 //! Tree-sitter style priority-cascade span collector for CST nodes.
 //! Traverses CST, queries 14 discipline rules, and emits atomic non-overlapping ColorSpans.
 
-import { CSTNode, CSTCollectorOptions, GroupNode, ScriptNode, FractionNode } from "./types";
+import { CSTNode, CSTCollectorOptions } from "./types";
 import { ColorSpan } from "../../utils/spans";
 import { RAINBOW_DELIMITER_COLORS } from "../../config";
 

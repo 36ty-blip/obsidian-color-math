@@ -1510,34 +1510,6 @@ export function normalizeBareFunctions(source: string): string {
   return result;
 }
 
-const TALL_MATH_PATTERN =
-  /\\(?:frac|dfrac|tfrac|cfrac|binom|dbinom|tbinom|sum|prod|coprod|bigcup|bigcap|bigsqcup|bigvee|bigwedge|bigoplus|bigotimes|int|iint|iiint|oint|smallint|stackrel|overset|underset|atop|sqrt)(?![A-Za-z])|\\begin\s*\{(?:matrix|pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix|aligned|cases|array|split|gather)\}/;
-
-function isTallMath(inner: string): boolean {
-  if (TALL_MATH_PATTERN.test(inner)) return true;
-  let i = 0;
-  while (i < inner.length) {
-    if (inner[i] === "\\") {
-      const cmd = matchCommand(inner, i);
-      if (cmd) {
-        const entry = lookupCatalog(cmd);
-        if (
-          entry &&
-          (entry.role === "bigop" ||
-            (entry.role === "operator" &&
-              /^\\(?:big|int|iint|iiint|iiiint|idotsint|oint|smallint|coprod|prod|sum)/.test(cmd)))
-        ) {
-          return true;
-        }
-        i += cmd.length;
-        continue;
-      }
-    }
-    i++;
-  }
-  return false;
-}
-
 export function estimateMathHeight(expr: string): number {
   const trimmed = expr.trim();
   if (!trimmed) return 1.0;
@@ -1614,14 +1586,6 @@ export function estimateMathHeight(expr: string): number {
   }
 
   return 1.0;
-}
-
-function getDelimSizingLevel(inner: string): "Big" | "bigg" | "Bigg" | null {
-  const height = estimateMathHeight(inner);
-  if (height >= 3.4) return "Bigg"; // Level 4 (>= 3.4 lines, +50% over standard fraction)
-  if (height >= 2.5) return "bigg"; // Level 3 (~2.5 lines)
-  if (height >= 1.8) return "Big";  // Level 2 (~1.8 lines)
-  return null;
 }
 
 function isDelimSized(source: string, index: number, isClosing: boolean): boolean {
@@ -2468,7 +2432,7 @@ export function normalizeTypstArrows(source: string): string {
 export function padMatrixEnvironment(source: string): string {
   return source.replace(
     /\\begin\s*\{((?:p|b|B|v|V|small)?matrix)\}([\s\S]*?)\\end\s*\{\1\}/g,
-    (match, envName, inner) => {
+    (match: string, envName: string, inner: string) => {
       const rowRegex = /\\\\(?:\[[^\]]*\])?/g;
       let m: RegExpExecArray | null;
       let lastIndex = 0;
@@ -2530,28 +2494,43 @@ export function normalizeMathSyntax(
   source: string,
   options?: ColorMathOptions
 ): string {
-  let text = source.replace(/[\u200B-\u200D\uFEFF]/g, "");
-  text = text.replace(/([A-Za-z])\u0302/g, "\\hat{$1}");
-  text = text.replace(/([A-Za-z])\u0304/g, "\\bar{$1}");
-  text = text.replace(/([A-Za-z])\u0307/g, "\\dot{$1}");
-  text = text.replace(/([A-Za-z])\u0308/g, "\\ddot{$1}");
-  text = text.replace(/([A-Za-z])\u0303/g, "\\tilde{$1}");
-  text = text.replace(/([A-Za-z])\u20D7/g, "\\vec{$1}");
-  text = text.replace(/([A-Za-z])\u030C/g, "\\check{$1}");
-  text = normalizeQuotedStrings(text);
-  text = normalizeTypstFontShortcuts(text);
-  text = normalizeTypstArrows(text);
-  text = normalizeInfixDivision(text, options?.requireBracesForSlashDivision);
-  text = normalizeBareGreekInMath(text);
-  text = normalizeBareFunctions(text);
-  if (options?.autoScaleDelimiters !== false) {
+  let text = source;
+  if (/[\u200B-\u200D\uFEFF]/.test(text)) {
+    text = text.replace(/[\u200B-\u200D\uFEFF]/g, "");
+  }
+  if (/[\u0300-\u036F\u20D0-\u20FF]/.test(text)) {
+    text = text.replace(/([A-Za-z])\u0302/g, "\\hat{$1}");
+    text = text.replace(/([A-Za-z])\u0304/g, "\\bar{$1}");
+    text = text.replace(/([A-Za-z])\u0307/g, "\\dot{$1}");
+    text = text.replace(/([A-Za-z])\u0308/g, "\\ddot{$1}");
+    text = text.replace(/([A-Za-z])\u0303/g, "\\tilde{$1}");
+    text = text.replace(/([A-Za-z])\u20D7/g, "\\vec{$1}");
+    text = text.replace(/([A-Za-z])\u030C/g, "\\check{$1}");
+  }
+  if (text.includes('"')) {
+    text = normalizeQuotedStrings(text);
+  }
+  if (/\b(?:bb|cal|bold|frak|scr)\s*\(/.test(text)) {
+    text = normalizeTypstFontShortcuts(text);
+  }
+  if (text.includes("-") || text.includes("=")) {
+    text = normalizeTypstArrows(text);
+  }
+  if (text.includes("/")) {
+    text = normalizeInfixDivision(text, options?.requireBracesForSlashDivision);
+  }
+  if (/[a-zA-Z]/.test(text)) {
+    text = normalizeBareGreekInMath(text);
+    text = normalizeBareFunctions(text);
+  }
+  if (options?.autoScaleDelimiters !== false && (text.includes("(") || text.includes("[") || text.includes("|"))) {
     text = normalizeAutoScaledDelimiters(text);
   }
   text = normalizeLatexBraces(text);
-  if (options?.padMatrixPadding === true) {
+  if (options?.padMatrixPadding === true && text.includes("\\begin") && text.includes("matrix")) {
     text = padMatrixEnvironment(text);
   }
-  if (options?.colorUnits === true) {
+  if (options?.colorUnits === true && /\d/.test(text)) {
     text = normalizePhysicalUnitSpacing(text, options);
   }
   if (options?.crashImmunityAutoSeal !== false) {

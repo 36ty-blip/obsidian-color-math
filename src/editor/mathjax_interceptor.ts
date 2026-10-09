@@ -41,6 +41,7 @@ export class MathJaxInterceptor {
   private getOptions: () => ColorMathOptions;
   private isEnabled: () => boolean;
   private getErrorMode: () => ErrorDisplayMode;
+  private isSourceMode?: () => boolean;
   private lastNoticeTime: number = 0;
   private renderCache = new Map<string, HTMLElement | SVGElement>();
   private maxCacheEntries: number = 500;
@@ -58,23 +59,23 @@ export class MathJaxInterceptor {
   private getCachedElement<T extends HTMLElement | SVGElement>(hash: string): T | null {
     const cached = this.renderCache.get(hash);
     if (!cached) return null;
-    if (typeof (cached as any).cloneNode === "function") {
-      return (cached as any).cloneNode(true) as T;
+    if ("cloneNode" in cached && typeof cached.cloneNode === "function") {
+      return cached.cloneNode(true) as T;
     }
     return cached as T;
   }
 
   private cacheElement<T extends HTMLElement | SVGElement>(hash: string, el: T): void {
     if (!el) return;
-    if (typeof (el as any).setAttribute === "function") {
-      (el as any).setAttribute("data-math-hash", hash);
+    if ("setAttribute" in el && typeof el.setAttribute === "function") {
+      el.setAttribute("data-math-hash", hash);
     }
     if (this.renderCache.size >= this.maxCacheEntries) {
       const firstKey = this.renderCache.keys().next().value;
       if (firstKey) this.renderCache.delete(firstKey);
     }
-    if (typeof (el as any).cloneNode === "function") {
-      this.renderCache.set(hash, (el as any).cloneNode(true));
+    if ("cloneNode" in el && typeof el.cloneNode === "function") {
+      this.renderCache.set(hash, el.cloneNode(true) as HTMLElement | SVGElement);
     } else {
       this.renderCache.set(hash, el);
     }
@@ -84,12 +85,14 @@ export class MathJaxInterceptor {
     getPalette: () => ColorPalette,
     getOptions: () => ColorMathOptions,
     isEnabled: () => boolean = () => true,
-    getErrorMode: () => ErrorDisplayMode = () => "inline"
+    getErrorMode: () => ErrorDisplayMode = () => "inline",
+    isSourceMode?: () => boolean
   ) {
     this.getPalette = getPalette;
     this.getOptions = getOptions;
     this.isEnabled = isEnabled;
     this.getErrorMode = getErrorMode;
+    this.isSourceMode = isSourceMode;
   }
 
   private notifyUserError(errorMsg: string): void {
@@ -127,6 +130,7 @@ export class MathJaxInterceptor {
 
     const transform = (latex: string): string => {
       if (!this.isEnabled()) return latex;
+      if (this.isSourceMode && this.isSourceMode()) return latex;
       try {
         const opts = this.getOptions();
         const effectiveOpts = {

@@ -43,7 +43,6 @@ export interface CatalogMatch {
 }
 
 const N = 6911;
-const M = 4096;
 const MASK = 4095;
 
 // 32-bit FNV-1a hash

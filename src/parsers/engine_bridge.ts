@@ -1,5 +1,4 @@
-import { ColorPalette, ColorMathOptions, COLORS, RAINBOW_DELIMITER_COLORS } from "../config";
-import type { DelimiterCollectorOptions } from "./delimiters";
+import { ColorPalette, ColorMathOptions, COLORS } from "../config";
 import { ColorSpan, selectColorSpans } from "../utils/spans";
 import { LruCache } from "../utils/lru_cache";
 import { parseMathWithCST } from "./cst/index";
@@ -31,13 +30,18 @@ export function decodeBase64(base64: string): Uint8Array {
   return bytes;
 }
 
+interface StringWithWellFormed {
+  toWellFormed?: () => string;
+}
+
 /**
  * Ensures strings are valid UTF-16 with no orphaned surrogates
  * before crossing the WebAssembly bridge into Rust.
  */
 export function sanitizeToWellFormed(str: string): string {
-  if (typeof (str as any).toWellFormed === "function") {
-    return (str as any).toWellFormed();
+  const candidate = str as unknown as StringWithWellFormed;
+  if (typeof candidate.toWellFormed === "function") {
+    return candidate.toWellFormed();
   }
   return str.replace(
     /(?:[\uD800-\uDBFF](?![\uDC00-\uDFFF]))|(?:[^\uD800-\uDBFF]|^)([\uDC00-\uDFFF])/g,
@@ -94,7 +98,9 @@ export function notifyDelimiterParsed(): void {
   for (const cb of parseListeners) {
     try {
       cb();
-    } catch {}
+    } catch {
+      // Ignore listener execution errors
+    }
   }
 }
 

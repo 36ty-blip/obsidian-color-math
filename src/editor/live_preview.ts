@@ -8,7 +8,8 @@ import {
   ViewPlugin,
   ViewUpdate,
 } from "@codemirror/view";
-import { ColorPalette, ColorMathOptions, getBareFunctions } from "../config";
+import { editorLivePreviewField } from "obsidian";
+import { ColorPalette, ColorMathOptions } from "../config";
 import { computeSemanticMathSpans } from "../converters/generic";
 import { scanMarkdown } from "../parsers/markdown_scanner";
 import { containsColorWrapper } from "../utils/latex_helpers";
@@ -91,7 +92,7 @@ export function createColorMathLivePlugin(
         if (update.docChanged) {
           this.decorations = this.decorations.map(update.changes);
         }
-        if (update.docChanged || update.viewportChanged) {
+        if (update.docChanged || update.viewportChanged || update.selectionSet) {
           this.decorations = this.buildDecorations(update.view);
         }
       }
@@ -106,7 +107,14 @@ export function createColorMathLivePlugin(
           const doc = view.state.doc;
           const palette = getPalette();
           const options = getOptions ? getOptions() : undefined;
-          const bareFunctions = getBareFunctions(options);
+
+          const isLivePreview = (() => {
+            try {
+              return typeof editorLivePreviewField !== "undefined" && Boolean(view.state.field(editorLivePreviewField, false));
+            } catch {
+              return false;
+            }
+          })();
 
           // When document is larger than 1 screen and visible ranges exist,
           // use velocity-adaptive overscanning with airtight delimiter/fence expansion
@@ -156,20 +164,60 @@ export function createColorMathLivePlugin(
           const mathInlines = options?.highlightInlineMath !== false ? scan.mathInlines : [];
           const allMath = [...mathBlocks, ...mathInlines].sort((a, b) => a.start - b.start);
 
+          const visibleMath: typeof allMath = [];
+          for (const block of allMath) {
+            const blockStart = offset + block.start;
+            const blockEnd = offset + block.end;
+            const isVisible =
+              view.visibleRanges.length === 0 ||
+              view.visibleRanges.some(
+                (r) => Math.max(r.from, blockStart) <= Math.min(r.to, blockEnd)
+              );
+            if (isVisible) {
+              visibleMath.push(block);
+            }
+          }
+
+          let targetMath: typeof allMath = visibleMath;
+          if (isLivePreview && visibleMath.length > 3) {
+            const cursor = view.state.selection.main.head;
+            let activeVisibleIdx = -1;
+            for (let i = 0; i < visibleMath.length; i++) {
+              const bStart = offset + visibleMath[i].start;
+              const bEnd = offset + visibleMath[i].end;
+              if (cursor >= bStart && cursor <= bEnd) {
+                activeVisibleIdx = i;
+                break;
+              }
+            }
+
+            if (activeVisibleIdx !== -1) {
+              const startIdx = Math.max(0, activeVisibleIdx - 1);
+              const endIdx = Math.min(visibleMath.length, activeVisibleIdx + 2);
+              targetMath = visibleMath.slice(startIdx, endIdx);
+            } else {
+              let closestIdx = 0;
+              let minDistance = Infinity;
+              for (let i = 0; i < visibleMath.length; i++) {
+                const bCenter = offset + (visibleMath[i].start + visibleMath[i].end) / 2;
+                const dist = Math.abs(cursor - bCenter);
+                if (dist < minDistance) {
+                  minDistance = dist;
+                  closestIdx = i;
+                }
+              }
+              const startIdx = Math.max(0, closestIdx - 1);
+              const endIdx = Math.min(visibleMath.length, closestIdx + 2);
+              targetMath = visibleMath.slice(startIdx, endIdx);
+            }
+          }
+
           const pendingDecorations: { from: number; to: number; decoration: Decoration }[] = [];
 
-          for (const block of allMath) {
+          for (const block of targetMath) {
             try {
               const blockStart = offset + block.contentStart;
               const blockEnd = offset + block.contentEnd;
-
-              // Check if block intersects any visible range
-              const isVisible =
-                view.visibleRanges.length === 0 ||
-                view.visibleRanges.some(
-                  (r) => Math.max(r.from, blockStart) <= Math.min(r.to, blockEnd)
-                );
-              if (!isVisible) continue;
 
               const body = text.slice(block.contentStart, block.contentEnd);
               if (containsColorWrapper(body)) continue;

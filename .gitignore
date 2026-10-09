@@ -15,3 +15,5 @@ tests/corpus/
 benchmark_results.json
 reports/
 CHECKPOINT.md
+*_old.md
+tests/test_scratch*.ts

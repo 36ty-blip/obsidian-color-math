@@ -26,6 +26,9 @@ const context = await esbuild.context({
 	logLevel: "info",
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
+	define: {
+		"import.meta.url": '""',
+	},
 	outfile: "main.js",
 });
 

@@ -14,7 +14,7 @@ import { collectDomainOperatorSpans, generateModeAwareDerivativeSpans } from "..
 import { collectUnitSpans, findUnitSpans } from "../parsers/units";
 import { collectVariableSpans } from "../parsers/variable_hash";
 import { parseMathWithCST } from "../parsers/cst/index";
-import { containsColorWrapper, normalizeLatexBraces, normalizeMathSyntax, autoSealUnclosedDelimiters } from "../utils/latex_helpers";
+import { containsColorWrapper, normalizeMathSyntax, autoSealUnclosedDelimiters } from "../utils/latex_helpers";
 import { ColorSpan, applyColorSpans } from "../utils/spans";
 import { uncolorFragment } from "../undo";
 import { LruCache } from "../utils/lru_cache";

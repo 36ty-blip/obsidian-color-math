@@ -10,9 +10,6 @@ import {
   ScriptNode,
   IdentifierNode,
   OperatorNode,
-  NumberNode,
-  PunctuationNode,
-  CommentNode,
 } from "./types";
 import { DelimiterStack } from "./stack";
 import {
@@ -27,10 +24,7 @@ import {
   CHAR_CARET,
   CHAR_PERCENT,
   CHAR_PRIME,
-  GREEK_COMMANDS,
   isGreekCommand,
-  isQuantifier,
-  isSubgroupOrMorphism,
   OPTIONAL_BRACKET_COMMANDS,
   COMMON_DIMENSIONLESS_SET,
   TENSOR_BASE_SYMBOLS,
@@ -1229,7 +1223,7 @@ export class MathCSTParser {
         isQuantumCommutator = true;
       }
     } else if (openChar === "(" && children.length === 1 && children[0].kind === "fraction") {
-      const f = children[0] as FractionNode;
+      const f = children[0];
       if (f.isLegendreCandidate) {
         f.isLegendreSymbol = true;
         isLegendreSymbol = true;
@@ -1341,7 +1335,7 @@ export class MathCSTParser {
     }
 
     // 3. p-Adic Norm: |x|_p, |x+y|_p
-    const padicMatch = rest.match(/^\|([a-zA-Z0-9+\-]+?)\|_p/);
+    const padicMatch = rest.match(/^\|([a-zA-Z0-9+-]+?)\|_p/);
     if (padicMatch) {
       this.index++; // skip '|'
       const openEnd = this.index;
@@ -1373,7 +1367,7 @@ export class MathCSTParser {
     const prev = prevNodes.length > 0 ? prevNodes[prevNodes.length - 1] : undefined;
     const isProb =
       this.inProbabilityContext ||
-      (prev && "isProbabilityOperator" in prev && (prev as any).isProbabilityOperator);
+      (prev !== undefined && prev.kind === "command" && Boolean(prev.isProbabilityOperator));
     if (isProb) {
       return {
         kind: "operator",
@@ -1451,7 +1445,7 @@ export class MathCSTParser {
         this.index += 2;
       }
       closeEnd = this.index;
-      closeText = isInterfaceAverage ? "\\}\\\}" : "\\}";
+      closeText = isInterfaceAverage ? "\\}\\}" : "\\}";
     }
 
     // 6.1 Quantum Anticommutator: \{\hat{A}, \hat{B}\} vs 3.1 Symplectic Poisson Bracket: \{q_i, H\}
@@ -1753,7 +1747,7 @@ export class MathCSTParser {
         isMatrixDeterminant = true;
       }
     } else if (openText.includes("(") && closeText?.includes(")") && children.length === 1 && children[0].kind === "fraction") {
-      const f = children[0] as FractionNode;
+      const f = children[0];
       if (f.isLegendreCandidate) {
         f.isLegendreSymbol = true;
         isLegendreSymbol = true;
@@ -1815,10 +1809,12 @@ export class MathCSTParser {
     let innerText: string;
     if (arg.length === 1) {
       const a0 = arg[0];
-      if ("text" in a0 && typeof (a0 as any).text === "string") {
-        innerText = (a0 as any).text;
-      } else if ("name" in a0 && typeof (a0 as any).name === "string") {
-        innerText = (a0 as any).name;
+      if (a0.kind === "identifier" || a0.kind === "operator") {
+        innerText = a0.text;
+      } else if (a0.kind === "command") {
+        innerText = a0.name;
+      } else if (a0.kind === "number") {
+        innerText = a0.value;
       } else {
         innerText = this.nodesToRawText(arg).trim();
       }
@@ -1828,7 +1824,14 @@ export class MathCSTParser {
       innerText = this.nodesToRawText(arg).trim();
     }
 
-    const prevText = prevNode && "text" in prevNode ? (prevNode as any).text : prevNode && "name" in prevNode ? (prevNode as any).name : "";
+    const prevText =
+      prevNode?.kind === "identifier" || prevNode?.kind === "operator"
+        ? prevNode.text
+        : prevNode?.kind === "command"
+        ? prevNode.name
+        : prevNode?.kind === "number"
+        ? prevNode.value
+        : "";
 
     let isHigherOrderDerivative = false;
     let isConjugate = false;
@@ -1854,7 +1857,7 @@ export class MathCSTParser {
       // 1.1 Higher-order derivative detection: f^{(3)}(x), f^{(n)}(x), f'''(x) vs (x)^3
       if (isFunctionBase) {
         if (arg.length === 1 && arg[0].kind === "group") {
-          const g = arg[0] as GroupNode;
+          const g = arg[0];
           if (g.delimType === "paren" && g.children.length >= 1) {
             const parenInner = this.nodesToRawText(g.children).trim();
             if (HIGHER_ORDER_DERIV_PATTERN.test(parenInner)) {
@@ -1924,10 +1927,10 @@ export class MathCSTParser {
       // 6.1 Pauli Spin Matrices: \sigma_x, \sigma_y, \sigma_z, \sigma_1, \sigma_2, \sigma_3
       if ((prevText === "\\sigma" || prevText === "\\boldsymbol{\\sigma}") && PAULI_INDICES.has(innerText)) {
         isPauliMatrix = true;
-      } else if (prevNode && prevNode.kind === "group" && (prevNode as GroupNode).isStochasticVariation) {
+      } else if (prevNode && prevNode.kind === "group" && prevNode.isStochasticVariation) {
         // 6.3 Stochastic Quadratic Variation subscript: [X]_t, \langle M \rangle_t
         isStochasticVariation = true;
-      } else if (prevNode && "isChainBoundary" in prevNode && (prevNode as any).isChainBoundary) {
+      } else if (prevNode && prevNode.kind === "command" && prevNode.isChainBoundary) {
         // 4.2 Nilpotent chain boundary subscript: \partial_n, \partial_{n+1}
         isChainBoundary = true;
       } else if (innerText.includes(";")) {
@@ -2107,7 +2110,7 @@ export class MathCSTParser {
         } else if (child.kind === "script") {
           child.isSingularityPole = true;
           if (child.base && child.base.kind === "identifier") {
-            (child.base as IdentifierNode).isSingularityPole = true;
+            child.base.isSingularityPole = true;
           }
         }
       }

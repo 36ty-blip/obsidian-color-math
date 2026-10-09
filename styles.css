@@ -90,9 +90,10 @@
 }
 
 /* Indented sub-setting for hierarchical toggles */
-.color-math-sub-setting {
-  margin-left: 18px !important;
-  padding-left: 14px !important;
+.color-math-collapsible-body .setting-item.color-math-sub-setting,
+.setting-item.color-math-sub-setting {
+  margin-left: 18px;
+  padding-left: 14px;
   border-left: 2px solid var(--background-modifier-border);
 }
 
@@ -152,21 +153,40 @@
 }
 
 /* High-visibility warning for unmatched or unclosed delimiters and braces */
+.cm-editor .cm-line span.color-math-unmatched-delimiter,
+span.color-math-unmatched-delimiter,
 .color-math-unmatched-delimiter {
-  color: #f7768e !important;
-  font-weight: 700 !important;
-  text-decoration: underline wavy #f7768e !important;
-  background-color: rgba(247, 118, 142, 0.18) !important;
-  border-radius: 2px !important;
+  color: #f7768e;
+  font-weight: 700;
+  text-decoration: underline wavy #f7768e;
+  background-color: rgba(247, 118, 142, 0.18);
+  border-radius: 2px;
 }
 
 /* Typst-style string literals in math ("...") */
+.cm-editor .cm-line span.color-math-string-literal,
+span.color-math-string-literal,
 .color-math-string-literal {
-  font-style: normal !important;
+  font-style: normal;
   letter-spacing: 0.02em;
 }
 
 /* Matrix cell spacing and breathing room */
+.markdown-rendered .math.math-block .matrix,
+.markdown-rendered .math.math-block .pmatrix,
+.markdown-rendered .math.math-block .bmatrix,
+.markdown-rendered .math.math-block .Bmatrix,
+.markdown-rendered .math.math-block .vmatrix,
+.markdown-rendered .math.math-block .Vmatrix,
+.markdown-rendered .math.math-inline .matrix,
+.markdown-rendered .math.math-inline .pmatrix,
+.markdown-rendered .math.math-inline .bmatrix,
+.markdown-rendered .math.math-inline .Bmatrix,
+.markdown-rendered .math.math-inline .vmatrix,
+.markdown-rendered .math.math-inline .Vmatrix,
+.markdown-rendered .MathJax .mjx-matrix,
+.markdown-rendered [class*="mjx-container"] .mjx-matrix,
+.markdown-rendered .katex .matrix,
 .math.math-block .matrix,
 .math.math-block .pmatrix,
 .math.math-block .bmatrix,
@@ -179,17 +199,24 @@
 .math.math-inline .Bmatrix,
 .math.math-inline .vmatrix,
 .math.math-inline .Vmatrix,
-mjx-container .mjx-matrix,
+.MathJax .mjx-matrix,
+[class*="mjx-container"] .mjx-matrix,
 .katex .matrix {
-  margin-left: 0.25em !important;
-  margin-right: 0.25em !important;
+  margin-left: 0.25em;
+  margin-right: 0.25em;
 }
 
+.markdown-rendered .math.math-block td,
+.markdown-rendered .math.math-inline td,
+.markdown-rendered .MathJax .mjx-mtr > .mjx-mtd,
+.markdown-rendered [class*="mjx-container"] .mjx-mtr > .mjx-mtd,
+.markdown-rendered .katex .matrix td,
 .math.math-block td,
 .math.math-inline td,
-mjx-container .mjx-mtr > .mjx-mtd,
+.MathJax .mjx-mtr > .mjx-mtd,
+[class*="mjx-container"] .mjx-mtr > .mjx-mtd,
 .katex .matrix td {
-  padding-left: 0.45em !important;
-  padding-right: 0.45em !important;
+  padding-left: 0.45em;
+  padding-right: 0.45em;
 }
 

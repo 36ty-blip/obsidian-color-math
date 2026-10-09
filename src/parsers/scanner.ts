@@ -1,6 +1,6 @@
 // src/parsers/scanner.ts
 
-import { COLORS, SORTED_COLOR_COMMANDS, ColorPalette } from "../config";
+import { COLORS, COLOR_COMMANDS, ColorPalette } from "../config";
 import { commandColor } from "../utils/coloring";
 import { readColorCommand, skipEnvironmentHead } from "../utils/latex_helpers";
 import { ColorSpan, applyColorSpans } from "../utils/spans";
@@ -9,6 +9,14 @@ import {
   findScriptArgumentSpans,
   readOperand,
 } from "./latex_spans";
+
+const NON_SLASH_COLOR_COMMANDS = Array.from(COLOR_COMMANDS)
+  .filter((cand) => !cand.startsWith("\\"))
+  .sort((a, b) => b.length - a.length);
+
+const NON_SLASH_FIRST_CHARS = new Set<number>(
+  NON_SLASH_COLOR_COMMANDS.map((cand) => cand.charCodeAt(0))
+);
 
 export function collectOperatorSpans(
   body: string,
@@ -122,7 +130,7 @@ export function collectScannerSpans(
         continue;
       }
 
-      if (SORTED_COLOR_COMMANDS.includes(command)) {
+      if (COLOR_COMMANDS.has(command)) {
         const rem = body.slice(spanEnd);
         const limitMatch = rem.match(/^(\\(?:limits|nolimits|displaylimits))(?![a-zA-Z])/);
         if (limitMatch) {
@@ -141,17 +149,19 @@ export function collectScannerSpans(
       continue;
     }
 
-    const nonSlashCommand = SORTED_COLOR_COMMANDS.find(
-      (cand) => !cand.startsWith("\\") && body.startsWith(cand, index)
-    );
-    if (nonSlashCommand !== undefined) {
-      spans.push({
-        start: index,
-        end: index + nonSlashCommand.length,
-        color: commandColor(nonSlashCommand, palette),
-      });
-      index += nonSlashCommand.length;
-      continue;
+    if (NON_SLASH_FIRST_CHARS.has(body.charCodeAt(index))) {
+      const nonSlashCommand = NON_SLASH_COLOR_COMMANDS.find(
+        (cand) => body.startsWith(cand, index)
+      );
+      if (nonSlashCommand !== undefined) {
+        spans.push({
+          start: index,
+          end: index + nonSlashCommand.length,
+          color: commandColor(nonSlashCommand, palette),
+        });
+        index += nonSlashCommand.length;
+        continue;
+      }
     }
 
     index += 1;

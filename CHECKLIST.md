@@ -171,10 +171,10 @@
   - [x] Balanced stray closing braces inside unclosed quote text as `{}` (`x = 1 " if } y = 0` -> `x = 1 \text{ if {} y = 0}`)
   - [x] Strict invariant preserved: unclosed `{` handling remains completely untouched
   - [x] 100% green test suite: 476/476 tests passing across all 35 test files with 6 worker threads
-  - [x] Full Multi-Threaded Corpus Audit Runner: 100% Zero-Error SLA verified across all 6,392 markdown files and 172,823 mathematical equations in 27.68 seconds on 6 worker threads (6,244 eq/sec throughput, 0 critical regressions, 0 crashes)
-
-
-
-
-
+- [x] Settings Tab Architectural Redesign & Quality of Life Pillar (v1.0.63):
+  - [x] Reorganized settings tab into 7 clean, logically grouped sections (Core & Viewport, Theme & Palettes, Life Quality & Typing Ergonomics, Mathematical Syntax, Unicode Math, Diagnostics, Feature Previews)
+  - [x] Promoted Compiler Crash Immunity, Typst-style Delimiter Auto-Scaling, and Ergonomic Matrix Padding out of Previews into the primary Life Quality & Typing Ergonomics section
+  - [x] Created dedicated Physics & Quantum Mechanics sub-group unifying Dirac Bra-Ket notation, Quantum Differential Operators, Physical Units, and Dimensionless Numbers
+  - [x] Reorganized Theme & Palettes: moved Preset Theme Palettes dropdown to the top and Tokyo Night Restore Defaults button to the bottom
+  - [x] Updated default settings: `convertProseToUnicode: true` and `autoDetectNoteMode: false` with complete synchronization in `default.config.json`
 

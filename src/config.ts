@@ -677,6 +677,7 @@ export interface ColorMathOptions {
   highlightUnmatchedBraces?: boolean;
   variableDataFlow?: boolean;
   colorUnits?: boolean;
+  allowSingleLetterUnits?: boolean;
   colorDifferentials?: boolean;
   colorDerivativeFractions?: boolean;
   colorInfinitesimals?: boolean;

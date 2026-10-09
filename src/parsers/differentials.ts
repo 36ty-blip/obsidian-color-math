@@ -11,10 +11,6 @@ export interface DifferentialSpan {
 const DIFF_FONT_COMMANDS =
   "mathbf|boldsymbol|pmb|vec|hat|bar|tilde|dot|ddot|mathit|mathrm|mathbb|mathcal|mathfrak|msf|Bbb|check|acute|grave|breve|overline|underline|widetilde|widehat";
 
-const DIFF_RESERVED_COMMANDS =
-  "end|begin|right|left|frac|dfrac|tfrac|text|operatorname|limits|nolimits|displaylimits|sqrt|pmod|pod|mod|bmod|" +
-  DIFF_FONT_COMMANDS;
-
 const DIFF_GREEK_COMMANDS =
   "alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|varkappa|lambda|mu|nu|xi|pi|varpi|rho|varrho|sigma|varsigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega|ell";
 

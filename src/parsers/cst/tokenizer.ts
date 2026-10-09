@@ -102,7 +102,7 @@ export const TENSOR_INDEX_PATTERN =
   /^(?:\\(?:mu|nu|alpha|beta|gamma|delta|rho|sigma|lambda|kappa|tau|eta|theta|phi|psi|omega|xi|zeta)|[ijklmnμναβγδρσλκτηθφψωξζ]){1,4}$/;
 
 export const HIGHER_ORDER_DERIV_PATTERN =
-  /^(?:\d+|[nkm\alpha\beta\mu\nu]|\w\s*[+\-]\s*\d+)$/;
+  /^(?:\d+|[nkmαβμν]|\\(?:alpha|beta|mu|nu)|\w\s*[+-]\s*\d+)$/;
 
 export const PRIME_PATTERN = /^'+$/;
 export const BACKSLASH_PRIME_PATTERN = /^\\prime+$/;

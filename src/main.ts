@@ -10,6 +10,7 @@ import {
   PluginSettingTab,
   Setting,
   TFile,
+  editorLivePreviewField,
 } from "obsidian";
 import {
   ColorPalette,
@@ -116,11 +117,11 @@ const DEFAULT_SETTINGS: ColorMathSettings = {
   convertDefiniteIntegrals: false,
   convertBoundedOperators: false,
   greekStyle: "plane1",
-  convertProseToUnicode: false,
+  convertProseToUnicode: true,
   convertProseToLatex: false,
   autoDetectNoteField: true,
   defaultMode: "analysis",
-  autoDetectNoteMode: true,
+  autoDetectNoteMode: false,
   enableQuantumOperatorsGlobal: false,
   previewLatexNormalization: true,
   autoScaleDelimiters: true,
@@ -168,6 +169,7 @@ export default class ColorMathPlugin extends Plugin {
   ribbonIconEl: HTMLElement | null = null;
   interceptor: MathJaxInterceptor | null = null;
   private mcpCleanup: (() => void) | null = null;
+  private noteModeCache = new Map<string, NoteFieldDetection>();
 
   async onload() {
     await this.loadSettings();
@@ -178,7 +180,23 @@ export default class ColorMathPlugin extends Plugin {
       () => this.settings.palette,
       () => this.getMathOptions(),
       () => this.settings.liveRendering,
-      () => this.settings.errorDisplayMode
+      () => this.settings.errorDisplayMode,
+      () => {
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!view) return false;
+        if (view.getMode() === "source") {
+          const cm = (view.editor as any)?.cm;
+          if (cm && typeof cm.state?.field === "function") {
+            try {
+              const isLive = cm.state.field(editorLivePreviewField, false);
+              return !isLive;
+            } catch {
+              return false;
+            }
+          }
+        }
+        return false;
+      }
     );
     await this.interceptor.install(() => this.rerenderMath());
 
@@ -198,6 +216,22 @@ export default class ColorMathPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on("css-change", () => {
         void this.handleThemeChange();
+      })
+    );
+
+    // Invalidate note mode cache on active leaf switch or file cache update
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", () => {
+        this.noteModeCache.clear();
+      })
+    );
+    this.registerEvent(
+      this.app.metadataCache.on("changed", (file) => {
+        if (file?.path) {
+          this.noteModeCache.delete(file.path);
+        } else {
+          this.noteModeCache.clear();
+        }
       })
     );
 
@@ -260,11 +294,10 @@ export default class ColorMathPlugin extends Plugin {
       },
     });
 
-    // 3b. Quick suggestion menu on ambiguous notation (Alt+Enter)
+    // 3b. Quick suggestion menu on ambiguous notation
     this.addCommand({
       id: "quick-menu-ambiguity",
       name: "Resolve ambiguous math notation (Quick Menu)",
-      hotkeys: [{ modifiers: ["Alt"], key: "Enter" }],
       editorCallback: (editor: Editor) => {
         if (!this.settings.enableQuickMenuOnAmbiguity) return;
         const cursor = editor.getCursor();
@@ -572,20 +605,37 @@ export default class ColorMathPlugin extends Plugin {
       return null;
     }
     const appWithMeta = this.app as unknown as {
-      workspace?: { getActiveFile?: () => unknown; getActiveViewOfType?: (type: unknown) => MarkdownView | null };
-      metadataCache?: { getFileCache?: (file: unknown) => { frontmatter?: Record<string, unknown> } | null };
+      workspace?: { getActiveFile?: () => { path?: string } | null; getActiveViewOfType?: (type: unknown) => MarkdownView | null };
+      metadataCache?: { getFileCache?: (file: unknown) => { frontmatter?: Record<string, unknown>; tags?: Array<{ tag: string }> } | null };
     };
     const file = appWithMeta.workspace?.getActiveFile?.();
-    const cache = file ? appWithMeta.metadataCache?.getFileCache?.(file)?.frontmatter : undefined;
-
-    let text = content;
-    if (!text && !cache) {
-      const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-      if (view) {
-        text = view.editor.getValue();
-      }
+    const filePath = file?.path;
+    if (filePath && this.noteModeCache.has(filePath)) {
+      return this.noteModeCache.get(filePath)!;
     }
-    return detectNoteField(text || "", cache);
+
+    const fileCache = file ? appWithMeta.metadataCache?.getFileCache?.(file) : null;
+    const frontmatter = fileCache?.frontmatter || {};
+    const tagsFromCache = fileCache?.tags?.map((t) => t.tag);
+    const combinedFrontmatter = tagsFromCache && tagsFromCache.length > 0
+      ? {
+          ...frontmatter,
+          tags: [
+            ...(Array.isArray(frontmatter.tags)
+              ? frontmatter.tags
+              : frontmatter.tags
+              ? [frontmatter.tags]
+              : []),
+            ...tagsFromCache,
+          ],
+        }
+      : frontmatter;
+
+    const detection = detectNoteField(content || "", combinedFrontmatter);
+    if (filePath) {
+      this.noteModeCache.set(filePath, detection);
+    }
+    return detection;
   }
 
   getMathOptions(content?: string): ColorMathOptions {
@@ -1217,6 +1267,14 @@ class ColorMathSettingTab extends PluginSettingTab {
     this.buildTab(this.containerEl);
   }
 
+  private refresh(): void {
+    if (typeof (this as any).update === "function") {
+      (this as any).update();
+    }
+    this.containerEl.empty();
+    this.buildTab(this.containerEl);
+  }
+
   private buildTab(containerEl: HTMLElement): void {
     containerEl.createEl("p", {
       text: "Automatically apply semantic colors to LaTeX and MathJax equations in markdown notes.",
@@ -1224,12 +1282,12 @@ class ColorMathSettingTab extends PluginSettingTab {
     });
 
     // =========================================================================
-    // Section 1: ⚡ Core & Live Rendering
+    // Section 1: ⚡ Core & Viewport Rendering
     // =========================================================================
     const coreBody = this.createCollapsible(
       containerEl,
       "section-core",
-      "⚡ Core & Live Rendering",
+      "⚡ Core & Viewport Rendering",
       true
     );
 
@@ -1268,7 +1326,7 @@ class ColorMathSettingTab extends PluginSettingTab {
           .onChange(async (val) => {
             this.plugin.settings.livePreviewHighlighting = val;
             await this.plugin.saveSettings();
-            this.display();
+            this.refresh();
           })
       );
 
@@ -1325,63 +1383,6 @@ class ColorMathSettingTab extends PluginSettingTab {
       "🎨 Theme & Color Palettes",
       true
     );
-
-    new Setting(themeBody)
-      .setName("Sync with active theme")
-      .setDesc("Extract and apply matching colors from your currently active Obsidian theme.")
-      .addButton((button) =>
-        button
-          .setButtonText("Sync with Theme")
-          .setCta()
-          .onClick(async () => {
-            this.plugin.settings.palette = extractThemePalette(
-              this.plugin.settings.autoLightDark ? isVaultLightMode() : false
-            );
-            await this.plugin.saveSettings();
-            this.plugin.rerenderMath();
-            this.display();
-            new Notice("Color Math: Synced colors with active Obsidian theme!");
-          })
-      );
-
-    new Setting(themeBody)
-      .setName("Auto-match on theme change")
-      .setDesc("Automatically re-sync palette whenever you switch themes in Obsidian.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.autoSyncTheme)
-          .onChange(async (val) => {
-            this.plugin.settings.autoSyncTheme = val;
-            if (val) {
-              this.plugin.settings.palette = extractThemePalette(
-                this.plugin.settings.autoLightDark ? isVaultLightMode() : false
-              );
-              this.plugin.rerenderMath();
-            }
-            await this.plugin.saveSettings();
-            this.display();
-          })
-      );
-
-    new Setting(themeBody)
-      .setName("Auto-adapt for light / dark mode")
-      .setDesc("Adjust operator contrast (e.g. '=' and '\\cdot') so math never washes out on light backgrounds.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.autoLightDark)
-          .onChange(async (val) => {
-            this.plugin.settings.autoLightDark = val;
-            if (val) {
-              const light = isVaultLightMode();
-              this.plugin.settings.palette.relation = light ? "#1e293b" : "white";
-              this.plugin.settings.palette.dot = light ? "#334155" : "white";
-              this.plugin.settings.palette.spacing = light ? "#334155" : "white";
-              this.plugin.rerenderMath();
-            }
-            await this.plugin.saveSettings();
-            this.display();
-          })
-      );
 
     const PRESET_THEMES: Record<string, { name: string; palette: ColorPalette; rainbow: string[] }> = {
       tokyo: {
@@ -1466,24 +1467,67 @@ class ColorMathSettingTab extends PluginSettingTab {
               this.plugin.settings.rainbowColors = [...preset.rainbow];
               await this.plugin.saveSettings();
               this.plugin.rerenderMath();
-              this.display();
+              this.refresh();
               new Notice(`Color Math: Applied ${preset.name} palette!`);
             }
           });
       });
 
     new Setting(themeBody)
-      .setName("Restore default Tokyo Night palette")
-      .setDesc("Revert all colors back to our signature Tokyo Night palette.")
+      .setName("Sync with active theme")
+      .setDesc("Extract and apply matching colors from your currently active Obsidian theme.")
       .addButton((button) =>
-        button.setButtonText("Restore Defaults").onClick(async () => {
-          this.plugin.settings.palette = { ...DEFAULT_COLORS };
-          this.plugin.settings.rainbowColors = [...RAINBOW_DELIMITER_COLORS];
-          await this.plugin.saveSettings();
-          this.plugin.rerenderMath();
-          this.display();
-          new Notice("Color Math: Restored default Tokyo Night palette.");
-        })
+        button
+          .setButtonText("Sync with Theme")
+          .setCta()
+          .onClick(async () => {
+            this.plugin.settings.palette = extractThemePalette(
+              this.plugin.settings.autoLightDark ? isVaultLightMode() : false
+            );
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+            this.refresh();
+            new Notice("Color Math: Synced colors with active Obsidian theme!");
+          })
+      );
+
+    new Setting(themeBody)
+      .setName("Auto-match on theme change")
+      .setDesc("Automatically re-sync palette whenever you switch themes in Obsidian.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.autoSyncTheme)
+          .onChange(async (val) => {
+            this.plugin.settings.autoSyncTheme = val;
+            if (val) {
+              this.plugin.settings.palette = extractThemePalette(
+                this.plugin.settings.autoLightDark ? isVaultLightMode() : false
+              );
+              this.plugin.rerenderMath();
+            }
+            await this.plugin.saveSettings();
+            this.refresh();
+          })
+      );
+
+    new Setting(themeBody)
+      .setName("Auto-adapt for light / dark mode")
+      .setDesc("Adjust operator contrast (e.g. '=' and '\\cdot') so math never washes out on light backgrounds.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.autoLightDark)
+          .onChange(async (val) => {
+            this.plugin.settings.autoLightDark = val;
+            if (val) {
+              const light = isVaultLightMode();
+              this.plugin.settings.palette.relation = light ? "#1e293b" : "white";
+              this.plugin.settings.palette.dot = light ? "#334155" : "white";
+              this.plugin.settings.palette.spacing = light ? "#334155" : "white";
+              this.plugin.rerenderMath();
+            }
+            await this.plugin.saveSettings();
+            this.refresh();
+          })
       );
 
     // Sub-collapsible: Semantic Role Colors (13 roles)
@@ -1570,8 +1614,130 @@ class ColorMathSettingTab extends PluginSettingTab {
       });
     }
 
+    new Setting(themeBody)
+      .setName("Restore default Tokyo Night palette")
+      .setDesc("Revert all colors back to our signature Tokyo Night palette.")
+      .addButton((button) =>
+        button.setButtonText("Restore Defaults").onClick(async () => {
+          this.plugin.settings.palette = { ...DEFAULT_COLORS };
+          this.plugin.settings.rainbowColors = [...RAINBOW_DELIMITER_COLORS];
+          await this.plugin.saveSettings();
+          this.plugin.rerenderMath();
+          this.refresh();
+          new Notice("Color Math: Restored default Tokyo Night palette.");
+        })
+      );
+
     // =========================================================================
-    // Section 3: 🧠 Mathematical Syntax & Disambiguation
+    // Section 3: 💖 Life Quality & Typing Ergonomics
+    // =========================================================================
+    const qolBody = this.createCollapsible(
+      containerEl,
+      "section-quality-of-life",
+      "💖 Life Quality & Typing Ergonomics",
+      true
+    );
+
+    // Sub-collapsible 1: Brackets & Delimiters
+    const bracketsBody = this.createSubCollapsible(
+      qolBody,
+      "sub-qol-brackets",
+      "📦 Brackets & Delimiters",
+      true
+    );
+
+    new Setting(bracketsBody)
+      .setName("Rainbow delimiters")
+      .setDesc("Color nested parentheses, brackets, and braces recursively by depth to prevent delimiter blindness.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.rainbowDelimiters)
+          .onChange(async (val) => {
+            this.plugin.settings.rainbowDelimiters = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+            this.refresh();
+          })
+      );
+
+    if (this.plugin.settings.rainbowDelimiters) {
+      new Setting(bracketsBody)
+        .setClass("color-math-sub-setting")
+        .setName("Rainbow grouping braces ({})")
+        .setDesc("Include LaTeX grouping braces { and } in rainbow depth coloring in Live Preview.")
+        .addToggle((toggle) =>
+          toggle
+            .setValue(this.plugin.settings.rainbowBareBraces)
+            .onChange(async (val) => {
+              this.plugin.settings.rainbowBareBraces = val;
+              await this.plugin.saveSettings();
+              this.plugin.rerenderMath();
+            })
+        );
+    }
+
+    new Setting(bracketsBody)
+      .setName("Highlight unmatched delimiters & braces")
+      .setDesc("Highlight unclosed { or stray } with a high-visibility warning in Live Preview to catch MathJax syntax errors while typing.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.highlightUnmatchedBraces)
+          .onChange(async (val) => {
+            this.plugin.settings.highlightUnmatchedBraces = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    new Setting(bracketsBody)
+      .setName("Compiler crash immunity")
+      .setDesc("Automatically seal unclosed \\left delimiters with \\right. and unclosed { scopes with } at equation boundaries to prevent red MathJax syntax crash boxes while typing unfinished formulas.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.crashImmunityAutoSeal)
+          .onChange(async (val) => {
+            this.plugin.settings.crashImmunityAutoSeal = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    new Setting(bracketsBody)
+      .setName("Auto-scaling delimiters (Typst style)")
+      .setDesc("Automatically scale balanced parentheses ( ... ), brackets [ ... ], and sets \\{ ... \\} with \\left and \\right when they enclose tall math structures like fractions, sums, integrals, and matrices.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.autoScaleDelimiters)
+          .onChange(async (val) => {
+            this.plugin.settings.autoScaleDelimiters = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    // Sub-collapsible 2: Matrices & Layout Ergonomics
+    const matricesBody = this.createSubCollapsible(
+      qolBody,
+      "sub-qol-matrices",
+      "📐 Matrices & Layout Ergonomics",
+      true
+    );
+
+    new Setting(matricesBody)
+      .setName("Ergonomic matrix padding (&)")
+      .setDesc("Automatically adds extra & spacing before the first column and at the end of the last row in matrix environments (pmatrix, bmatrix, etc.) for comfortable typing breathing room.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.padMatrixPadding)
+          .onChange(async (val) => {
+            this.plugin.settings.padMatrixPadding = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    // =========================================================================
+    // Section 4: 🧠 Mathematical Syntax & Disambiguation
     // =========================================================================
     const mathBody = this.createCollapsible(
       containerEl,
@@ -1580,11 +1746,11 @@ class ColorMathSettingTab extends PluginSettingTab {
       false
     );
 
-    // Sub-collapsible 1: Calculus & Differentials
+    // Sub-collapsible 1: Calculus & Analysis
     const calculusBody = this.createSubCollapsible(
       mathBody,
       "sub-math-calculus",
-      "📐 Calculus & Differentials",
+      "📐 Calculus & Analysis",
       false
     );
 
@@ -1614,84 +1780,7 @@ class ColorMathSettingTab extends PluginSettingTab {
           })
       );
 
-    new Setting(calculusBody)
-      .setName("Enable quantum operators globally")
-      .setDesc("Always highlight quantum differential operators (Energy: iℏ∂/∂t, Momentum: -iℏ∇, Kinetic: -ℏ²/2m ∇²) across all notes without requiring YAML frontmatter.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.enableQuantumOperatorsGlobal)
-          .onChange(async (val) => {
-            this.plugin.settings.enableQuantumOperatorsGlobal = val;
-            await this.plugin.saveSettings();
-            this.plugin.rerenderMath();
-          })
-      );
-
-    // Sub-collapsible 2: Delimiters & Brackets
-    const delimitersBody = this.createSubCollapsible(
-      mathBody,
-      "sub-math-delimiters",
-      "📦 Delimiters & Brackets",
-      false
-    );
-
-    new Setting(delimitersBody)
-      .setName("Rainbow delimiters")
-      .setDesc("Color nested parentheses, brackets, and braces recursively by depth to prevent delimiter blindness.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.rainbowDelimiters)
-          .onChange(async (val) => {
-            this.plugin.settings.rainbowDelimiters = val;
-            await this.plugin.saveSettings();
-            this.plugin.rerenderMath();
-            this.display();
-          })
-      );
-
-    if (this.plugin.settings.rainbowDelimiters) {
-      new Setting(delimitersBody)
-        .setClass("color-math-sub-setting")
-        .setName("Rainbow grouping braces ({})")
-        .setDesc("Include LaTeX grouping braces { and } in rainbow depth coloring in Live Preview.")
-        .addToggle((toggle) =>
-          toggle
-            .setValue(this.plugin.settings.rainbowBareBraces)
-            .onChange(async (val) => {
-              this.plugin.settings.rainbowBareBraces = val;
-              await this.plugin.saveSettings();
-              this.plugin.rerenderMath();
-            })
-        );
-    }
-
-    new Setting(delimitersBody)
-      .setName("Highlight unmatched delimiters & braces")
-      .setDesc("Highlight unclosed { or stray } with a high-visibility warning in Live Preview to catch MathJax syntax errors while typing.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.highlightUnmatchedBraces)
-          .onChange(async (val) => {
-            this.plugin.settings.highlightUnmatchedBraces = val;
-            await this.plugin.saveSettings();
-            this.plugin.rerenderMath();
-          })
-      );
-
-    new Setting(delimitersBody)
-      .setName("Quantum bra-ket notation")
-      .setDesc("Highlight Dirac bra-ket state vectors (|ψ⟩, ⟨ϕ|, ⟨ϕ|ψ⟩) with clean delimiter styling.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.colorBraKet)
-          .onChange(async (val) => {
-            this.plugin.settings.colorBraKet = val;
-            await this.plugin.saveSettings();
-            this.plugin.rerenderMath();
-          })
-      );
-
-    // Sub-collapsible 3: Symbol Taxonomy & Constants
+    // Sub-collapsible 2: Symbol Taxonomy & Constants
     const taxonomyBody = this.createSubCollapsible(
       mathBody,
       "sub-math-taxonomy",
@@ -1709,7 +1798,7 @@ class ColorMathSettingTab extends PluginSettingTab {
             this.plugin.settings.enableTaxonomy = val;
             await this.plugin.saveSettings();
             this.plugin.rerenderMath();
-            this.display();
+            this.refresh();
           })
       );
 
@@ -1784,13 +1873,39 @@ class ColorMathSettingTab extends PluginSettingTab {
           })
       );
 
-    // Sub-collapsible 4: Physics, Engineering & Variables
+    // Sub-collapsible 3: Physics & Quantum Mechanics
     const physicsBody = this.createSubCollapsible(
       mathBody,
-      "sub-math-physics",
-      "⚙️ Physics, Engineering & Variables",
+      "sub-math-physics-quantum",
+      "⚛️ Physics & Quantum Mechanics",
       false
     );
+
+    new Setting(physicsBody)
+      .setName("Enable quantum operators globally")
+      .setDesc("Always highlight quantum differential operators (Energy: iℏ∂/∂t, Momentum: -iℏ∇, Kinetic: -ℏ²/2m ∇²) across all notes without requiring YAML frontmatter.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.enableQuantumOperatorsGlobal)
+          .onChange(async (val) => {
+            this.plugin.settings.enableQuantumOperatorsGlobal = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
+
+    new Setting(physicsBody)
+      .setName("Quantum bra-ket notation")
+      .setDesc("Highlight Dirac bra-ket state vectors (|ψ⟩, ⟨ϕ|, ⟨ϕ|ψ⟩) with clean delimiter styling.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.colorBraKet)
+          .onChange(async (val) => {
+            this.plugin.settings.colorBraKet = val;
+            await this.plugin.saveSettings();
+            this.plugin.rerenderMath();
+          })
+      );
 
     new Setting(physicsBody)
       .setName("Color physical units")
@@ -1818,7 +1933,15 @@ class ColorMathSettingTab extends PluginSettingTab {
           })
       );
 
-    new Setting(physicsBody)
+    // Sub-collapsible 4: Advanced Functions & Data Flow
+    const advancedBody = this.createSubCollapsible(
+      mathBody,
+      "sub-math-advanced",
+      "⚙️ Advanced Functions & Data Flow",
+      false
+    );
+
+    new Setting(advancedBody)
       .setName("Extended 2–3 letter functions")
       .setDesc("Recognize shorthand 2–3 letter math functions (adj, var, cov, im, sp, div, rot, sh, ch) before parentheses.")
       .addToggle((toggle) =>
@@ -1831,7 +1954,7 @@ class ColorMathSettingTab extends PluginSettingTab {
           })
       );
 
-    new Setting(physicsBody)
+    new Setting(advancedBody)
       .setName("Variable data-flow hashing")
       .setDesc("Deterministically assign a unique color to each variable in an expression to visually trace its flow.")
       .addToggle((toggle) =>
@@ -1845,7 +1968,7 @@ class ColorMathSettingTab extends PluginSettingTab {
       );
 
     // =========================================================================
-    // Section 4: 🔤 Unicode Math & Typography
+    // Section 5: 🔤 Unicode Math & Typography
     // =========================================================================
     const unicodeBody = this.createCollapsible(
       containerEl,
@@ -1894,7 +2017,7 @@ class ColorMathSettingTab extends PluginSettingTab {
 
     new Setting(unicodeBody)
       .setName("Convert LaTeX in prose to Unicode")
-      .setDesc("Convert LaTeX math commands like \\psi to 𝜓 in regular text outside math blocks and lines (default: OFF to protect prose). Code blocks and inline code are strictly protected.")
+      .setDesc("Convert LaTeX math commands like \\psi to 𝜓 in regular text outside math blocks and lines when running the conversion command (Code blocks and inline code are strictly protected).")
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.convertProseToUnicode)
@@ -1906,7 +2029,7 @@ class ColorMathSettingTab extends PluginSettingTab {
 
     new Setting(unicodeBody)
       .setName("Convert Unicode in prose to LaTeX")
-      .setDesc("Convert Unicode symbols like 𝝍 back to \\psi in regular text outside math blocks (default: OFF). When OFF, Unicode symbols in your notes prose are preserved.")
+      .setDesc("Convert Unicode symbols like 𝝍 back to \\psi in regular text outside math blocks when running the restore command (Code blocks and inline code are strictly protected).")
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.convertProseToLatex)
@@ -1917,12 +2040,12 @@ class ColorMathSettingTab extends PluginSettingTab {
       );
 
     // =========================================================================
-    // Section 5: 🛠️ Domain Presets & Diagnostics
+    // Section 6: 🛠️ Diagnostics & Maintenance
     // =========================================================================
     const domainBody = this.createCollapsible(
       containerEl,
       "section-domain-diagnostics",
-      "🛠️ Domain Presets & Diagnostics",
+      "🛠️ Diagnostics & Maintenance",
       false
     );
 
@@ -1949,20 +2072,20 @@ class ColorMathSettingTab extends PluginSettingTab {
       .addButton((button) =>
         button
           .setButtonText("Reset to Factory Defaults")
-          .setWarning()
+          .setDestructive()
           .onClick(async () => {
             await this.plugin.resetSettingsToDefaults();
-            this.display();
+            this.refresh();
           })
       );
 
     // =========================================================================
-    // Section 6: 🧪 Feature Previews
+    // Section 7: 🧪 Feature Previews & Experimental
     // =========================================================================
     const previewBody = this.createCollapsible(
       containerEl,
       "section-feature-previews",
-      "🧪 Feature Previews",
+      "🧪 Feature Previews & Experimental",
       false
     );
 
@@ -1980,32 +2103,6 @@ class ColorMathSettingTab extends PluginSettingTab {
       );
 
     new Setting(previewBody)
-      .setName("Auto-scaling delimiters (Typst style)")
-      .setDesc("Automatically scale balanced parentheses ( ... ), brackets [ ... ], and sets \\{ ... \\} with \\left and \\right when they enclose tall math structures like fractions, sums, integrals, and matrices.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.autoScaleDelimiters)
-          .onChange(async (val) => {
-            this.plugin.settings.autoScaleDelimiters = val;
-            await this.plugin.saveSettings();
-            this.plugin.rerenderMath();
-          })
-      );
-
-    new Setting(previewBody)
-      .setName("Compiler crash immunity")
-      .setDesc("Automatically seal unclosed \\left delimiters with \\right. and unclosed { scopes with } at equation boundaries to prevent red MathJax syntax crash boxes while typing unfinished formulas.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.crashImmunityAutoSeal)
-          .onChange(async (val) => {
-            this.plugin.settings.crashImmunityAutoSeal = val;
-            await this.plugin.saveSettings();
-            this.plugin.rerenderMath();
-          })
-      );
-
-    new Setting(previewBody)
       .setName("Require braces for infix slash division")
       .setDesc("When enabled, infix slash division requires grouped braces {a} / {b}. When disabled, raw whitespace-bounded numbers like 12 / 3 are also converted to vertical fractions.")
       .addToggle((toggle) =>
@@ -2013,19 +2110,6 @@ class ColorMathSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.requireBracesForSlashDivision)
           .onChange(async (val) => {
             this.plugin.settings.requireBracesForSlashDivision = val;
-            await this.plugin.saveSettings();
-            this.plugin.rerenderMath();
-          })
-      );
-
-    new Setting(previewBody)
-      .setName("Ergonomic matrix padding (&)")
-      .setDesc("Automatically adds extra & spacing before the first column and at the end of the last row in matrix environments (pmatrix, bmatrix, etc.) for comfortable typing breathing room.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.padMatrixPadding)
-          .onChange(async (val) => {
-            this.plugin.settings.padMatrixPadding = val;
             await this.plugin.saveSettings();
             this.plugin.rerenderMath();
           })
