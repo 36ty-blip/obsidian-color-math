@@ -6,6 +6,11 @@
   - Keep explanations direct and concise.
   - Be mindful of late evening / night hours in IST.
 - **Obsidian Plugin & Releases**: Always increment the version number on every update/release because Obsidian only checks and triggers updates when the version has increased (`manifest.json`, `package.json`, `versions.json`).
+- **Documentation Hierarchy & Single Source of Truth (Zero Duplication Rule)**:
+  - There is strictly **ONE canonical `ROADMAP.md`** and **ONE canonical `TODO.md`** for the entire project, residing exclusively at the monorepo root: `C:\Users\aditya\Documents\GitHub\color-math\ROADMAP.md` and `C:\Users\aditya\Documents\GitHub\color-math\TODO.md` (with mathematical taxonomy at `ROADMAP_MATHEMATICS.md` and master cumulative ledger at `CHECKLIST.md`).
+  - **NEVER create duplicate `TODO.md` or `ROADMAP.md` files** in subprojects (e.g. `CODES/TypeScript/...`, `obsidian-color-math/`, `zed-color-math/`, or parent directories). All platforms (Obsidian, Zed, Python) share these root files under their designated sections.
+  - Active sprint tasks and milestone checkboxes are tracked **only** in `GitHub/color-math/TODO.md`. Architectural specifications and decision records reside **only** in `GitHub/color-math/ROADMAP.md` (do not duplicate architectural decisions into `TODO.md`).
+  - **Pruning & Verification Ledger Protocol**: Master cumulative verification and older release history belong in root `GitHub/color-math/CHECKLIST.md`. To keep `TODO.md` lean, older completed tasks are pruned into `CHECKLIST.md` only after verifying they exist in `CHECKLIST.md`, retaining **strictly the last 2–3 completed milestones** (e.g. v1.0.63–v1.0.65) in `TODO.md` for recent context alongside active sprint items. Subproject release QA checklists belong in `<subproject>/CHECKLIST.md`.
 - **Synchronization**: Always use the workspace sync engine (`sync.mjs` / `sync.ps1` at `C:\Users\aditya\Documents\CODES\Sync`) following the protocol in `C:\Users\aditya\Documents\CODES\Sync\AI_MANUAL.md`:
   - Profile `2` / `CodesToVault`: Deploy CODES bundle directly to Obsidian Vault (`color-math`) for live user testing & verification. (Step 1 of release cycle).
   - Profile `1` / `CodesToGitHub`: Sync CODES to GitHub (pre-sync hook: `npm run build && npm test`). Executed ONLY after user verifies everything is working in their vault. (Step 2 of release cycle).

@@ -50,25 +50,25 @@
   "requireBracesForSlashDivision": false,
   "padMatrixPadding": false,
   "_role_descriptions": {
-    "main": "Primary expression / function color (e.g. f(x))",
-    "orange": "Constants, coefficients, and major operators (e.g. \\int, \\sum, \\lim)",
-    "dot": "Multiplication dots and symbols (e.g. \\cdot, \\times)",
-    "derivative": "Outer derivatives and prime markers (e.g. f'(x), \\frac{d}{dx}, \\frac{∂}{∂t})",
-    "chain": "Chain rule factors and subscripts (e.g. g'(x), y_i)",
-    "upper": "Superscripts and matrix outer wrappers (e.g. x^2, A^T)",
-    "relation": "Relations, equalities, and tensors (e.g. =, \\approx, \\le)",
-    "arrow": "Arrows and mappings (e.g. \\to, \\implies)",
-    "set": "Set theory symbols (e.g. \\in, \\subset)",
-    "spacing": "LaTeX spacing commands (e.g. \\quad, \\,)",
-    "parameter": "Parameters, angles, and Greek coefficients",
-    "unit": "Physical units and metric prefixes (e.g. μm, m/s, kg)",
-    "energyOperator": "Quantum differential operators (Energy: iℏ∂/∂t, Momentum: -iℏ∇, Kinetic: -ℏ²/2m ∇²)"
+    "main": "Primary expression and function identifiers (e.g. f(x), \\sin, \\cos).",
+    "orange": "Universal constants, coefficients, and major bounded operators (e.g. \\pi, \\hbar, \\sum, \\int, \\lim).",
+    "dot": "Scalar multiplication products and tensor contractions (e.g. \\cdot, \\times, \\otimes).",
+    "derivative": "Differential operators (e.g. \\frac{df}{dx}, \\frac{\\partial\\psi}{\\partial t}, \\nabla) and prime order markers (e.g. f'(x)).",
+    "chain": "Bound summation/product indices (e.g. i, j) and inner chain rule factors (e.g. g(x) in f(g(x))).",
+    "upper": "Exponent powers and outer tensor/matrix transpose indices (e.g. x^2, A^T, \\mathbf{v}^\\top).",
+    "relation": "Binary algebraic relations, inequalities, and asymptotic bounds (e.g. =, \\approx, \\le, \\ge, \\sim, \\equiv).",
+    "arrow": "Morphisms, limit trajectories, vector directions, and logical implications (e.g. \\to, \\mapsto, \\implies).",
+    "set": "Set-theoretic membership and logical quantifiers (e.g. \\in, \\subset, \\cup, \\cap, \\forall, \\exists).",
+    "spacing": "LaTeX structural spacing and micro-typography formatting commands (e.g. \\quad, \\;, \\!).",
+    "parameter": "Continuous parameters, manifold coordinates, and Greek coefficients (e.g. \\alpha, \\beta, \\theta, \\lambda, \\omega).",
+    "unit": "Physical dimensional units and SI metric prefixes bound to numerical scalars (e.g. \\text{kg}, \\text{m/s}, \\mu\\text{m}, \\text{GHz}).",
+    "energyOperator": "Canonical quantum mechanics operators (Energy: i\\hbar\\partial_t, Momentum: -i\\hbar\\nabla, Kinetic: -\\frac{\\hbar^2}{2m}\\nabla^2)."
   },
   "_unicode_descriptions": {
-    "greekStyle": "Greek letter typography: 'plane1' (Mathematical Italic: 𝝍, 𝝰) or 'standard' (ψ, α)",
-    "convertDefiniteIntegrals": "Convert bounded integrals like \\int_a^b to ∫_a^b (default: false to preserve vertical TeX limits)",
-    "convertBoundedOperators": "Convert bounded summations/products like \\sum_{i=1}^n to ∑_{i=1}^n (default: false)",
-    "convertProseToUnicode": "Convert LaTeX commands like \\psi to 𝜓 in regular text outside math blocks (default: false to protect prose)",
-    "convertProseToLatex": "Convert Unicode symbols like 𝝍 back to \\psi in regular text outside math blocks (default: false)"
+    "greekStyle": "Selects between Plane 1 Mathematical Italic Symbols (U+1D400–U+1D7FF) and Standard BMP Greek (U+0370–U+03FF) for Unicode conversion. Conversion occurs in-memory with zero typing overhead.",
+    "convertDefiniteIntegrals": "Controls conversion of bounded integrals (\\int_a^b) to Unicode (∫_a^b). Keeping this OFF preserves LaTeX commands for proper displaystyle vertical limit placement in TeX engines.",
+    "convertBoundedOperators": "Controls conversion of bounded summation and product operators (\\sum_{i=1}^n) to Unicode (∑_{i=1}^n). Keeping this OFF preserves LaTeX commands for centered vertical limit layout.",
+    "convertProseToUnicode": "Scans prose text outside math delimiters to transform LaTeX commands into Unicode glyphs, strictly isolating markdown code spans (`...`) and fenced blocks. Single-pass regex scan executes in milliseconds.",
+    "convertProseToLatex": "Reverses Unicode mathematical symbols in prose back to canonical LaTeX commands, strictly protecting code spans and fenced blocks. Executes in milliseconds with zero note corruption."
   }
 }

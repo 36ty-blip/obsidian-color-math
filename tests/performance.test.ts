@@ -141,6 +141,12 @@ describe("Performance & SLA Regression Gates", () => {
   });
 
   it("SLA: Live preview typing keystroke latency stays within 16.6ms (60 FPS budget)", () => {
+    // JIT warm-up
+    for (let i = 0; i < 10; i++) {
+      colorLatexBody("\\frac{a}{b} + c", DEFAULT_COLORS, DEFAULT_OPTIONS);
+    }
+    clearLatexBodyCache();
+
     const keystrokes = [
       "\\", "\\f", "\\fr", "\\fra", "\\frac", "\\frac{", "\\frac{a", "\\frac{a}",
       "\\frac{a}{", "\\frac{a}{b", "\\frac{a}{b}", "\\frac{a}{b} +", "\\frac{a}{b} + c"

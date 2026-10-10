@@ -51,9 +51,32 @@ export class MathJaxInterceptor {
   }
 
   private getContextKey(): string {
-    const p = this.getPalette();
-    const o = this.getOptions();
-    return `${p.main}-${p.orange}-${p.derivative}-${p.chain}-${o.activeMode || ""}`;
+    const p = this.getPalette() || ({} as ColorPalette);
+    const o = this.getOptions() || ({} as ColorMathOptions);
+    const rainbow = (o.rainbowColors || []).join(",");
+    return [
+      p.main,
+      p.orange,
+      p.dot,
+      p.derivative,
+      p.chain,
+      p.upper,
+      p.relation,
+      p.arrow,
+      p.set,
+      p.spacing,
+      p.parameter,
+      p.unit,
+      p.energyOperator,
+      rainbow,
+      o.activeMode || "",
+      o.enableTaxonomy ? "t1" : "t0",
+      o.colorUnits ? "u1" : "u0",
+      o.rainbowDelimiters ? "r1" : "r0",
+      o.variableDataFlow ? "v1" : "v0",
+      o.colorDifferentials ? "d1" : "d0",
+      o.colorBraKet ? "b1" : "b0",
+    ].join("|");
   }
 
   private getCachedElement<T extends HTMLElement | SVGElement>(hash: string): T | null {
@@ -442,5 +465,6 @@ export class MathJaxInterceptor {
     }
     this.unpatchFns = [];
     this.installed = false;
+    this.clearCache();
   }
 }

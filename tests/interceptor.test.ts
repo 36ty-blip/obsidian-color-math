@@ -208,5 +208,44 @@ describe("MathJaxInterceptor Headless Unit Tests", () => {
     expect(capturedTexCalls.length).toBe(2);
 
     interceptor.uninstall();
+    expect(interceptor.isInstalled()).toBe(false);
+  });
+
+  it("invalidates cache when palette color or options change", async () => {
+    let currentPalette = { ...DEFAULT_COLORS };
+    let currentOptions = { enableTaxonomy: true };
+
+    const interceptor = new MathJaxInterceptor(
+      () => currentPalette,
+      () => currentOptions,
+      () => true,
+      () => "fallback"
+    );
+
+    await interceptor.install();
+
+    // 1. Initial render
+    const res1 = (window as any).MathJax.tex2chtml("f(x) = y") as MockElement;
+    const hash1 = res1.getAttribute("data-math-hash");
+    expect(capturedTexCalls.length).toBe(1);
+
+    // 2. Change relation color
+    currentPalette = { ...currentPalette, relation: "#ff0000" };
+    const res2 = (window as any).MathJax.tex2chtml("f(x) = y") as MockElement;
+    const hash2 = res2.getAttribute("data-math-hash");
+    expect(hash2).not.toBe(hash1);
+    expect(capturedTexCalls.length).toBe(2);
+
+    // 3. Change parameter color
+    currentPalette = { ...currentPalette, parameter: "#00ff00" };
+    const res3 = (window as any).MathJax.tex2chtml("f(x) = y") as MockElement;
+    const hash3 = res3.getAttribute("data-math-hash");
+    expect(hash3).not.toBe(hash2);
+    expect(capturedTexCalls.length).toBe(3);
+
+    // 4. Uninstall clears cache and restores functions
+    interceptor.uninstall();
+    expect(interceptor.isInstalled()).toBe(false);
   });
 });
+
