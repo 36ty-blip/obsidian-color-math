@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "repository": "36ty-blip/obsidian-color-math",
-  "lastUpdatedIST": "23/10/2026, 18:51:30",
+  "lastUpdatedIST": "23/10/2026, 18:55:37",
   "dailyTraffic": {
     "views": {
       "2026-10-02": {
@@ -566,11 +566,11 @@
       "tag": "1.0.79",
       "publishedAt": "2026-10-23",
       "timestamp": 1792757482000,
-      "mainJs": 2,
-      "manifest": 2,
-      "styles": 2,
-      "totalAssets": 6,
-      "uniqueInstalls": 2
+      "mainJs": 3,
+      "manifest": 3,
+      "styles": 3,
+      "totalAssets": 9,
+      "uniqueInstalls": 3
     }
   },
   "releaseDailySnapshots": {
@@ -806,10 +806,10 @@
       }
     },
     "2026-10-23": {
-      "totalAssets": 3155,
-      "uniqueInstalls": 2374,
+      "totalAssets": 3158,
+      "uniqueInstalls": 2375,
       "byTag": {
-        "1.0.79": 6,
+        "1.0.79": 9,
         "1.0.66": 304,
         "1.0.64": 108,
         "1.0.63": 78,

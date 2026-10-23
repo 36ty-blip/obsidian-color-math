@@ -216,7 +216,9 @@ export async function publishToGitHub(options = {}) {
       console.log(`  • Working tree already committed cleanly.`);
     }
 
-    // 3. Push to origin main
+    // 3. Rebase onto remote main (if needed) and push to origin main
+    console.log(`  • Synchronizing with remote repository (origin main)...`);
+    execSync("git pull --rebase -X theirs origin main", { cwd: rootDir });
     console.log(`  • Pushing commit to remote repository (origin main)...`);
     execSync("git push origin main", { cwd: rootDir });
 
