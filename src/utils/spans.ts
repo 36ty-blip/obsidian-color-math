@@ -116,7 +116,10 @@ export function applyColorSpans(source: string, spans: ColorSpan[]): string {
       return false;
     }
     const spanText = source.slice(span.start, span.end).trim();
-    if (/^(\\(?:quad|qquad|,|:|;|!|\s)+)$/.test(spanText)) {
+    if (
+      /^(\\(?:quad|qquad|,|:|;|!|\s)+)$/.test(spanText) ||
+      /^\\(?:frac|dfrac|cfrac|tfrac|sqrt|mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat|cases)$/.test(spanText)
+    ) {
       return false;
     }
     return true;

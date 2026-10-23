@@ -163,7 +163,7 @@ export function computeSemanticMathSpans(
         forLatexWrap,
         palette: options?.rainbowColors,
         includeBareBraces: !forLatexWrap && options?.rainbowBareBraces !== false,
-        highlightUnmatched: options?.highlightUnmatchedBraces !== false,
+        highlightUnmatched: !forLatexWrap && options?.highlightUnmatchedBraces !== false,
         strictBracketWarnings: options?.strictBracketWarnings === true,
       })
     );
@@ -181,7 +181,7 @@ export function computeSemanticMathSpans(
 
   if (options?.enableTaxonomy) {
     spans.push(
-      ...collectTaxonomySpans(scanBody, palette, unitSpans, diffSpans, dimSpans, options)
+      ...collectTaxonomySpans(scanBody, palette, unitSpans, diffSpans, dimSpans, options, forLatexWrap)
     );
   }
 

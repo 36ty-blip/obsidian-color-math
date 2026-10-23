@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "repository": "36ty-blip/obsidian-color-math",
-  "lastUpdatedIST": "23/10/2026, 11:51:05",
+  "lastUpdatedIST": "23/10/2026, 18:51:30",
   "dailyTraffic": {
     "views": {
       "2026-10-02": {
@@ -81,6 +81,10 @@
         "uniques": 0
       },
       "2026-10-21": {
+        "count": 0,
+        "uniques": 0
+      },
+      "2026-10-22": {
         "count": 0,
         "uniques": 0
       }
@@ -165,6 +169,10 @@
       "2026-10-21": {
         "count": 5,
         "uniques": 4
+      },
+      "2026-10-22": {
+        "count": 1,
+        "uniques": 1
       }
     }
   },
@@ -172,7 +180,7 @@
     "github.com": {
       "maxCount": 28,
       "maxUniques": 1,
-      "latestCount": 27,
+      "latestCount": 7,
       "latestUniques": 1,
       "lastSeen": "2026-10-23"
     }
@@ -182,15 +190,15 @@
       "title": "Overview",
       "maxCount": 44,
       "maxUniques": 5,
-      "latestCount": 43,
-      "latestUniques": 5,
+      "latestCount": 24,
+      "latestUniques": 4,
       "lastSeen": "2026-10-23"
     },
     "/36ty-blip/obsidian-color-math/issues": {
       "title": "/issues",
       "maxCount": 9,
       "maxUniques": 1,
-      "latestCount": 8,
+      "latestCount": 7,
       "latestUniques": 1,
       "lastSeen": "2026-10-23"
     },
@@ -268,6 +276,14 @@
     },
     "/36ty-blip/obsidian-color-math/blob/a7966197f92a7d772fae14a7d04f421115b20b9e/src/editor/live_preview.ts": {
       "title": "/blob/a7966197f92a7d772fae14a7d04f421115b20b9e/src/editor/live_preview.ts",
+      "maxCount": 1,
+      "maxUniques": 1,
+      "latestCount": 1,
+      "latestUniques": 1,
+      "lastSeen": "2026-10-23"
+    },
+    "/36ty-blip/obsidian-color-math/blob/main/src/main.ts": {
+      "title": "/blob/main/src/main.ts",
       "maxCount": 1,
       "maxUniques": 1,
       "latestCount": 1,
@@ -545,6 +561,16 @@
       "styles": 3,
       "totalAssets": 16,
       "uniqueInstalls": 11
+    },
+    "1.0.79": {
+      "tag": "1.0.79",
+      "publishedAt": "2026-10-23",
+      "timestamp": 1792757482000,
+      "mainJs": 2,
+      "manifest": 2,
+      "styles": 2,
+      "totalAssets": 6,
+      "uniqueInstalls": 2
     }
   },
   "releaseDailySnapshots": {
@@ -780,9 +806,10 @@
       }
     },
     "2026-10-23": {
-      "totalAssets": 3149,
-      "uniqueInstalls": 2372,
+      "totalAssets": 3155,
+      "uniqueInstalls": 2374,
       "byTag": {
+        "1.0.79": 6,
         "1.0.66": 304,
         "1.0.64": 108,
         "1.0.63": 78,

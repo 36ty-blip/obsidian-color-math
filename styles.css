@@ -365,5 +365,75 @@ mark .color-math-live-token,
   line-height: 1.4;
 }
 
+/* Color Math Reference Modal & Cheatsheet */
+.color-math-reference-modal-container {
+  width: 90vw !important;
+  max-width: 980px !important;
+  height: 85vh !important;
+  max-height: 900px !important;
+}
+
+.color-math-reference-modal-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0 16px 16px 16px;
+  overflow: hidden;
+}
+
+.color-math-reference-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.color-math-reference-heading {
+  font-size: var(--font-ui-medium);
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+}
+
+.color-math-reference-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-math-ref-btn {
+  font-size: var(--font-ui-smaller);
+  padding: 4px 10px;
+  border-radius: var(--radius-s);
+}
+
+.color-math-reference-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 8px 32px 8px;
+  user-select: text;
+}
+
+.color-math-reference-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: var(--font-ui-small);
+}
+
+.color-math-reference-body th,
+.color-math-reference-body td {
+  border: 1px solid var(--background-modifier-border);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.color-math-reference-body th {
+  background-color: var(--background-secondary);
+  font-weight: var(--font-semibold);
+}
+
 
 

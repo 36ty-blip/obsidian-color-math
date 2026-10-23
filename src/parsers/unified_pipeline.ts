@@ -214,7 +214,7 @@ export function extractMathColorSpans(
 
   if (options?.enableTaxonomy) {
     allSpans.push(
-      ...collectTaxonomySpans(body, palette, unitSpans, diffSpans, dimSpans, options)
+      ...collectTaxonomySpans(body, palette, unitSpans, diffSpans, dimSpans, options, forLatexWrap)
     );
   }
 

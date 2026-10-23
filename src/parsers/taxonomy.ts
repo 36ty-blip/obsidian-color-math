@@ -63,7 +63,8 @@ export function collectTaxonomySpans(
   unitSpans?: UnitSpan[],
   diffSpans?: DifferentialSpan[],
   dimSpans?: DimensionlessSpan[],
-  options?: ColorMathOptions
+  options?: ColorMathOptions,
+  forLatexWrap: boolean = false
 ): ColorSpan[] {
   const units = unitSpans || findUnitSpans(body);
   const diffs = diffSpans || findDifferentialSpans(body);
@@ -224,12 +225,14 @@ export function collectTaxonomySpans(
         }
 
         if (STRUCTURAL_LAYOUT_MACROS.has(name)) {
-          spans.push({
-            start: index,
-            end: cmdEnd,
-            color: palette.structural || "none",
-            priority: 25,
-          });
+          if (!forLatexWrap) {
+            spans.push({
+              start: index,
+              end: cmdEnd,
+              color: palette.structural || "none",
+              priority: 25,
+            });
+          }
           index = cmdEnd;
           continue;
         }
@@ -407,22 +410,24 @@ export function collectTaxonomySpans(
       continue;
     }
 
-    // Max Speed syntactic sugar constructors: mat, pmat, bmat, sqrt followed strictly by '[' or '{' (never '(')
+    // Max Speed syntactic sugar constructors: mat, pmat, bmat, sqrt, cases followed strictly by '[' or '{' (never '(')
     if (options?.speedSyntacticSugar !== false) {
       const sugarConstructorMatch = body
         .slice(index)
-        .match(/^(mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat|sqrt)(?![A-Za-z])/);
+        .match(/^(mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat|sqrt|cases)(?![A-Za-z])/);
       if (sugarConstructorMatch) {
         const name = sugarConstructorMatch[1];
         let lookahead = index + name.length;
         while (lookahead < body.length && /\s/.test(body[lookahead])) lookahead++;
         if (lookahead < body.length && (body[lookahead] === "[" || body[lookahead] === "{")) {
-          spans.push({
-            start: index,
-            end: index + name.length,
-            color: palette.structural || "none",
-            priority: 25,
-          });
+          if (!forLatexWrap) {
+            spans.push({
+              start: index,
+              end: index + name.length,
+              color: palette.structural || "none",
+              priority: 25,
+            });
+          }
           index += name.length;
           continue;
         }

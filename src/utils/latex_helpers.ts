@@ -1500,7 +1500,8 @@ export function normalizeBareGreekInMath(source: string): string {
           !/^\\Bbb[A-Za-z]/.test(canonical) &&
           canonical !== "\\greater" &&
           canonical !== "\\equal" &&
-          canonical !== "\\mupNu"
+          canonical !== "\\mupNu" &&
+          canonical !== "\\bigtimes"
         ) {
           result += canonical;
           index += bare.length;
@@ -2642,7 +2643,12 @@ export function normalizeAsciiOperators(source: string): string {
     }
 
     // Multi-dialect ASCII shorthand operators (Maximal Munch: 3-char before 2-char)
-    const isPrevBoundary = index === 0 || !/[A-Za-z0-9_\\]/.test(source[index - 1]);
+    // Never trigger alphabetic operator shorthands inside subscript/superscript braces (e.g. \partial_{xxx}, u_{xx}, g_{uu})
+    const isScriptBrace =
+      index >= 2 &&
+      (source.slice(index - 2, index) === "_{" || source.slice(index - 2, index) === "^{");
+    const isPrevBoundary =
+      !isScriptBrace && (index === 0 || !/[A-Za-z0-9_\\^]/.test(source[index - 1]));
     if (isPrevBoundary) {
       // Length 3: xxx (\bigtimes), vvv (\bigvee), uuu (\bigcup), nnn (\bigcap)
       if (index + 3 <= len) {

@@ -39,6 +39,7 @@ import {
 } from "./converters/unicode_converter";
 import { detectNoteField, NoteFieldDetection } from "./parsers/frontmatter";
 import { QuickMenuModal, findAmbiguousTokenAtCursor } from "./editor/quick_menu_modal";
+import { ColorMathReferenceModal, exportReferenceNote } from "./editor/reference_modal";
 
 interface ColorMathSettings {
   palette: ColorPalette;
@@ -195,7 +196,7 @@ const COLOR_ROLE_DESCRIPTIONS: Record<ColorRole, string> = {
   parameter: "Continuous parameters, manifold coordinates, and Greek coefficients (e.g. \\alpha, \\beta, \\theta, \\lambda, \\omega).",
   unit: "Physical dimensional units and SI metric prefixes bound to numerical scalars (e.g. \\text{kg}, \\text{m/s}, \\mu\\text{m}, \\text{GHz}).",
   energyOperator: "Canonical quantum mechanics operators (Energy: i\\hbar\\partial_t, Momentum: -i\\hbar\\nabla, Kinetic: -\\frac{\\hbar^2}{2m}\\nabla^2).",
-  structural: "Structural typesetting scaffolding and constructors (e.g. \\mat, \\frac, \\dfrac, \\sqrt, cases). Defaults to natural uncolored.",
+  structural: "Structural typesetting scaffolding and constructors (e.g. \\mat, \\frac, \\dfrac, \\sqrt, cases). Styled solely in CodeMirror editor; never injects \\textcolor in math.",
   transform: "Linear transformation unary operators, matrix transposes, conjugate adjoints, and pseudoinverses (e.g. A^\\top, A^T, A^\\dagger, A^*, M^{-1}, A^+).",
   arithmetic: "Additive binary arithmetic operators and signs (e.g. +, -, \\pm, \\mp). Defaults to natural uncolored.",
 };
@@ -466,6 +467,24 @@ export default class ColorMathPlugin extends Plugin {
       },
     });
 
+    // 14. Open syntax and operator reference guide
+    this.addCommand({
+      id: "open-syntax-reference",
+      name: "Open syntax and operator reference guide",
+      callback: () => {
+        new ColorMathReferenceModal(this.app).open();
+      },
+    });
+
+    // 15. Export syntax and operator reference note to vault
+    this.addCommand({
+      id: "export-syntax-reference",
+      name: "Create or open syntax reference note in vault",
+      callback: async () => {
+        await exportReferenceNote(this.app);
+      },
+    });
+
     // Settings tab
     this.addSettingTab(new ColorMathSettingTab(this.app, this));
 
@@ -654,6 +673,15 @@ export default class ColorMathPlugin extends Plugin {
     );
 
     menu.addSeparator();
+
+    menu.addItem((item) =>
+      item
+        .setTitle("Syntax & Operator Reference")
+        .setIcon("book-open")
+        .onClick(() => {
+          new ColorMathReferenceModal(this.app).open();
+        })
+    );
 
     menu.addItem((item) =>
       item
@@ -1368,6 +1396,39 @@ class ColorMathSettingTab extends PluginSettingTab {
       text: "AST-driven semantic IDE styling and real-time MathJax CHTML decoration for mathematical expressions across CodeMirror 6 viewports and Reading View. Operates non-destructively in-memory with zero disk mutation.",
       cls: "color-math-section-desc",
     });
+
+    // =========================================================================
+    // Section 0: 📚 Syntax & Operator Reference Guide
+    // =========================================================================
+    const refCard = this.createCollapsible(
+      containerEl,
+      "section-syntax-reference",
+      "📚 Syntax & Operator Reference Guide",
+      true
+    );
+
+    new Setting(refCard)
+      .setName("Interactive Syntax Cheatsheet")
+      .setDesc("Opens the full reference catalog modal detailing custom extensions (dmat[], cmat[], {a}/{b}, multi-dialect operators, font modifiers) with KaTeX previews and toggle guides.")
+      .addButton((btn) =>
+        btn
+          .setButtonText("Open Cheatsheet")
+          .setCta()
+          .onClick(() => {
+            new ColorMathReferenceModal(this.plugin.app).open();
+          })
+      );
+
+    new Setting(refCard)
+      .setName("Export Reference Note to Vault")
+      .setDesc("Creates 'Color Math Reference.md' directly in your vault root for permanent side-by-side reading, offline search, and personal annotations.")
+      .addButton((btn) =>
+        btn
+          .setButtonText("Create Note in Vault")
+          .onClick(async () => {
+            await exportReferenceNote(this.plugin.app);
+          })
+      );
 
     // =========================================================================
     // Section 1: ⚡ Core & Viewport Rendering

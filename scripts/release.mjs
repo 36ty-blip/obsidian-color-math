@@ -105,7 +105,7 @@ async function runSyncCommand(profileId, dryRun, force) {
 
   const cmd = `node "${SYNC_ENGINE_PATH}" ${flags.join(" ")}`;
   try {
-    const output = execSync(cmd, { encoding: "utf-8", timeout: 45000, cwd: SYNC_DIR });
+    const output = execSync(cmd, { encoding: "utf-8", timeout: 60000, maxBuffer: 50 * 1024 * 1024, cwd: SYNC_DIR });
     return { success: true, output };
   } catch (err) {
     return { success: false, error: err.message, stderr: err.stderr?.toString() };

@@ -9,8 +9,19 @@ import { Worker, isMainThread, parentPort, workerData } from "worker_threads";
 import katex from "katex";
 import { scanMarkdown } from "../src/parsers/markdown_scanner";
 import { convertText } from "../src/converters/block";
-import { DEFAULT_COLORS, DEFAULT_OPTIONS, ColorMathOptions } from "../src/config";
+import { DEFAULT_COLORS, DEFAULT_OPTIONS, ColorMathOptions, ColorPalette } from "../src/config";
 import { detectNoteField } from "../src/parsers/frontmatter";
+
+// Full-spectrum audit palette: activates all 16 semantic roles (including Group C/D optional roles)
+// so corpus audit catches any LaTeX/MathJax wrapping regression when a user enables non-default roles.
+const AUDIT_COLORS: ColorPalette = {
+  ...DEFAULT_COLORS,
+  relation: "#89ddff",
+  arithmetic: "#c0caf5",
+  dot: "#ff757f",
+  structural: "#ced5e3",
+  spacing: "#565f89",
+};
 
 export interface Anomaly {
   type: "CRITICAL_REGRESSION" | "PRE_EXISTING_NOTE_TYPO" | "PARSER_CRASH" | "ROUNDTRIP_MISMATCH";
@@ -143,7 +154,7 @@ if (!isMainThread) {
 
     let colored: string;
     try {
-      colored = convertText(content, DEFAULT_COLORS, options);
+      colored = convertText(content, AUDIT_COLORS, options);
     } catch (bakeErr: any) {
       result.crashes.push({
         type: "PARSER_CRASH",

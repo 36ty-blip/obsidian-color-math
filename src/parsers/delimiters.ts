@@ -2,7 +2,7 @@
 
 import { RAINBOW_DELIMITER_COLORS } from "../config";
 import { ColorSpan } from "../utils/spans";
-import { skipEnvironmentHead, readColorCommand, skipMacroDefinition } from "../utils/latex_helpers";
+import { skipEnvironmentHead, readColorCommand, skipMacroDefinition, readVerbEnd, readOpaqueCommand } from "../utils/latex_helpers";
 
 export interface DelimiterItem {
   type: string;
@@ -192,6 +192,20 @@ export function findDelimiterScan(
     if (colorCmd !== null) {
       index = colorCmd[1];
       continue;
+    }
+
+    // Skip \verb|...| and opaque text commands (\text{...}, \mbox{...}) so literal characters/prose parens inside them do not corrupt delimiter matching
+    if (text[index] === "\\") {
+      const verb = readVerbEnd(text, index);
+      if (verb !== null) {
+        index = verb[0];
+        continue;
+      }
+      const opaque = readOpaqueCommand(text, index);
+      if (opaque !== null) {
+        index = opaque[1];
+        continue;
+      }
     }
 
     // Check \left / \right
@@ -483,9 +497,16 @@ export function findDelimiterScan(
 
     if (text.startsWith("\\rangle", index)) {
       let matchIdx = -1;
+      let ketPipeIdx = -1;
       for (let i = stack.length - 1; i >= 0; i--) {
         if (!stack[i].item.isLeftRight && stack[i].item.type === "angle") {
           matchIdx = i;
+          break;
+        }
+        if (!stack[i].item.isLeftRight && stack[i].item.type === "pipe" && ketPipeIdx === -1) {
+          ketPipeIdx = i;
+        }
+        if (stack[i].item.isLeftRight || stack[i].item.type === "bare_brace" || stack[i].item.type === "paren" || stack[i].item.type === "bracket" || stack[i].item.type === "brace") {
           break;
         }
       }
@@ -501,6 +522,9 @@ export function findDelimiterScan(
           },
           depth: matched.depth,
         });
+      } else if (ketPipeIdx !== -1) {
+        // Dirac ket |...\rangle: consume the opening pipe so it does not remain as a stray unmatched pipe
+        stack.splice(ketPipeIdx, 1);
       } else {
         unmatched.push({
           type: "angle",
@@ -727,6 +751,16 @@ export function findDelimiterScan(
           matchIdx = i;
           break;
         }
+        // Do not allow a bare pipe | to match across an open brace, paren, bracket, or \left scope
+        if (
+          stack[i].item.isLeftRight ||
+          stack[i].item.type === "bare_brace" ||
+          stack[i].item.type === "paren" ||
+          stack[i].item.type === "bracket" ||
+          stack[i].item.type === "brace"
+        ) {
+          break;
+        }
       }
       if (matchIdx !== -1) {
         const matched = stack[matchIdx];
@@ -825,10 +859,11 @@ export function collectDelimiterSpans(
   options?: DelimiterCollectorOptions
 ): ColorSpan[] {
   const forLatexWrap = options?.forLatexWrap ?? false;
-  // SAFETY GUARD: If forLatexWrap is true (LaTeX baking), we NEVER include bare braces!
+  // SAFETY GUARD: If forLatexWrap is true (LaTeX baking), we NEVER include bare braces or unmatched error spans!
   const includeBareBraces = forLatexWrap ? false : (options?.includeBareBraces ?? false);
+  const highlightUnmatched = !forLatexWrap && Boolean(options?.highlightUnmatched);
   const scan = findDelimiterScan(text, {
-    includeBareBraces: options?.highlightUnmatched ? true : Boolean(options?.includeBareBraces),
+    includeBareBraces: highlightUnmatched ? true : includeBareBraces,
   });
   const palette = options?.palette || RAINBOW_DELIMITER_COLORS;
   const spans: ColorSpan[] = [];
@@ -875,8 +910,8 @@ export function collectDelimiterSpans(
     }
   }
 
-  // Highlight unmatched delimiters (unclosed opening or stray closing)
-  if (options?.highlightUnmatched) {
+  // Highlight unmatched delimiters (unclosed opening or stray closing) strictly in CodeMirror 6 (!forLatexWrap)
+  if (highlightUnmatched) {
     const errColor = options?.errorColor || "#f7768e";
     const strict = options?.strictBracketWarnings === true;
 
