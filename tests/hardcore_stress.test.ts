@@ -20,7 +20,8 @@ describe("Hardcore Adversarial & Stress Testing", () => {
       const halfColored = "$$\\frac{d}{dx}\\textcolor{#7aa2f7}{f(x)} = f'(x)$$";
       const result = convertText(halfColored);
 
-      expect(result).toMatch(/\\textcolor\{white\}\{=\}/);
+      expect(result).toContain(" = ");
+      expect(result).not.toMatch(/\\textcolor\{white\}\{=\}/);
       expect(result).toMatch(/\\textcolor\{#[0-9a-fA-F]+\}\{f'\(x\)\}/);
       expect(result).not.toMatch(/\\textcolor\{[^}]+\}\{\\textcolor/);
     });
@@ -107,7 +108,8 @@ $$\\frac{d}{dx}f(x) = f'(x)$$
       expect(converted).toContain('return "$$\\frac{d}{dx}f(x) = f\'(x)$$"');
       // The real math block outside code MUST have \textcolor
       expect(converted).toMatch(/\\textcolor\{#[0-9a-fA-F]+\}\{f\(x\)\}/);
-      expect(converted).toMatch(/\\textcolor\{white\}\{=\}/);
+      expect(converted).toContain(" = ");
+      expect(converted).not.toMatch(/\\textcolor\{white\}\{=\}/);
     });
 
     it("protects inline backtick code spans from math coloring", () => {
@@ -167,14 +169,16 @@ x^{2}, & x\\ge0\\\\
 \\end{cases}
 $$`;
       const converted = convertText(input);
-      // Both relations must be colored
-      expect(converted).toMatch(/\\textcolor\{white\}\{\\ge\}/);
-      expect(converted).toMatch(/\\textcolor\{white\}\{<\}/);
+      // Relations must remain uncolored to maintain contrast across light and dark themes
+      expect(converted).not.toMatch(/\\textcolor\{white\}\{\\ge\}/);
+      expect(converted).not.toMatch(/\\textcolor\{white\}\{<\}/);
+      expect(converted).toContain("x\\ge0");
+      expect(converted).toContain("x<0");
 
       // With variableDataFlow, all x instances in both branches must be colored
       const withDataFlow = convertText(input, undefined, { variableDataFlow: true });
       expect(withDataFlow).toMatch(/-\\textcolor\{#[0-9a-fA-F]+\}\{x\}/);
-      expect(withDataFlow).toMatch(/\\textcolor\{#[0-9a-fA-F]+\}\{x\}\\textcolor\{white\}\{<\}/);
+      expect(withDataFlow).toMatch(/\\textcolor\{#[0-9a-fA-F]+\}\{x\}</);
     });
   });
 });

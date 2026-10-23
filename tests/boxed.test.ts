@@ -5,7 +5,7 @@ describe("boxed tests", () => {
   it("converts boxed simple equation", () => {
     const input = "$$\\boxed{x = 1}$$";
     const result = convertText(input);
-    expect(result).toBe("$$\\boxed{x \\textcolor{white}{=} 1}$$");
+    expect(result).toBe("$$\\boxed{x = 1}$$");
   });
 
   it("converts boxed nested functions", () => {

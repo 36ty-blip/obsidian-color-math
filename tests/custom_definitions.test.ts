@@ -84,9 +84,10 @@ describe("Custom Definitions Color Rendering", () => {
     expect(rendered).toContain("\\textcolor{#7aa2f7}{relu}");
   });
 
-  it("colors custom relational operator \\coloneqq", () => {
+  it("preserves custom relational operator \\coloneqq uncolored for contrast", () => {
     const rendered = colorLatexBody("x \\coloneqq 5");
-    expect(rendered).toContain("\\textcolor{white}{\\coloneqq}");
+    expect(rendered).not.toContain("\\textcolor{white}{\\coloneqq}");
+    expect(rendered).toContain("\\coloneqq");
   });
 
   it("colors custom quantum operators when quantum operators are enabled", () => {

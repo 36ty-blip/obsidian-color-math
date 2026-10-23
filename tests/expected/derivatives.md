@@ -3,7 +3,7 @@
 ## 1. Power of a function
 
 $$
-\frac{d}{dx}\textcolor{#7aa2f7}{g(y)^m}\textcolor{white}{=}\textcolor{#e0af68}{m}\textcolor{#7aa2f7}{g(y)^{m-1}}\textcolor{white}{\cdot} \textcolor{#bb9af7}{g'(y)}\textcolor{#9ece6a}{y'}
+\frac{d}{dx}\textcolor{#7aa2f7}{g(y)^m}=\textcolor{#e0af68}{m}\textcolor{#7aa2f7}{g(y)^{m-1}}\cdot \textcolor{#bb9af7}{g'(y)}\textcolor{#9ece6a}{y'}
 $$
 
 ---
@@ -11,7 +11,7 @@ $$
 ## 2. Cubic function
 
 $$
-\frac{d}{dx}\textcolor{#7aa2f7}{f(u)^3}\textcolor{white}{=}\textcolor{#e0af68}{3}\textcolor{#7aa2f7}{f(u)^2}\textcolor{white}{\cdot} \textcolor{#bb9af7}{f'(u)}\textcolor{#9ece6a}{u'}
+\frac{d}{dx}\textcolor{#7aa2f7}{f(u)^3}=\textcolor{#e0af68}{3}\textcolor{#7aa2f7}{f(u)^2}\cdot \textcolor{#bb9af7}{f'(u)}\textcolor{#9ece6a}{u'}
 $$
 
 ---
@@ -19,7 +19,7 @@ $$
 ## 3. Negative power
 
 $$
-\frac{d}{dx}\textcolor{#7aa2f7}{h(t)^{-2}}\textcolor{white}{=}\textcolor{#e0af68}{-2}\textcolor{#7aa2f7}{h(t)^{-3}}\textcolor{white}{\cdot} \textcolor{#bb9af7}{h'(t)}\textcolor{#9ece6a}{t'}
+\frac{d}{dx}\textcolor{#7aa2f7}{h(t)^{-2}}=\textcolor{#e0af68}{-2}\textcolor{#7aa2f7}{h(t)^{-3}}\cdot \textcolor{#bb9af7}{h'(t)}\textcolor{#9ece6a}{t'}
 $$
 
 ---
@@ -28,8 +28,8 @@ $$
 
 $$
 \frac{d}{dx}\textcolor{#7aa2f7}{p(z)^{\frac{1}{2}}}
-\textcolor{white}{=}
-\textcolor{#e0af68}{\frac{1}{2}}\textcolor{#7aa2f7}{p(z)^{-\frac{1}{2}}}\textcolor{white}{\cdot} \textcolor{#bb9af7}{p'(z)}\textcolor{#9ece6a}{z'}
+=
+\textcolor{#e0af68}{\frac{1}{2}}\textcolor{#7aa2f7}{p(z)^{-\frac{1}{2}}}\cdot \textcolor{#bb9af7}{p'(z)}\textcolor{#9ece6a}{z'}
 $$
 
 ---
@@ -38,8 +38,8 @@ $$
 
 $$
 \frac{d}{dx}\textcolor{#7aa2f7}{\sin(f(y))}
-\textcolor{white}{=}
-\textcolor{#bb9af7}{\cos(f(y))}\textcolor{white}{\cdot} \textcolor{#bb9af7}{f'(y)}\textcolor{#9ece6a}{y'}
+=
+\textcolor{#bb9af7}{\cos(f(y))}\cdot \textcolor{#bb9af7}{f'(y)}\textcolor{#9ece6a}{y'}
 $$
 
 ---
@@ -48,8 +48,8 @@ $$
 
 $$
 \frac{d}{dx}\textcolor{#7aa2f7}{\cos(g(t))}
-\textcolor{white}{=}
-\textcolor{white}{-}\textcolor{#bb9af7}{\sin(g(t))}\textcolor{white}{\cdot} \textcolor{#bb9af7}{g'(t)}\textcolor{#9ece6a}{t'}
+=
+-\textcolor{#bb9af7}{\sin(g(t))}\cdot \textcolor{#bb9af7}{g'(t)}\textcolor{#9ece6a}{t'}
 $$
 
 ---
@@ -58,8 +58,8 @@ $$
 
 $$
 \frac{d}{dx}\textcolor{#7aa2f7}{e^{f(u)}}
-\textcolor{white}{=}
-\textcolor{#bb9af7}{e^{f(u)}}\textcolor{white}{\cdot} \textcolor{#bb9af7}{f'(u)}\textcolor{#9ece6a}{u'}
+=
+\textcolor{#bb9af7}{e^{f(u)}}\cdot \textcolor{#bb9af7}{f'(u)}\textcolor{#9ece6a}{u'}
 $$
 
 ---
@@ -68,8 +68,8 @@ $$
 
 $$
 \frac{d}{dx}\textcolor{#7aa2f7}{\ln(h(y))}
-\textcolor{white}{=}
-\textcolor{#bb9af7}{\frac{\textcolor{#e0af68}{1}}{\textcolor{#7aa2f7}{h(y)}}}\textcolor{white}{\cdot} \textcolor{#bb9af7}{h'(y)}\textcolor{#9ece6a}{y'}
+=
+\textcolor{#bb9af7}{\frac{\textcolor{#e0af68}{1}}{\textcolor{#7aa2f7}{h(y)}}}\cdot \textcolor{#bb9af7}{h'(y)}\textcolor{#9ece6a}{y'}
 $$
 
 ---
@@ -78,8 +78,8 @@ $$
 
 $$
 \frac{d}{dx}\textcolor{#7aa2f7}{\sqrt{f(t)}}
-\textcolor{white}{=}
-\textcolor{#bb9af7}{\frac{\textcolor{#e0af68}{1}}{\textcolor{#e0af68}{2}\textcolor{#bb9af7}{\sqrt{f(t)}}}}\textcolor{white}{\cdot} \textcolor{#bb9af7}{f'(t)}\textcolor{#9ece6a}{t'}
+=
+\textcolor{#bb9af7}{\frac{\textcolor{#e0af68}{1}}{\textcolor{#e0af68}{2}\textcolor{#bb9af7}{\sqrt{f(t)}}}}\cdot \textcolor{#bb9af7}{f'(t)}\textcolor{#9ece6a}{t'}
 $$
 
 ---
@@ -88,7 +88,7 @@ $$
 
 $$
 \frac{d}{dx}\textcolor{#7aa2f7}{f(g(y))}
-\textcolor{white}{=}
-\textcolor{#bb9af7}{f'(g(y))}\textcolor{white}{\cdot} \textcolor{#9ece6a}{g'(y)}\textcolor{#9ece6a}{y'}
+=
+\textcolor{#bb9af7}{f'(g(y))}\cdot \textcolor{#9ece6a}{g'(y)}\textcolor{#9ece6a}{y'}
 $$
 ---

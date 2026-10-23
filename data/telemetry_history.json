@@ -1,0 +1,817 @@
+{
+  "schemaVersion": "1.0.0",
+  "repository": "36ty-blip/obsidian-color-math",
+  "lastUpdatedIST": "23/10/2026, 11:51:05",
+  "dailyTraffic": {
+    "views": {
+      "2026-10-02": {
+        "count": 0,
+        "uniques": 0
+      },
+      "2026-10-03": {
+        "count": 0,
+        "uniques": 0
+      },
+      "2026-10-04": {
+        "count": 1,
+        "uniques": 1
+      },
+      "2026-10-05": {
+        "count": 0,
+        "uniques": 0
+      },
+      "2026-10-06": {
+        "count": 0,
+        "uniques": 0
+      },
+      "2026-10-07": {
+        "count": 7,
+        "uniques": 1
+      },
+      "2026-10-08": {
+        "count": 25,
+        "uniques": 2
+      },
+      "2026-10-09": {
+        "count": 25,
+        "uniques": 1
+      },
+      "2026-10-10": {
+        "count": 7,
+        "uniques": 2
+      },
+      "2026-10-11": {
+        "count": 5,
+        "uniques": 1
+      },
+      "2026-10-12": {
+        "count": 5,
+        "uniques": 1
+      },
+      "2026-10-13": {
+        "count": 1,
+        "uniques": 1
+      },
+      "2026-10-14": {
+        "count": 1,
+        "uniques": 1
+      },
+      "2026-10-15": {
+        "count": 0,
+        "uniques": 0
+      },
+      "2026-10-16": {
+        "count": 0,
+        "uniques": 0
+      },
+      "2026-10-17": {
+        "count": 3,
+        "uniques": 1
+      },
+      "2026-10-18": {
+        "count": 1,
+        "uniques": 1
+      },
+      "2026-10-19": {
+        "count": 1,
+        "uniques": 1
+      },
+      "2026-10-20": {
+        "count": 0,
+        "uniques": 0
+      },
+      "2026-10-21": {
+        "count": 0,
+        "uniques": 0
+      }
+    },
+    "clones": {
+      "2026-10-02": {
+        "count": 0,
+        "uniques": 0
+      },
+      "2026-10-03": {
+        "count": 0,
+        "uniques": 0
+      },
+      "2026-10-04": {
+        "count": 4,
+        "uniques": 1
+      },
+      "2026-10-05": {
+        "count": 7,
+        "uniques": 4
+      },
+      "2026-10-06": {
+        "count": 1,
+        "uniques": 1
+      },
+      "2026-10-07": {
+        "count": 1,
+        "uniques": 1
+      },
+      "2026-10-08": {
+        "count": 93,
+        "uniques": 28
+      },
+      "2026-10-09": {
+        "count": 50,
+        "uniques": 18
+      },
+      "2026-10-10": {
+        "count": 18,
+        "uniques": 5
+      },
+      "2026-10-11": {
+        "count": 15,
+        "uniques": 10
+      },
+      "2026-10-12": {
+        "count": 4,
+        "uniques": 4
+      },
+      "2026-10-13": {
+        "count": 2,
+        "uniques": 2
+      },
+      "2026-10-14": {
+        "count": 1,
+        "uniques": 1
+      },
+      "2026-10-15": {
+        "count": 1,
+        "uniques": 1
+      },
+      "2026-10-16": {
+        "count": 3,
+        "uniques": 3
+      },
+      "2026-10-17": {
+        "count": 1,
+        "uniques": 1
+      },
+      "2026-10-18": {
+        "count": 1,
+        "uniques": 1
+      },
+      "2026-10-19": {
+        "count": 2,
+        "uniques": 2
+      },
+      "2026-10-20": {
+        "count": 1,
+        "uniques": 1
+      },
+      "2026-10-21": {
+        "count": 5,
+        "uniques": 4
+      }
+    }
+  },
+  "referrersArchive": {
+    "github.com": {
+      "maxCount": 28,
+      "maxUniques": 1,
+      "latestCount": 27,
+      "latestUniques": 1,
+      "lastSeen": "2026-10-23"
+    }
+  },
+  "pathsArchive": {
+    "/36ty-blip/obsidian-color-math": {
+      "title": "Overview",
+      "maxCount": 44,
+      "maxUniques": 5,
+      "latestCount": 43,
+      "latestUniques": 5,
+      "lastSeen": "2026-10-23"
+    },
+    "/36ty-blip/obsidian-color-math/issues": {
+      "title": "/issues",
+      "maxCount": 9,
+      "maxUniques": 1,
+      "latestCount": 8,
+      "latestUniques": 1,
+      "lastSeen": "2026-10-23"
+    },
+    "/36ty-blip/obsidian-color-math/releases": {
+      "title": "/releases",
+      "maxCount": 4,
+      "maxUniques": 1,
+      "latestCount": 4,
+      "latestUniques": 1,
+      "lastSeen": "2026-10-23"
+    },
+    "/36ty-blip/obsidian-color-math/issues/2": {
+      "title": "/issues/2",
+      "maxCount": 3,
+      "maxUniques": 1,
+      "latestCount": 3,
+      "latestUniques": 1,
+      "lastSeen": "2026-10-21"
+    },
+    "/36ty-blip/obsidian-color-math/issues/4": {
+      "title": "/issues/4",
+      "maxCount": 3,
+      "maxUniques": 1,
+      "latestCount": 3,
+      "latestUniques": 1,
+      "lastSeen": "2026-10-21"
+    },
+    "/36ty-blip/obsidian-color-math/releases/tag/1.0.58": {
+      "title": "/releases/tag/1.0.58",
+      "maxCount": 3,
+      "maxUniques": 1,
+      "latestCount": 3,
+      "latestUniques": 1,
+      "lastSeen": "2026-10-23"
+    },
+    "/36ty-blip/obsidian-color-math/branches/yours": {
+      "title": "/branches/yours",
+      "maxCount": 2,
+      "maxUniques": 1,
+      "latestCount": 2,
+      "latestUniques": 1,
+      "lastSeen": "2026-10-23"
+    },
+    "/36ty-blip/obsidian-color-math/pull/1": {
+      "title": "/pull/1",
+      "maxCount": 2,
+      "maxUniques": 1,
+      "latestCount": 2,
+      "latestUniques": 1,
+      "lastSeen": "2026-10-23"
+    },
+    "/36ty-blip/obsidian-color-math/tags": {
+      "title": "/tags",
+      "maxCount": 2,
+      "maxUniques": 1,
+      "latestCount": 2,
+      "latestUniques": 1,
+      "lastSeen": "2026-10-23"
+    },
+    "/36ty-blip/obsidian-color-math/tree/1.0.63": {
+      "title": "/tree/1.0.63",
+      "maxCount": 2,
+      "maxUniques": 1,
+      "latestCount": 2,
+      "latestUniques": 1,
+      "lastSeen": "2026-10-23"
+    },
+    "/36ty-blip/obsidian-color-math/blob/6d61bad4c653efb6d98fc6296e4a6a4e4d8b4076/src/config.ts": {
+      "title": "/blob/6d61bad4c653efb6d98fc6296e4a6a4e4d8b4076/src/config.ts",
+      "maxCount": 1,
+      "maxUniques": 1,
+      "latestCount": 1,
+      "latestUniques": 1,
+      "lastSeen": "2026-10-23"
+    },
+    "/36ty-blip/obsidian-color-math/blob/a7966197f92a7d772fae14a7d04f421115b20b9e/src/editor/live_preview.ts": {
+      "title": "/blob/a7966197f92a7d772fae14a7d04f421115b20b9e/src/editor/live_preview.ts",
+      "maxCount": 1,
+      "maxUniques": 1,
+      "latestCount": 1,
+      "latestUniques": 1,
+      "lastSeen": "2026-10-23"
+    }
+  },
+  "releasesHighWaterMark": {
+    "1.0.66": {
+      "tag": "1.0.66",
+      "publishedAt": "2026-10-10",
+      "timestamp": 1791629804000,
+      "mainJs": 79,
+      "manifest": 154,
+      "styles": 71,
+      "totalAssets": 304,
+      "uniqueInstalls": 154
+    },
+    "1.0.64": {
+      "tag": "1.0.64",
+      "publishedAt": "2026-10-09",
+      "timestamp": 1791560881000,
+      "mainJs": 14,
+      "manifest": 82,
+      "styles": 12,
+      "totalAssets": 108,
+      "uniqueInstalls": 82
+    },
+    "1.0.63": {
+      "tag": "1.0.63",
+      "publishedAt": "2026-10-09",
+      "timestamp": 1791557778000,
+      "mainJs": 3,
+      "manifest": 72,
+      "styles": 3,
+      "totalAssets": 78,
+      "uniqueInstalls": 72
+    },
+    "1.0.60": {
+      "tag": "1.0.60",
+      "publishedAt": "2026-10-08",
+      "timestamp": 1791455805000,
+      "mainJs": 19,
+      "manifest": 101,
+      "styles": 19,
+      "totalAssets": 139,
+      "uniqueInstalls": 101
+    },
+    "1.0.59": {
+      "tag": "1.0.59",
+      "publishedAt": "2026-10-08",
+      "timestamp": 1791445492000,
+      "mainJs": 0,
+      "manifest": 84,
+      "styles": 0,
+      "totalAssets": 84,
+      "uniqueInstalls": 84
+    },
+    "1.0.58": {
+      "tag": "1.0.58",
+      "publishedAt": "2026-10-08",
+      "timestamp": 1791441899000,
+      "mainJs": 2,
+      "manifest": 86,
+      "styles": 2,
+      "totalAssets": 90,
+      "uniqueInstalls": 86
+    },
+    "1.0.33": {
+      "tag": "1.0.33",
+      "publishedAt": "2026-09-24",
+      "timestamp": 1790244870000,
+      "mainJs": 112,
+      "manifest": 273,
+      "styles": 109,
+      "totalAssets": 494,
+      "uniqueInstalls": 273
+    },
+    "1.0.30": {
+      "tag": "1.0.30",
+      "publishedAt": "2026-09-24",
+      "timestamp": 1790232471000,
+      "mainJs": 5,
+      "manifest": 167,
+      "styles": 5,
+      "totalAssets": 177,
+      "uniqueInstalls": 167
+    },
+    "1.0.29": {
+      "tag": "1.0.29",
+      "publishedAt": "2026-09-21",
+      "timestamp": 1790006822000,
+      "mainJs": 25,
+      "manifest": 209,
+      "styles": 25,
+      "totalAssets": 259,
+      "uniqueInstalls": 209
+    },
+    "1.0.28": {
+      "tag": "1.0.28",
+      "publishedAt": "2026-09-21",
+      "timestamp": 1790006155000,
+      "mainJs": 0,
+      "manifest": 176,
+      "styles": 0,
+      "totalAssets": 176,
+      "uniqueInstalls": 176
+    },
+    "1.0.27": {
+      "tag": "1.0.27",
+      "publishedAt": "2026-09-21",
+      "timestamp": 1790004938000,
+      "mainJs": 0,
+      "manifest": 109,
+      "styles": 0,
+      "totalAssets": 109,
+      "uniqueInstalls": 109
+    },
+    "1.0.25": {
+      "tag": "1.0.25",
+      "publishedAt": "2026-09-18",
+      "timestamp": 1789746687000,
+      "mainJs": 34,
+      "manifest": 149,
+      "styles": 34,
+      "totalAssets": 217,
+      "uniqueInstalls": 149
+    },
+    "1.0.24": {
+      "tag": "1.0.24",
+      "publishedAt": "2026-09-18",
+      "timestamp": 1789745595000,
+      "mainJs": 0,
+      "manifest": 112,
+      "styles": 0,
+      "totalAssets": 112,
+      "uniqueInstalls": 112
+    },
+    "1.0.23": {
+      "tag": "1.0.23",
+      "publishedAt": "2026-09-18",
+      "timestamp": 1789733393000,
+      "mainJs": 6,
+      "manifest": 107,
+      "styles": 6,
+      "totalAssets": 119,
+      "uniqueInstalls": 107
+    },
+    "1.0.11": {
+      "tag": "1.0.11",
+      "publishedAt": "2026-09-14",
+      "timestamp": 1789388729000,
+      "mainJs": 27,
+      "manifest": 131,
+      "styles": 27,
+      "totalAssets": 185,
+      "uniqueInstalls": 131
+    },
+    "1.0.10": {
+      "tag": "1.0.10",
+      "publishedAt": "2026-09-14",
+      "timestamp": 1789379698000,
+      "mainJs": 2,
+      "manifest": 107,
+      "styles": 2,
+      "totalAssets": 111,
+      "uniqueInstalls": 107
+    },
+    "1.0.9": {
+      "tag": "1.0.9",
+      "publishedAt": "2026-09-13",
+      "timestamp": 1789307658000,
+      "mainJs": 8,
+      "manifest": 37,
+      "styles": 8,
+      "totalAssets": 53,
+      "uniqueInstalls": 37
+    },
+    "1.0.8": {
+      "tag": "1.0.8",
+      "publishedAt": "2026-09-13",
+      "timestamp": 1789301099000,
+      "mainJs": 4,
+      "manifest": 31,
+      "styles": 4,
+      "totalAssets": 39,
+      "uniqueInstalls": 31
+    },
+    "1.0.7": {
+      "tag": "1.0.7",
+      "publishedAt": "2026-09-10",
+      "timestamp": 1789051461000,
+      "mainJs": 20,
+      "manifest": 36,
+      "styles": 20,
+      "totalAssets": 76,
+      "uniqueInstalls": 36
+    },
+    "1.0.6": {
+      "tag": "1.0.6",
+      "publishedAt": "2026-09-10",
+      "timestamp": 1789044887000,
+      "mainJs": 1,
+      "manifest": 16,
+      "styles": 1,
+      "totalAssets": 18,
+      "uniqueInstalls": 16
+    },
+    "1.0.5": {
+      "tag": "1.0.5",
+      "publishedAt": "2026-09-07",
+      "timestamp": 1788793863000,
+      "mainJs": 29,
+      "manifest": 49,
+      "styles": 28,
+      "totalAssets": 106,
+      "uniqueInstalls": 49
+    },
+    "1.0.4": {
+      "tag": "1.0.4",
+      "publishedAt": "2026-09-07",
+      "timestamp": 1788789455000,
+      "mainJs": 2,
+      "manifest": 18,
+      "styles": 0,
+      "totalAssets": 20,
+      "uniqueInstalls": 18
+    },
+    "1.0.3": {
+      "tag": "1.0.3",
+      "publishedAt": "2026-09-07",
+      "timestamp": 1788788672000,
+      "mainJs": 0,
+      "manifest": 16,
+      "styles": 0,
+      "totalAssets": 16,
+      "uniqueInstalls": 16
+    },
+    "1.0.2": {
+      "tag": "1.0.2",
+      "publishedAt": "2026-09-07",
+      "timestamp": 1788787889000,
+      "mainJs": 0,
+      "manifest": 17,
+      "styles": 0,
+      "totalAssets": 17,
+      "uniqueInstalls": 17
+    },
+    "1.0.1": {
+      "tag": "1.0.1",
+      "publishedAt": "2026-09-07",
+      "timestamp": 1788786216000,
+      "mainJs": 0,
+      "manifest": 10,
+      "styles": 0,
+      "totalAssets": 10,
+      "uniqueInstalls": 10
+    },
+    "1.0.0": {
+      "tag": "1.0.0",
+      "publishedAt": "2026-09-07",
+      "timestamp": 1788783899000,
+      "mainJs": 2,
+      "manifest": 12,
+      "styles": 2,
+      "totalAssets": 16,
+      "uniqueInstalls": 12
+    },
+    "0.1.0": {
+      "tag": "0.1.0",
+      "publishedAt": "2026-09-05",
+      "timestamp": 1788625279000,
+      "mainJs": 2,
+      "manifest": 11,
+      "styles": 3,
+      "totalAssets": 16,
+      "uniqueInstalls": 11
+    }
+  },
+  "releaseDailySnapshots": {
+    "2026-10-16": {
+      "totalAssets": 2632,
+      "uniqueInstalls": 1890,
+      "byTag": {
+        "1.0.66": 201,
+        "1.0.64": 62,
+        "1.0.63": 32,
+        "1.0.60": 93,
+        "1.0.59": 38,
+        "1.0.58": 44,
+        "1.0.33": 448,
+        "1.0.30": 131,
+        "1.0.29": 213,
+        "1.0.28": 130,
+        "1.0.27": 109,
+        "1.0.25": 217,
+        "1.0.24": 112,
+        "1.0.23": 119,
+        "1.0.11": 185,
+        "1.0.10": 111,
+        "1.0.9": 53,
+        "1.0.8": 39,
+        "1.0.7": 76,
+        "1.0.6": 18,
+        "1.0.5": 106,
+        "1.0.4": 20,
+        "1.0.3": 16,
+        "1.0.2": 17,
+        "1.0.1": 10,
+        "1.0.0": 16,
+        "0.1.0": 16
+      }
+    },
+    "2026-10-17": {
+      "totalAssets": 2681,
+      "uniqueInstalls": 1933,
+      "byTag": {
+        "1.0.66": 214,
+        "1.0.64": 66,
+        "1.0.63": 36,
+        "1.0.60": 97,
+        "1.0.59": 42,
+        "1.0.58": 48,
+        "1.0.33": 452,
+        "1.0.30": 135,
+        "1.0.29": 217,
+        "1.0.28": 134,
+        "1.0.27": 109,
+        "1.0.25": 217,
+        "1.0.24": 112,
+        "1.0.23": 119,
+        "1.0.11": 185,
+        "1.0.10": 111,
+        "1.0.9": 53,
+        "1.0.8": 39,
+        "1.0.7": 76,
+        "1.0.6": 18,
+        "1.0.5": 106,
+        "1.0.4": 20,
+        "1.0.3": 16,
+        "1.0.2": 17,
+        "1.0.1": 10,
+        "1.0.0": 16,
+        "0.1.0": 16
+      }
+    },
+    "2026-10-18": {
+      "totalAssets": 2744,
+      "uniqueInstalls": 1994,
+      "byTag": {
+        "1.0.66": 223,
+        "1.0.64": 72,
+        "1.0.63": 42,
+        "1.0.60": 103,
+        "1.0.59": 48,
+        "1.0.58": 54,
+        "1.0.33": 458,
+        "1.0.30": 141,
+        "1.0.29": 223,
+        "1.0.28": 140,
+        "1.0.27": 109,
+        "1.0.25": 217,
+        "1.0.24": 112,
+        "1.0.23": 119,
+        "1.0.11": 185,
+        "1.0.10": 111,
+        "1.0.9": 53,
+        "1.0.8": 39,
+        "1.0.7": 76,
+        "1.0.6": 18,
+        "1.0.5": 106,
+        "1.0.4": 20,
+        "1.0.3": 16,
+        "1.0.2": 17,
+        "1.0.1": 10,
+        "1.0.0": 16,
+        "0.1.0": 16
+      }
+    },
+    "2026-10-19": {
+      "totalAssets": 2800,
+      "uniqueInstalls": 2046,
+      "byTag": {
+        "1.0.66": 234,
+        "1.0.64": 77,
+        "1.0.63": 47,
+        "1.0.60": 108,
+        "1.0.59": 53,
+        "1.0.58": 59,
+        "1.0.33": 463,
+        "1.0.30": 146,
+        "1.0.29": 228,
+        "1.0.28": 145,
+        "1.0.27": 109,
+        "1.0.25": 217,
+        "1.0.24": 112,
+        "1.0.23": 119,
+        "1.0.11": 185,
+        "1.0.10": 111,
+        "1.0.9": 53,
+        "1.0.8": 39,
+        "1.0.7": 76,
+        "1.0.6": 18,
+        "1.0.5": 106,
+        "1.0.4": 20,
+        "1.0.3": 16,
+        "1.0.2": 17,
+        "1.0.1": 10,
+        "1.0.0": 16,
+        "0.1.0": 16
+      }
+    },
+    "2026-10-20": {
+      "totalAssets": 2974,
+      "uniqueInstalls": 2211,
+      "byTag": {
+        "1.0.66": 264,
+        "1.0.64": 93,
+        "1.0.63": 63,
+        "1.0.60": 124,
+        "1.0.59": 69,
+        "1.0.58": 75,
+        "1.0.33": 479,
+        "1.0.30": 162,
+        "1.0.29": 244,
+        "1.0.28": 161,
+        "1.0.27": 109,
+        "1.0.25": 217,
+        "1.0.24": 112,
+        "1.0.23": 119,
+        "1.0.11": 185,
+        "1.0.10": 111,
+        "1.0.9": 53,
+        "1.0.8": 39,
+        "1.0.7": 76,
+        "1.0.6": 18,
+        "1.0.5": 106,
+        "1.0.4": 20,
+        "1.0.3": 16,
+        "1.0.2": 17,
+        "1.0.1": 10,
+        "1.0.0": 16,
+        "0.1.0": 16
+      }
+    },
+    "2026-10-21": {
+      "totalAssets": 3019,
+      "uniqueInstalls": 2253,
+      "byTag": {
+        "1.0.66": 273,
+        "1.0.64": 97,
+        "1.0.63": 67,
+        "1.0.60": 128,
+        "1.0.59": 73,
+        "1.0.58": 79,
+        "1.0.33": 483,
+        "1.0.30": 166,
+        "1.0.29": 248,
+        "1.0.28": 165,
+        "1.0.27": 109,
+        "1.0.25": 217,
+        "1.0.24": 112,
+        "1.0.23": 119,
+        "1.0.11": 185,
+        "1.0.10": 111,
+        "1.0.9": 53,
+        "1.0.8": 39,
+        "1.0.7": 76,
+        "1.0.6": 18,
+        "1.0.5": 106,
+        "1.0.4": 20,
+        "1.0.3": 16,
+        "1.0.2": 17,
+        "1.0.1": 10,
+        "1.0.0": 16,
+        "0.1.0": 16
+      }
+    },
+    "2026-10-22": {
+      "totalAssets": 3123,
+      "uniqueInstalls": 2350,
+      "byTag": {
+        "1.0.66": 296,
+        "1.0.64": 106,
+        "1.0.63": 76,
+        "1.0.60": 137,
+        "1.0.59": 82,
+        "1.0.58": 88,
+        "1.0.33": 492,
+        "1.0.30": 175,
+        "1.0.29": 257,
+        "1.0.28": 174,
+        "1.0.27": 109,
+        "1.0.25": 217,
+        "1.0.24": 112,
+        "1.0.23": 119,
+        "1.0.11": 185,
+        "1.0.10": 111,
+        "1.0.9": 53,
+        "1.0.8": 39,
+        "1.0.7": 76,
+        "1.0.6": 18,
+        "1.0.5": 106,
+        "1.0.4": 20,
+        "1.0.3": 16,
+        "1.0.2": 17,
+        "1.0.1": 10,
+        "1.0.0": 16,
+        "0.1.0": 16
+      }
+    },
+    "2026-10-23": {
+      "totalAssets": 3149,
+      "uniqueInstalls": 2372,
+      "byTag": {
+        "1.0.66": 304,
+        "1.0.64": 108,
+        "1.0.63": 78,
+        "1.0.60": 139,
+        "1.0.59": 84,
+        "1.0.58": 90,
+        "1.0.33": 494,
+        "1.0.30": 177,
+        "1.0.29": 259,
+        "1.0.28": 176,
+        "1.0.27": 109,
+        "1.0.25": 217,
+        "1.0.24": 112,
+        "1.0.23": 119,
+        "1.0.11": 185,
+        "1.0.10": 111,
+        "1.0.9": 53,
+        "1.0.8": 39,
+        "1.0.7": 76,
+        "1.0.6": 18,
+        "1.0.5": 106,
+        "1.0.4": 20,
+        "1.0.3": 16,
+        "1.0.2": 17,
+        "1.0.1": 10,
+        "1.0.0": 16,
+        "0.1.0": 16
+      }
+    }
+  },
+  "lastUpdatedDate": "2026-10-23"
+}

@@ -217,7 +217,6 @@ export function createColorMathLivePlugin(
           for (const block of targetMath) {
             try {
               const blockStart = offset + block.contentStart;
-              const blockEnd = offset + block.contentEnd;
 
               const body = text.slice(block.contentStart, block.contentEnd);
               if (containsColorWrapper(body)) continue;
@@ -305,6 +304,43 @@ export function createColorMathLivePlugin(
               if (isUnmatched) {
                 unmatchedCount++;
                 if (unmatchedCount > 15) continue;
+              }
+              const colorVal = span.color ? span.color.trim().toLowerCase() : "";
+              const isNone =
+                !colorVal ||
+                colorVal === "none" ||
+                colorVal === "off" ||
+                colorVal === "transparent" ||
+                colorVal === "default";
+
+              const tokenText = body.slice(span.start, span.end);
+              const isRawAmbiguousLetterOp =
+                tokenText === "xxx" ||
+                tokenText === "vvv" ||
+                tokenText === "uuu" ||
+                tokenText === "nnn" ||
+                tokenText === "xx" ||
+                tokenText === "vv" ||
+                tokenText === "uu" ||
+                tokenText === "nn";
+
+              if (isNone && !isUnmatched) {
+                // If it's a raw ambiguous letter shorthand (xx, xxx, vv, vvv, uu, uuu, nn, nnn) when set to "none",
+                // apply upright contrast style so Obsidian does not render it as italic single variables.
+                // Operators with explicit punctuation (o+, ox, o., +-, -+) step aside completely to inherit natural theme styling.
+                if (isRawAmbiguousLetterOp) {
+                  const cls = "color-math-live-token color-math-operator-contrast";
+                  pendingDecorations.push({
+                    from,
+                    to,
+                    decoration: Decoration.mark({
+                      class: cls,
+                    }),
+                  });
+                }
+                // For functions (\sin, \cos, etc.) or any category set to "none":
+                // STEP ASIDE COMPLETELY: emit zero decoration so Obsidian's natural theme highlighting remains untouched!
+                continue;
               }
               const isStringLiteral =
                 span.end - span.start > 1 &&

@@ -37,6 +37,15 @@ const VARIABLE_OPAQUE_MACROS = new Set([
   "ref",
   "eqref",
   "cite",
+  "hspace",
+  "vspace",
+  "phantom",
+  "hphantom",
+  "vphantom",
+  "kern",
+  "mkern",
+  "mskip",
+  "hskip",
 ]);
 
 function skipComment(text: string, start: number): number {
@@ -317,6 +326,21 @@ export function collectVariableSpans(
         }
 
         index = cmdEnd;
+        continue;
+      }
+    }
+
+    // Max Speed syntactic sugar constructors: mat, pmat, bmat, sqrt followed strictly by '[' or '{' (never '(')
+    const sugarConstructorMatch = body
+      .slice(index)
+      .match(/^(mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat|sqrt)(?![A-Za-z])/);
+    if (sugarConstructorMatch) {
+      const name = sugarConstructorMatch[1];
+      let lookahead = index + name.length;
+      while (lookahead < body.length && /\s/.test(body[lookahead])) lookahead++;
+      if (lookahead < body.length && (body[lookahead] === "[" || body[lookahead] === "{")) {
+        // Skip keyword atomically so letters (e.g. m, a, t) are NOT individually hashed as variables
+        index += name.length;
         continue;
       }
     }

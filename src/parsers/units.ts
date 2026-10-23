@@ -2,6 +2,7 @@
 
 import { COLORS, ColorPalette } from "../config";
 import { ColorSpan } from "../utils/spans";
+import { maskComments } from "../utils/latex_helpers";
 
 export interface UnitSpan {
   start: number;
@@ -76,7 +77,8 @@ const NUMBER_LEADER_REGEX =
  * - Single-letter safety: single letters (m, s, g, etc.) are protected unless allowSingleLetterUnits is active.
  * - Explicit \text{...} and \mathrm{...} units.
  */
-export function findUnitSpans(body: string, options?: UnitOptions): UnitSpan[] {
+export function findUnitSpans(rawBody: string, options?: UnitOptions): UnitSpan[] {
+  const body = rawBody.includes("%") ? maskComments(rawBody) : rawBody;
   const spans: UnitSpan[] = [];
 
   function addSpan(start: number, end: number, text: string) {

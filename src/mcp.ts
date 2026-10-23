@@ -91,7 +91,7 @@ export function registerColorMathMcpTools(plugin: ColorMathPlugin): (() => void)
         text: z.string().describe("Markdown or LaTeX text containing math expressions to colorize"),
       },
       async (args: Record<string, unknown>) => {
-        const text = String(args.text ?? "");
+        const text = typeof args.text === "string" ? args.text : "";
         const palette = plugin.settings.palette;
         const options = plugin.getMathOptions();
         const converted = convertText(text, palette, options);
@@ -119,7 +119,7 @@ export function registerColorMathMcpTools(plugin: ColorMathPlugin): (() => void)
         text: z.string().describe("Markdown or LaTeX text containing baked math color formatting to clean"),
       },
       async (args: Record<string, unknown>) => {
-        const text = String(args.text ?? "");
+        const text = typeof args.text === "string" ? args.text : "";
         const cleaned = uncolorText(text);
         return {
           originalLength: text.length,
@@ -149,7 +149,7 @@ export function registerColorMathMcpTools(plugin: ColorMathPlugin): (() => void)
           .describe("If true, removes baked colors instead of adding them (default: false)"),
       },
       async (args: Record<string, unknown>) => {
-        const path = String(args.path ?? "").trim();
+        const path = typeof args.path === "string" ? args.path.trim() : "";
         const undo = Boolean(args.undo ?? false);
 
         const file = plugin.app.vault.getAbstractFileByPath(path);

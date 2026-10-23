@@ -45,13 +45,13 @@ describe("Self Tests (from self_test.py)", () => {
     "$$\\mathbf{M}=\\left(\\begin{array}{cc}a&b\\\\c&d" +
     "\\end{array}\\right)$$";
   const nested_array_colored =
-    "$$\\textcolor{#7aa2f7}{\\mathbf{M}}\\textcolor{white}{=}" +
+    "$$\\textcolor{#7aa2f7}{\\mathbf{M}}=" +
     "\\textcolor{#9d7cd8}{\\left(\\begin{array}{cc}a&b\\\\c&d" +
     "\\end{array}\\right)}$$";
 
   const grouped_command = "$$\\operatorname*{arg\\,max}_{x} f(x)$$";
   const grouped_command_colored =
-    "$$\\operatorname*{arg\\textcolor{white}{\\,}max}_" +
+    "$$\\operatorname*{arg\\,max}_" +
     "{\\textcolor{#9ece6a}{x}} \\textcolor{#7aa2f7}{f}(x)$$";
 
   const styled = "$$f(x)+\\displaystyle g(x)$$";

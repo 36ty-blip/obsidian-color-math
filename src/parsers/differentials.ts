@@ -1,5 +1,6 @@
 import { COLORS, ColorPalette, ColorMathOptions } from "../config";
 import { ColorSpan } from "../utils/spans";
+import { maskComments } from "../utils/latex_helpers";
 
 export interface DifferentialSpan {
   start: number;
@@ -58,7 +59,8 @@ const BOUNDARY_DOMAIN_SCANNER = new RegExp(
   "g"
 );
 
-export function findBoundarySpans(body: string): BoundarySpan[] {
+export function findBoundarySpans(rawBody: string): BoundarySpan[] {
+  const body = rawBody.includes("%") ? maskComments(rawBody) : rawBody;
   const spans: BoundarySpan[] = [];
   BOUNDARY_DOMAIN_SCANNER.lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -86,7 +88,8 @@ export function findBoundarySpans(body: string): BoundarySpan[] {
  * Protects standalone $d$ (e.g. $W = Fd$, $d = vt$) from being treated as differentials.
  * Protects boundary surface manifolds (\partial\Omega, \partial V, \partial D, \partial M) from being treated as differentials.
  */
-export function findDifferentialSpans(body: string): DifferentialSpan[] {
+export function findDifferentialSpans(rawBody: string): DifferentialSpan[] {
+  const body = rawBody.includes("%") ? maskComments(rawBody) : rawBody;
   const spans: DifferentialSpan[] = [];
 
   function addSpan(start: number, end: number, text: string, kind: "differential" | "derivative_fraction") {

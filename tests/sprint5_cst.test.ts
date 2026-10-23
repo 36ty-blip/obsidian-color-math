@@ -151,7 +151,7 @@ describe("Sprint 5: Live Editor & MathJax Integration with Modular CST", () => {
       const input = "\\forall x \\in \\mathbb{R}, \\quad dX_t = \\mu dt + \\sigma dW_t";
       const colored = colorLatexBody(input, DEFAULT_COLORS, { useCST: true });
 
-      expect(colored).toContain(DEFAULT_COLORS.relation); // \forall, \in
+      expect(colored).toContain(DEFAULT_COLORS.set); // \in, sets
       expect(colored).toContain(DEFAULT_COLORS.derivative); // differentials
     });
   });

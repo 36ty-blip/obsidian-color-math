@@ -3,10 +3,10 @@ import { convertText, uncolorText, scanMarkdown } from "../src/index";
 
 describe("Markdown Scanner & Fast-Path Features", () => {
   it("converts standard inline math", () => {
-    const input = "Here is $a=b$ in text.";
+    const input = "Here is $f(x)=b$ in text.";
     const res = convertText(input);
-    expect(res).toContain("\\textcolor{white}{=}");
-    expect(res).toBe("Here is $a\\textcolor{white}{=}b$ in text.");
+    expect(res).toContain("\\textcolor");
+    expect(res).not.toContain("\\textcolor{white}{=}");
   });
 
 
@@ -49,12 +49,12 @@ describe("Markdown Scanner & Fast-Path Features", () => {
   });
 
   it("protects inline code and code blocks", () => {
-    const inlineCode = "Use `$a=b$` in terminal and $c=d$ in math.";
+    const inlineCode = "Use `$a=b$` in terminal and $f(x)=d$ in math.";
     const res = convertText(inlineCode);
     expect(res).toContain("`$a=b$`");
     expect(res).toContain("\\textcolor");
 
-    const fenced = "```python\nx = '$a=b$'\n```\n$$x=y$$";
+    const fenced = "```python\nx = '$a=b$'\n```\n$$f(x)=y$$";
     const resFenced = convertText(fenced);
     expect(resFenced).toContain("x = '$a=b$'");
     expect(resFenced).toContain("\\textcolor");
@@ -137,7 +137,7 @@ describe("Markdown Scanner & Fast-Path Features", () => {
 
     // 1. Math was colored
     expect(converted).toContain("\\textcolor");
-    expect(converted).toContain("\\textcolor{white}{=}");
+    expect(converted).not.toContain("\\textcolor{white}{=}");
 
     // 2. Protected areas preserved byte-for-byte
     expect(converted).toContain("\\$50 for the experiment");

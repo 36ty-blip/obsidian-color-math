@@ -86,8 +86,8 @@ describe("Typst Standards & User Issues Diagnostics", () => {
     const eq2 = '"matrices:"|\\begin{pmatrix} \\cfrac{1}{2} & \\cfrac{3}{4} \\\\ \\cfrac{5}{6} & \\cfrac{7}{8} \\end{pmatrix}|\u200B\u200B+ {21}/{12} ->  bb()';
     const norm = normalizeMathSyntax(eq2);
     expect(norm).toContain("\\text{matrices:}");
-    expect(norm).toContain("\\Biggl|");
-    expect(norm).toContain("\\Biggr|");
+    expect(norm).toContain("\\left|");
+    expect(norm).toContain("\\right|");
     expect(norm).toContain("\\to");
     expect(norm).toContain("\\mathbb{}");
     expect(norm).not.toContain("\u200B");

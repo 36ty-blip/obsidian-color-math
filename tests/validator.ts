@@ -1,23 +1,71 @@
 import katex from "katex";
-import { mathjax } from "mathjax-full/js/mathjax.js";
-import { TeX } from "mathjax-full/js/input/tex.js";
-import { CHTML } from "mathjax-full/js/output/chtml.js";
-import { liteAdaptor } from "mathjax-full/js/adaptors/liteAdaptor.js";
-import { RegisterHTMLHandler } from "mathjax-full/js/handlers/html.js";
-import { AllPackages } from "mathjax-full/js/input/tex/AllPackages.js";
+import { mathjax } from "@mathjax/src/js/mathjax.js";
+import { TeX } from "@mathjax/src/js/input/tex.js";
+import { AbstractOutputJax } from "@mathjax/src/js/core/OutputJax.js";
+import { liteAdaptor } from "@mathjax/src/js/adaptors/liteAdaptor.js";
+import { RegisterHTMLHandler } from "@mathjax/src/js/handlers/html.js";
+import "@mathjax/src/js/input/tex/ams/AmsConfiguration.js";
+import "@mathjax/src/js/input/tex/color/ColorConfiguration.js";
+import "@mathjax/src/js/input/tex/braket/BraketConfiguration.js";
+import "@mathjax/src/js/input/tex/physics/PhysicsConfiguration.js";
+import "@mathjax/src/js/input/tex/mathtools/MathtoolsConfiguration.js";
+import "@mathjax/src/js/input/tex/newcommand/NewcommandConfiguration.js";
+import "@mathjax/src/js/input/tex/cases/CasesConfiguration.js";
+import "@mathjax/src/js/input/tex/centernot/CenternotConfiguration.js";
+import "@mathjax/src/js/input/tex/empheq/EmpheqConfiguration.js";
+import "@mathjax/src/js/input/tex/extpfeil/ExtpfeilConfiguration.js";
+import "@mathjax/src/js/input/tex/unicode/UnicodeConfiguration.js";
+import "@mathjax/src/js/input/tex/units/UnitsConfiguration.js";
+import "@mathjax/src/js/input/tex/upgreek/UpgreekConfiguration.js";
 import { scanMarkdown } from "../src/parsers/markdown_scanner";
 
-// Initialize headless MathJax instance with full TeX packages
+// Headless MathJax 4 OutputJax specifically designed for AST syntax validation
+class SyntaxValidationOutput extends AbstractOutputJax {
+  typeset(math: any) {
+    return math.root;
+  }
+  escaped(math: any) {
+    return math.math;
+  }
+}
+
 const adaptor = liteAdaptor();
 RegisterHTMLHandler(adaptor);
 
 const tex = new TeX({
-  packages: AllPackages,
+  packages: [
+    "base",
+    "ams",
+    "color",
+    "braket",
+    "physics",
+    "mathtools",
+    "newcommand",
+    "cases",
+    "centernot",
+    "empheq",
+    "extpfeil",
+    "unicode",
+    "units",
+    "upgreek",
+  ],
   inlineMath: [["$", "$"]],
   displayMath: [["$$", "$$"]],
 });
-const chtml = new CHTML({ fontURL: "dummy" });
-const mathDocument = mathjax.document("", { InputJax: tex, OutputJax: chtml });
+const syntaxOutput = new SyntaxValidationOutput();
+const mathDocument = mathjax.document("", { InputJax: tex, OutputJax: syntaxOutput });
+
+function extractMathJaxError(node: any): string | null {
+  if (!node) return null;
+  if (node.kind === "merror") {
+    return node.attributes?.get("data-mjx-error") || node.attributes?.get("title") || "MathJax syntax error in formula";
+  }
+  for (const child of node.childNodes || []) {
+    const err = extractMathJaxError(child);
+    if (err) return err;
+  }
+  return null;
+}
 
 export interface ValidationResult {
   valid: boolean;
@@ -59,13 +107,9 @@ export function validateLatexWithMathJax(latex: string): ValidationResult {
 
   try {
     const node = mathDocument.convert(body, { display: true });
-    const serialized = adaptor.outerHTML(node);
-
-    // Look for error marks created by MathJax
-    if (serialized.includes("data-mjx-error") || serialized.includes("merror") || serialized.includes("mjx-merror")) {
-      const match = serialized.match(/data-mjx-error="([^"]+)"/) || serialized.match(/title="([^"]+)"/);
-      const errorMsg = match ? match[1] : "MathJax syntax error in formula";
-      return { valid: false, error: errorMsg, engine: "mathjax" };
+    const errorMsg = extractMathJaxError(node);
+    if (errorMsg || (tex as any).parseOptions?.error) {
+      return { valid: false, error: errorMsg || "MathJax syntax error in formula", engine: "mathjax" };
     }
 
     return { valid: true, engine: "mathjax" };

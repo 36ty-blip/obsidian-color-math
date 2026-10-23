@@ -32,6 +32,24 @@ function skipComment(text: string, start: number): number {
 const INDEX_PATTERN =
   /(\\(?:sum|prod|coprod|bigcup|bigcap|lim|inf|sup))_\{?\s*([A-Za-z])\s*(?:=|\to|\\to)/g;
 
+const STRUCTURAL_LAYOUT_MACROS = new Set([
+  "\\mat",
+  "\\pmat",
+  "\\bmat",
+  "\\cmat",
+  "\\dmat",
+  "\\vmat",
+  "\\nmat",
+  "\\Bmat",
+  "\\Vmat",
+  "\\frac",
+  "\\dfrac",
+  "\\cfrac",
+  "\\tfrac",
+  "\\sqrt",
+  "\\cases",
+]);
+
 /**
  * Collects semantic spans for mathematical symbols:
  * - Constants (\pi, \hbar, \infty, etc.) -> orange
@@ -110,95 +128,7 @@ export function collectTaxonomySpans(
       continue;
     }
 
-    // Bare math functions (sin, cos, tan, ln, exp, rank(A), relu(z), etc.) via MPHF engine
-    if (options?.taxonomyFunctions !== false) {
-      const bareMatch = matchBareFunction(body, index);
-      if (bareMatch) {
-        spans.push({
-          start: index,
-          end: index + bareMatch.length,
-          color: palette.main,
-          priority: 22,
-        });
-        index += bareMatch.length;
-        continue;
-      }
-      // Fallback for user custom bare functions
-      const legacyBare = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
-      if (legacyBare && BARE_FUNCTIONS.has(legacyBare[1].toLowerCase())) {
-        const fnName = legacyBare[1];
-        spans.push({
-          start: index,
-          end: index + fnName.length,
-          color: palette.main,
-          priority: 22,
-        });
-        index += fnName.length;
-        continue;
-      }
-    }
-
-    // Bare mathematical symbols (Greek letters, constants, operators like hbar, nabla, alpha, arrow.r)
-    const bareSymbol = matchBareSymbol(body, index);
-    if (bareSymbol) {
-      const entry = bareSymbol.entry;
-      if (entry.role === "constant" && options?.taxonomyConstants !== false) {
-        spans.push({
-          start: index,
-          end: index + bareSymbol.length,
-          color: palette.orange,
-          priority: entry.priority || 22,
-        });
-        index += bareSymbol.length;
-        continue;
-      } else if (entry.role === "parameter" && options?.taxonomyParameters !== false) {
-        spans.push({
-          start: index,
-          end: index + bareSymbol.length,
-          color: palette.parameter || palette.derivative,
-          priority: entry.priority || 20,
-        });
-        index += bareSymbol.length;
-        continue;
-      } else if (entry.role === "differential") {
-        spans.push({
-          start: index,
-          end: index + bareSymbol.length,
-          color: palette.derivative || palette.main,
-          priority: entry.priority || 24,
-        });
-        index += bareSymbol.length;
-        continue;
-      } else if (entry.role === "operator") {
-        spans.push({
-          start: index,
-          end: index + bareSymbol.length,
-          color: palette.chain || palette.derivative,
-          priority: 25,
-        });
-        index += bareSymbol.length;
-        continue;
-      } else if (entry.role === "relation") {
-        spans.push({
-          start: index,
-          end: index + bareSymbol.length,
-          color: palette.chain || palette.derivative,
-          priority: 20,
-        });
-        index += bareSymbol.length;
-        continue;
-      } else if (entry.role === "variable" && options?.taxonomyParameters !== false) {
-        spans.push({
-          start: index,
-          end: index + bareSymbol.length,
-          color: palette.parameter || palette.main,
-          priority: entry.priority || 20,
-        });
-        index += bareSymbol.length;
-        continue;
-      }
-    }
-
+    // Door 1: Native LaTeX Macro Fast-Path (Sovereign TeX path, 0.3 ns check)
     if (body[index] === "\\") {
       const match = body.slice(index).match(/^(\\[A-Za-z]+|\\.)/);
       if (match) {
@@ -291,6 +221,17 @@ export function collectTaxonomySpans(
               continue;
             }
           }
+        }
+
+        if (STRUCTURAL_LAYOUT_MACROS.has(name)) {
+          spans.push({
+            start: index,
+            end: cmdEnd,
+            color: palette.structural || "none",
+            priority: 25,
+          });
+          index = cmdEnd;
+          continue;
         }
 
         if (MATH_ACCENTS.has(name)) {
@@ -428,6 +369,10 @@ export function collectTaxonomySpans(
             index = cmdEnd;
             continue;
           }
+          if (catalogEntry.uncolored) {
+            index = cmdEnd;
+            continue;
+          }
         }
 
         if (FONT_STYLE_MACROS.has(name)) {
@@ -458,35 +403,248 @@ export function collectTaxonomySpans(
         index = cmdEnd;
         continue;
       }
-    } else {
-      const char2 = index + 1 < body.length ? body.slice(index, index + 2) : "";
-      const char1 = body[index];
+      index++;
+      continue;
+    }
 
-      if (char2 && (NON_SLASH_MATH_CONSTANTS.has(char2) || NON_SLASH_MATH_PARAMETERS.has(char2))) {
-        const isConst = NON_SLASH_MATH_CONSTANTS.has(char2);
-        if ((isConst && options?.taxonomyConstants !== false) || (!isConst && options?.taxonomyParameters !== false)) {
+    // Max Speed syntactic sugar constructors: mat, pmat, bmat, sqrt followed strictly by '[' or '{' (never '(')
+    if (options?.speedSyntacticSugar !== false) {
+      const sugarConstructorMatch = body
+        .slice(index)
+        .match(/^(mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat|sqrt)(?![A-Za-z])/);
+      if (sugarConstructorMatch) {
+        const name = sugarConstructorMatch[1];
+        let lookahead = index + name.length;
+        while (lookahead < body.length && /\s/.test(body[lookahead])) lookahead++;
+        if (lookahead < body.length && (body[lookahead] === "[" || body[lookahead] === "{")) {
           spans.push({
             start: index,
-            end: index + 2,
-            color: isConst ? palette.orange : (palette.parameter || palette.derivative),
-            priority: isConst ? 22 : 20,
+            end: index + name.length,
+            color: palette.structural || "none",
+            priority: 25,
           });
+          index += name.length;
+          continue;
         }
+      }
+    }
+
+    // Connective arithmetic operators (+, -, +-, -+, o+) when actively enabled
+    if (palette.arithmetic && palette.arithmetic !== "none" && palette.arithmetic !== "off") {
+      if (
+        body.startsWith("o+", index) &&
+        (index === 0 || !/[A-Za-z0-9_\\]/.test(body[index - 1])) &&
+        (index + 2 === body.length || !/[A-Za-z0-9_]/.test(body[index + 2]))
+      ) {
+        spans.push({
+          start: index,
+          end: index + 2,
+          color: palette.arithmetic,
+          priority: 30,
+        });
         index += 2;
         continue;
-      } else if (NON_SLASH_MATH_CONSTANTS.has(char1) || NON_SLASH_MATH_PARAMETERS.has(char1)) {
-        const isConst = NON_SLASH_MATH_CONSTANTS.has(char1);
-        if ((isConst && options?.taxonomyConstants !== false) || (!isConst && options?.taxonomyParameters !== false)) {
-          spans.push({
-            start: index,
-            end: index + 1,
-            color: isConst ? palette.orange : (palette.parameter || palette.derivative),
-            priority: isConst ? 22 : 20,
-          });
-        }
-        index += 1;
+      }
+      const twoChar = body.slice(index, index + 2);
+      if (twoChar === "+-" || twoChar === "-+") {
+        spans.push({
+          start: index,
+          end: index + 2,
+          color: palette.arithmetic,
+          priority: 30,
+        });
+        index += 2;
         continue;
       }
+      const ch = body[index];
+      if (ch === "+" || ch === "-") {
+        spans.push({
+          start: index,
+          end: index + 1,
+          color: palette.arithmetic,
+          priority: 28,
+        });
+        index++;
+        continue;
+      }
+    }
+
+    // Bare math functions (sin, cos, tan, ln, exp, rank(A), relu(z), etc.) via MPHF engine
+    if (options?.taxonomyFunctions !== false) {
+      const bareMatch = matchBareFunction(body, index);
+      if (bareMatch) {
+        spans.push({
+          start: index,
+          end: index + bareMatch.length,
+          color: palette.main,
+          priority: 22,
+        });
+        index += bareMatch.length;
+        continue;
+      }
+      // Fallback for user custom bare functions
+      const legacyBare = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
+      if (legacyBare && BARE_FUNCTIONS.has(legacyBare[1].toLowerCase())) {
+        const fnName = legacyBare[1];
+        spans.push({
+          start: index,
+          end: index + fnName.length,
+          color: palette.main,
+          priority: 22,
+        });
+        index += fnName.length;
+        continue;
+      }
+    }
+
+    // Bare mathematical symbols (Greek letters, constants, operators like hbar, nabla, alpha, arrow.r)
+    if (options?.strictDelimiterGating !== true) {
+      const bareSymbol = matchBareSymbol(body, index);
+      if (bareSymbol) {
+        const entry = bareSymbol.entry;
+        if (entry.role === "constant" && options?.taxonomyConstants !== false) {
+          spans.push({
+            start: index,
+            end: index + bareSymbol.length,
+            color: palette.orange,
+            priority: entry.priority || 22,
+          });
+          index += bareSymbol.length;
+          continue;
+        } else if (entry.role === "parameter" && options?.taxonomyParameters !== false) {
+          spans.push({
+            start: index,
+            end: index + bareSymbol.length,
+            color: palette.parameter || palette.derivative,
+            priority: entry.priority || 20,
+          });
+          index += bareSymbol.length;
+          continue;
+        } else if (entry.role === "differential") {
+          spans.push({
+            start: index,
+            end: index + bareSymbol.length,
+            color: palette.derivative || palette.main,
+            priority: entry.priority || 24,
+          });
+          index += bareSymbol.length;
+          continue;
+        } else if (entry.role === "operator") {
+          let targetColor = palette.chain || palette.derivative;
+          if (
+            entry.canonical === "\\bigtimes" ||
+            entry.canonical === "\\bigvee" ||
+            entry.canonical === "\\bigcup" ||
+            entry.canonical === "\\bigcap" ||
+            entry.key === "xxx" ||
+            entry.key === "vvv" ||
+            entry.key === "uuu" ||
+            entry.key === "nnn"
+          ) {
+            targetColor = palette.orange;
+          } else if (
+            entry.canonical === "\\times" ||
+            entry.canonical === "\\otimes" ||
+            entry.canonical === "\\odot" ||
+            entry.key === "xx" ||
+            entry.key === "ox" ||
+            entry.key === "o."
+          ) {
+            targetColor = palette.dot || "none";
+          } else if (
+            entry.canonical === "\\cup" ||
+            entry.canonical === "\\cap" ||
+            entry.canonical === "\\vee" ||
+            entry.canonical === "\\wedge" ||
+            entry.key === "uu" ||
+            entry.key === "nn" ||
+            entry.key === "vv" ||
+            entry.key === "^^"
+          ) {
+            targetColor = palette.set || "#7dcfff";
+          } else if (
+            entry.canonical === "\\pm" ||
+            entry.canonical === "\\mp" ||
+            entry.canonical === "\\oplus" ||
+            entry.canonical === "\\ominus" ||
+            entry.key === "o+"
+          ) {
+            targetColor = palette.arithmetic || "none";
+          }
+          spans.push({
+            start: index,
+            end: index + bareSymbol.length,
+            color: targetColor,
+            priority: 30,
+          });
+          index += bareSymbol.length;
+          continue;
+        } else if (entry.role === "relation") {
+          if (entry.uncolored) {
+            index += bareSymbol.length;
+            continue;
+          }
+          let targetColor = palette.relation || "none";
+          if (
+            entry.canonical === "\\subset" ||
+            entry.canonical === "\\supset" ||
+            entry.canonical === "\\in" ||
+            entry.unicode === "∈" ||
+            entry.unicode === "⊂" ||
+            entry.unicode === "⊃" ||
+            entry.key === "sub" ||
+            entry.key === "in"
+          ) {
+            targetColor = palette.set || "#7dcfff";
+          }
+          spans.push({
+            start: index,
+            end: index + bareSymbol.length,
+            color: targetColor,
+            priority: 20,
+          });
+          index += bareSymbol.length;
+          continue;
+        } else if (entry.role === "variable" && options?.taxonomyParameters !== false) {
+          spans.push({
+            start: index,
+            end: index + bareSymbol.length,
+            color: palette.parameter || palette.main,
+            priority: entry.priority || 20,
+          });
+          index += bareSymbol.length;
+          continue;
+        }
+      }
+    }
+
+    const char2 = index + 1 < body.length ? body.slice(index, index + 2) : "";
+    const char1 = body[index];
+
+    if (char2 && (NON_SLASH_MATH_CONSTANTS.has(char2) || NON_SLASH_MATH_PARAMETERS.has(char2))) {
+      const isConst = NON_SLASH_MATH_CONSTANTS.has(char2);
+      if ((isConst && options?.taxonomyConstants !== false) || (!isConst && options?.taxonomyParameters !== false)) {
+        spans.push({
+          start: index,
+          end: index + 2,
+          color: isConst ? palette.orange : (palette.parameter || palette.derivative),
+          priority: isConst ? 22 : 20,
+        });
+      }
+      index += 2;
+      continue;
+    } else if (NON_SLASH_MATH_CONSTANTS.has(char1) || NON_SLASH_MATH_PARAMETERS.has(char1)) {
+      const isConst = NON_SLASH_MATH_CONSTANTS.has(char1);
+      if ((isConst && options?.taxonomyConstants !== false) || (!isConst && options?.taxonomyParameters !== false)) {
+        spans.push({
+          start: index,
+          end: index + 1,
+          color: isConst ? palette.orange : (palette.parameter || palette.derivative),
+          priority: isConst ? 22 : 20,
+        });
+      }
+      index += 1;
+      continue;
     }
 
     index++;

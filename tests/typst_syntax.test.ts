@@ -143,7 +143,7 @@ describe("Phase 4: Typst Auto-Scaling Delimiters & Crash Immunity", () => {
     );
     expect(
       normalizeAutoScaledDelimiters("[ \\begin{matrix} 1 & 0 \\\\ 0 & 1 \\end{matrix} ]")
-    ).toBe("\\Biggl[ \\begin{matrix} 1 & 0 \\\\ 0 & 1 \\end{matrix} \\Biggr]");
+    ).toBe("\\left[ \\begin{matrix} 1 & 0 \\\\ 0 & 1 \\end{matrix} \\right]");
   });
 
   it("auto-seals unclosed \\left delimiters with \\right. for crash immunity", () => {
@@ -211,7 +211,7 @@ describe("Master Pipeline: normalizeMathSyntax", () => {
     expect(normalizeAutoScaledDelimiters(frac)).toBe("\\Bigl| \\frac{a}{b} \\Bigr|");
 
     const mat = '| \\begin{matrix} a & b \\\\ c & d \\end{matrix} |';
-    expect(normalizeAutoScaledDelimiters(mat)).toBe("\\Biggl| \\begin{matrix} a & b \\\\ c & d \\end{matrix} \\Biggr|");
+    expect(normalizeAutoScaledDelimiters(mat)).toBe("\\left| \\begin{matrix} a & b \\\\ c & d \\end{matrix} \\right|");
   });
 
   it("auto-scales double vertical bars \\| ... \\| enclosing tall elements", () => {
@@ -247,17 +247,16 @@ describe("Master Pipeline: normalizeMathSyntax", () => {
   it("normalizes and colors matrices enclosed in quotes and vertical bars properly", () => {
     const raw = '"matrices:"|\\begin{pmatrix} \\cfrac{1}{2} & \\cfrac{3}{4} \\\\ \\cfrac{5}{6} & \\cfrac{7}{8} \\end{pmatrix}|';
     const norm = normalizeMathSyntax(raw, { autoScaleDelimiters: true });
-    expect(norm).toBe("\\text{matrices:}\\Biggl|\\begin{pmatrix} \\cfrac{1}{2} & \\cfrac{3}{4} \\\\ \\cfrac{5}{6} & \\cfrac{7}{8} \\end{pmatrix}\\Biggr|");
+    expect(norm).toBe("\\text{matrices:}\\left|\\begin{pmatrix} \\cfrac{1}{2} & \\cfrac{3}{4} \\\\ \\cfrac{5}{6} & \\cfrac{7}{8} \\end{pmatrix}\\right|");
 
     const colored = colorLatexBody(raw, DEFAULT_COLORS, {
       previewLatexNormalization: true,
       autoScaleDelimiters: true,
       rainbowDelimiters: true,
     });
-    // Ensure the matrix is NOT wrapped in an outer delimiter \textcolor and vertical bars scale
-    expect(colored).toContain("\\text{matrices:}\\textcolor{");
-    expect(colored).toContain("\\Biggl|}\\begin{pmatrix}");
-    expect(colored).not.toMatch(/\\textcolor\{[^}]+\}\{\\Biggl\|\\begin\{pmatrix\}/);
+    // Ensure the matrix is NOT wrapped in an outer delimiter \textcolor and vertical bars scale to extensible \left| / \right|
+    expect(colored).toContain("\\text{matrices:}\\left|\\begin{pmatrix}");
+    expect(colored).not.toMatch(/\\textcolor\{[^}]+\}\{\\left\|\\begin\{pmatrix\}/);
   });
 
   it("preserves multiple spaces inside quoted strings and shields characters from math coloring", async () => {

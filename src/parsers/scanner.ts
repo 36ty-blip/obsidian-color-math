@@ -140,6 +140,7 @@ export function collectScannerSpans(
           start: index,
           end: spanEnd,
           color: commandColor(command, palette),
+          priority: 30,
         });
       }
       index = spanEnd;
@@ -150,14 +151,23 @@ export function collectScannerSpans(
     }
 
     if (NON_SLASH_FIRST_CHARS.has(body.charCodeAt(index))) {
-      const nonSlashCommand = NON_SLASH_COLOR_COMMANDS.find(
-        (cand) => body.startsWith(cand, index)
-      );
+      const prevChar = index > 0 ? body[index - 1] : "";
+      const nonSlashCommand = NON_SLASH_COLOR_COMMANDS.find((cand) => {
+        if (!body.startsWith(cand, index)) return false;
+        // Word boundary check for alphabetic commands (xxx, xx, vvv, vv, uuu, uu, nnn, nn, ox, etc.)
+        if (/[A-Za-z]/.test(cand)) {
+          if (/[A-Za-z0-9_\\]/.test(prevChar)) return false;
+          const nextChar = index + cand.length < body.length ? body[index + cand.length] : "";
+          if (/[A-Za-z0-9_]/.test(nextChar)) return false;
+        }
+        return true;
+      });
       if (nonSlashCommand !== undefined) {
         spans.push({
           start: index,
           end: index + nonSlashCommand.length,
           color: commandColor(nonSlashCommand, palette),
+          priority: 30,
         });
         index += nonSlashCommand.length;
         continue;

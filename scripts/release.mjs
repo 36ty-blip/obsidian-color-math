@@ -10,6 +10,7 @@ import { stdin as input, stdout as output } from "node:process";
 import { setupPerformanceOptimization, getOptimalThreadCount, configureLibuvThreadPool } from "./cpu_probe.mjs";
 import { readCurrentVersions, bumpVersion, atomicVersionSync } from "./semver.mjs";
 import { verifyReleaseAssets } from "./hasher.mjs";
+import { publishToGitHub } from "./publish_github.mjs";
 
 const SYNC_ENGINE_PATH = "C:\\Users\\aditya\\Documents\\CODES\\Sync\\sync.mjs";
 const MONOREPO_CHECKLIST = "C:\\Users\\aditya\\Documents\\GitHub\\color-math\\CHECKLIST.md";
@@ -49,6 +50,8 @@ function parseCliArgs() {
     profileVault: "2",
     profileGitHub: "1",
     description: null,
+    pushGithub: false,
+    skipLint: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -66,6 +69,8 @@ function parseCliArgs() {
     else if (arg === "--allow-dirty") options.allowDirty = true;
     else if (arg === "--auto-approve" || arg === "-y") options.autoApprove = true;
     else if (arg === "--desc" && i + 1 < args.length) options.description = args[++i];
+    else if (arg === "--push-github") options.pushGithub = true;
+    else if (arg === "--skip-lint") options.skipLint = true;
   }
 
   return options;
@@ -94,7 +99,7 @@ const SYNC_CONFIG_PATH = "C:\\Users\\aditya\\Documents\\CODES\\Sync\\sync-config
 const SYNC_DIR = "C:\\Users\\aditya\\Documents\\CODES\\Sync";
 
 async function runSyncCommand(profileId, dryRun, force) {
-  const flags = [`-Profile`, profileId, `-Config`, `"${SYNC_CONFIG_PATH}"`];
+  const flags = [`-Profile`, profileId, `-Config`, `"${SYNC_CONFIG_PATH}"`, `-NoBuild`];
   if (dryRun) flags.push(`-DryRun`, `-AsJson`);
   else if (force) flags.push(`-Execute`, `-Force`);
 
@@ -170,8 +175,27 @@ async function main() {
   const targetVersion = options.exactVersion || bumpVersion(currentVersions.pkgVersion, options.bumpType);
   console.log(`  • Current Version: ${c.dim}${currentVersions.pkgVersion}${c.reset} $\\longrightarrow$ Target Version: ${c.green}${c.bold}${targetVersion}${c.reset} (${options.exactVersion ? "exact" : options.bumpType})`);
 
-  // --- Phase 1: Multi-Core Test Suite Verification ---
-  console.log(`\n${c.bold}[Phase 1: Multi-Core Test Verification Suite]${c.reset}`);
+  // --- Phase 1: Official Obsidian Linter & Multi-Core Test Suite Verification ---
+  console.log(`\n${c.bold}[Phase 1: Official Obsidian Linter & Multi-Core Test Verification]${c.reset}`);
+
+  // Step 1A: Official Obsidian Community Linter Audit
+  if (options.skipLint) {
+    console.log(`${c.yellow}  ⚠️  Obsidian Linter audit skipped via --skip-lint.${c.reset}`);
+  } else {
+    console.log(`  • Running official Obsidian Community Review rules (eslint-plugin-obsidianmd)...`);
+    try {
+      execSync("npx eslint src/ --cache", { cwd: rootDir, stdio: "pipe" });
+      console.log(`  • ${c.green}✔ Official Obsidian Linter audit passed with zero violations.${c.reset}`);
+    } catch (err) {
+      console.error(`\n${c.red}❌ Official Obsidian Linter audit failed!${c.reset}`);
+      if (err.stdout) console.error(err.stdout.toString());
+      if (err.stderr) console.error(err.stderr.toString());
+      console.error(`\nAborting release pipeline. Please resolve all lint violations.`);
+      process.exit(1);
+    }
+  }
+
+  // Step 1B: Multi-Core Vitest Verification
   let testCount = "480+";
   if (options.skipTests) {
     console.log(`${c.yellow}  ⚠️  Tests skipped via --skip-tests flag.${c.reset}`);
@@ -332,6 +356,17 @@ async function main() {
     }
   } else {
     console.log(`  • [DRY-RUN] Would record release v${targetVersion} in GitHub/color-math/CHECKLIST.md.`);
+  }
+
+  // --- Phase 7: Remote GitHub Publishing Gate ---
+  if (options.pushGithub) {
+    console.log(`\n${c.bold}[Phase 7: Remote GitHub Publishing Pipeline]${c.reset}`);
+    await publishToGitHub({
+      targetVersion,
+      dryRun: options.dryRun,
+      autoApprove: options.autoApprove,
+      skipLint: true, // Already verified in Phase 1
+    });
   }
 
   printReceipt(targetVersion, assetRecords, startTime);

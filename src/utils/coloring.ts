@@ -9,6 +9,7 @@ import {
   SET_SYMBOLS,
   SPACING_COMMANDS,
   MULTIPLICATION_SYMBOLS,
+  ARITHMETIC_SYMBOLS,
   ColorPalette,
 } from "../config";
 
@@ -35,6 +36,9 @@ export function commandColor(command: string, palette: ColorPalette = COLORS): s
   }
   if (MULTIPLICATION_SYMBOLS.has(command)) {
     return palette.dot;
+  }
+  if (ARITHMETIC_SYMBOLS.has(command)) {
+    return palette.arithmetic;
   }
   return palette.relation;
 }

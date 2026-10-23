@@ -1,3 +1,12 @@
+.color-math-hidden {
+  display: none !important;
+}
+
+.color-math-operator-contrast {
+  color: var(--text-normal) !important;
+  font-style: normal;
+}
+
 /* styles.css */
 
 .color-math-live-token {
@@ -228,4 +237,133 @@ span.color-math-string-literal,
   -webkit-user-select: text;
   cursor: text;
 }
+
+/* Obsidian 1.14+ CodeMirror 6 .HyperMD-math per-line math classes */
+.cm-editor .cm-line.HyperMD-math {
+  position: relative;
+}
+
+/* Ensure high contrast for math tokens within native highlight marks */
+mark .color-math-live-token,
+.cm-formatting-highlight ~ .color-math-live-token {
+  filter: contrast(1.15);
+}
+
+/* =========================================================================
+   High-Fidelity Ergonomic Color Controls in Settings
+   ========================================================================= */
+
+/* Prominent, enlarged color picker boxes */
+.color-math-settings-tab .setting-item-control input[type="color"].color-math-color-picker {
+  width: 52px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background-color: var(--background-primary);
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.12s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.color-math-settings-tab .setting-item-control input[type="color"].color-math-color-picker:hover:not(:disabled) {
+  border-color: var(--interactive-accent);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+}
+
+/* Strip default Chromium OS swatch padding and bevels */
+.color-math-settings-tab .setting-item-control input[type="color"].color-math-color-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-math-settings-tab .setting-item-control input[type="color"].color-math-color-picker::-webkit-color-swatch {
+  border: none;
+  border-radius: calc(var(--radius-m) - 1px);
+}
+
+/* "None / Off" visual state badge */
+.color-math-none-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  border: 1.5px dashed var(--text-faint);
+  border-radius: var(--radius-m);
+  background-color: var(--background-secondary-alt);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: border-color 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+
+.color-math-none-swatch:hover {
+  border-color: var(--interactive-accent);
+  color: var(--text-normal);
+  transform: translateY(-1px);
+}
+
+/* Monospace hex and role input text field */
+.color-math-settings-tab .setting-item-control input[type="text"].color-math-color-text-input {
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  width: 88px;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+/* Dimmed state when category is toggled off */
+.color-math-settings-tab .setting-item.color-math-role-disabled .color-math-color-picker {
+  opacity: 0.35;
+  filter: grayscale(0.85);
+  cursor: not-allowed;
+}
+
+.color-math-settings-tab .setting-item.color-math-role-disabled .color-math-color-text-input {
+  opacity: 0.55;
+}
+
+/* Logical 4-Group visual containers */
+.color-math-role-group {
+  margin-top: 14px;
+  margin-bottom: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 12px;
+}
+
+.color-math-role-group:first-child {
+  border-top: none;
+  margin-top: 4px;
+  padding-top: 0;
+}
+
+.color-math-role-group-header {
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.color-math-role-group-title {
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+  letter-spacing: 0.01em;
+}
+
+.color-math-role-group-desc {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+
 

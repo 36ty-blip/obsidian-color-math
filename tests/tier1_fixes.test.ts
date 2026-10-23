@@ -5,17 +5,17 @@ import { findBoundarySpans } from "../src/parsers/differentials";
 import { hashStringToColor, COLORS } from "../src/config";
 
 describe("Tier 1 Bugfixes Verification", () => {
-  describe("Item 1: Sized Delimiters KaTeX Safety", () => {
-    it("wraps entire \\left( ... \\right) expression for LaTeX output to preserve KaTeX grouping", () => {
+  describe("Item 1: Sized Delimiters KaTeX Safety & Scope Color Flooding Elimination", () => {
+    it("does not wrap \\left( ... \\right) with \\textcolor for LaTeX output to eliminate scope color flooding", () => {
       const input = "\\left( x + y \\right)";
       const spans = collectDelimiterSpans(input, { forLatexWrap: true });
-      expect(spans.length).toBe(1);
-      expect(spans[0].start).toBe(0);
-      expect(spans[0].end).toBe(input.length);
-      expect(spans[0].priority).toBe(24);
+      // Zero scope-wrapping spans for \left...\right in LaTeX string output
+      expect(spans.length).toBe(0);
 
       const rendered = colorLatexBody(input, undefined, { rainbowDelimiters: true });
-      expect(rendered).toMatch(/^\\textcolor\{#[0-9a-fA-F]{6}\}\{\\left\( x \+ y \\right\)\}$/);
+      // Delimiters \left( and \right) are not wrapped in \textcolor, eliminating scope color flooding on '+'
+      expect(rendered).not.toContain("\\textcolor{");
+      expect(rendered).toBe("\\left( x + y \\right)");
     });
 
     it("keeps discrete open/close spans when forLatexWrap is false", () => {

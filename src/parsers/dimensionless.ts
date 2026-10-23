@@ -2,6 +2,7 @@
 
 import { COLORS, ColorPalette } from "../config";
 import { ColorSpan } from "../utils/spans";
+import { maskComments } from "../utils/latex_helpers";
 
 export interface DimensionlessSpan {
   start: number;
@@ -51,6 +52,7 @@ const BARE_REGEX = new RegExp(
  * - '\Re' is preserved as the standard LaTeX real-part operator.
  */
 export function findDimensionlessSpans(body: string): DimensionlessSpan[] {
+  const scanBody = body.includes("%") ? maskComments(body) : body;
   const spans: DimensionlessSpan[] = [];
 
   function addSpan(start: number, end: number, text: string) {
@@ -63,13 +65,13 @@ export function findDimensionlessSpans(body: string): DimensionlessSpan[] {
   // 1. Text or mathrm wrapped
   TEXT_REGEX.lastIndex = 0;
   let match: RegExpExecArray | null;
-  while ((match = TEXT_REGEX.exec(body)) !== null) {
+  while ((match = TEXT_REGEX.exec(scanBody)) !== null) {
     addSpan(match.index, match.index + match[0].length, match[0]);
   }
 
   // 2. Contiguous bare symbols
   BARE_REGEX.lastIndex = 0;
-  while ((match = BARE_REGEX.exec(body)) !== null) {
+  while ((match = BARE_REGEX.exec(scanBody)) !== null) {
     const symbol = match[1];
     const symStart = match.index + (match[0].length - symbol.length);
     const symEnd = symStart + symbol.length;

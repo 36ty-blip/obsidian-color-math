@@ -21,8 +21,9 @@ describe("User Formula Test", () => {
     // \mu\text{m} colored with physical unit color (not parameter!)
     expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.unit}}{\\mu\\text{m}}`);
     expect(result).not.toContain(`\\textcolor{${DEFAULT_COLORS.parameter}}{\\mu}`);
-    // = colored with relation color
-    expect(result).toContain(`\\textcolor{white}{=}`);
+    // = is uncolored to ensure contrast across light and dark themes
+    expect(result).not.toContain(`\\textcolor{white}{=}`);
+    expect(result).toContain("=1.064");
   });
 
   it("checks dot N = P lambda / hc with taxonomy", () => {

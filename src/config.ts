@@ -13,24 +13,34 @@ export type ColorRole =
   | "spacing"
   | "parameter"
   | "unit"
-  | "energyOperator";
+  | "energyOperator"
+  | "structural"
+  | "transform"
+  | "arithmetic";
 
 export type ColorPalette = Record<ColorRole, string>;
 
 export const DEFAULT_COLORS: ColorPalette = {
+  // Group A: Expression Core & Constants
   main: "#7aa2f7",
   orange: "#e0af68",
-  dot: "white",
+  parameter: "#ff9e64",
+  // Group B: Calculus, Analysis & Linear Algebra
   derivative: "#bb9af7",
   chain: "#9ece6a",
   upper: "#9d7cd8",
-  relation: "white",
-  arrow: "#f7768e",
-  set: "#7dcfff",
-  spacing: "white",
-  parameter: "#ff9e64",
-  unit: "#73daca",
+  transform: "#e0af68",
   energyOperator: "#2ac3de",
+  // Group C: Connective Glue & Relations (Co-located, minimalist defaults)
+  relation: "none",
+  arithmetic: "none",
+  dot: "none",
+  arrow: "#f7768e",
+  // Group D: Structure, Sets & Formatting
+  set: "#7dcfff",
+  structural: "none",
+  unit: "#73daca",
+  spacing: "none",
 };
 
 export const DEFAULT_PALETTE = DEFAULT_COLORS;
@@ -110,6 +120,11 @@ export const BIG_OPERATORS = new Set([
   "\\bigwedge",
   "\\bigoplus",
   "\\bigotimes",
+  "\\bigtimes",
+  "xxx",
+  "vvv",
+  "uuu",
+  "nnn",
   ...Object.values(UNICODE_BIG_OPERATORS),
 ]);
 
@@ -171,6 +186,12 @@ export const SET_SYMBOLS = new Set([
   "\\in",
   "\\cup",
   "\\cap",
+  "\\vee",
+  "\\wedge",
+  "uu",
+  "nn",
+  "vv",
+  "^^",
   ...Object.values(UNICODE_SETS),
 ]);
 
@@ -187,10 +208,29 @@ export const SPACING_COMMANDS = new Set([
 export const MULTIPLICATION_SYMBOLS = new Set([
   "\\cdot",
   "\\times",
+  "\\otimes",
+  "\\odot",
   "·",
   "*",
   "×",
   "✕",
+  "xx",
+  "ox",
+  "o.",
+]);
+
+export const ARITHMETIC_SYMBOLS = new Set([
+  "+",
+  "-",
+  "+-",
+  "-+",
+  "\\pm",
+  "\\mp",
+  "±",
+  "∓",
+  "\\oplus",
+  "\\ominus",
+  "o+",
 ]);
 
 export const COLOR_COMMANDS = new Set([
@@ -202,6 +242,7 @@ export const COLOR_COMMANDS = new Set([
   ...SET_SYMBOLS,
   ...SPACING_COMMANDS,
   ...MULTIPLICATION_SYMBOLS,
+  ...ARITHMETIC_SYMBOLS,
   ...CUSTOM_OPERATORS,
 ]);
 
@@ -558,10 +599,14 @@ export const VARIABLE_HASH_PALETTE: string[] = [
 ];
 
 export const CANONICAL_VARIABLE_SLOTS: Record<string, number> = {
-  // 1. Spatial 3D Cartesian coordinates: guaranteed maximum pairwise separation
+  // 1. Spatial 3D Cartesian coordinates & Random Variables: guaranteed maximum pairwise separation
   x: 0, // Tokyo Blue
   y: 4, // Tokyo Gold
   z: 5, // Tokyo Green
+  X: 0, // Tokyo Blue (Random Variable)
+  Y: 4, // Tokyo Gold (Random Variable)
+  Z: 5, // Tokyo Green (Random Variable)
+  E: 1, // Tokyo Cyan (Expectation / Energy)
 
   // 2. Coefficients: high-contrast against (x, y, z) and within the group
   a: 2, // Tokyo Purple
@@ -698,6 +743,20 @@ export interface ColorMathOptions {
   activeMode?: ActiveMathMode;
   autoDetectNoteMode?: boolean;
   padMatrixPadding?: boolean;
+  strictDelimiterGating?: boolean;
+  dialectLatex?: boolean;
+  dialectTypst?: boolean;
+  dialectAsciiMath?: boolean;
+  dialectMatlab?: boolean;
+  dialectPython?: boolean;
+  dialectWolfram?: boolean;
+  mathJaxLineBreaking?: boolean;
+  speedSyntacticSugar?: boolean;
+  sugarAsciiOperators?: boolean;
+  sugarQuotedStrings?: boolean;
+  sugarAsciiEllipses?: boolean;
+  sugarChainedRoots?: boolean;
+  sugarBracketMatrices?: boolean;
 }
 
 export const DEFAULT_OPTIONS: ColorMathOptions = {
@@ -731,5 +790,19 @@ export const DEFAULT_OPTIONS: ColorMathOptions = {
   activeMode: "analysis",
   autoDetectNoteMode: true,
   padMatrixPadding: false,
+  strictDelimiterGating: false,
+  dialectLatex: true,
+  dialectTypst: true,
+  dialectAsciiMath: true,
+  dialectMatlab: true,
+  dialectPython: true,
+  dialectWolfram: true,
+  mathJaxLineBreaking: true,
+  speedSyntacticSugar: true,
+  sugarAsciiOperators: true,
+  sugarQuotedStrings: true,
+  sugarAsciiEllipses: true,
+  sugarChainedRoots: true,
+  sugarBracketMatrices: true,
 };
 

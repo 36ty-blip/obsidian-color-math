@@ -58,11 +58,24 @@ export function relationSpans(
     "*": palette.dot,
   };
 
+  const isWhite =
+    !palette.relation ||
+    palette.relation.toLowerCase() === "white" ||
+    palette.relation.toLowerCase() === "#ffffff" ||
+    palette.relation.toLowerCase() === "#fff";
+
   const tokens = Object.keys(colorByToken);
-  return findTopLevelTokens(source, tokens, start, end).map(([s, e, token]) => ({
-    start: s,
-    end: e,
-    color: colorByToken[token],
-    priority: 30,
-  }));
+  return findTopLevelTokens(source, tokens, start, end)
+    .filter(([_, __, token]) => {
+      if (isWhite && colorByToken[token] === palette.relation) {
+        return false;
+      }
+      return true;
+    })
+    .map(([s, e, token]) => ({
+      start: s,
+      end: e,
+      color: colorByToken[token],
+      priority: 30,
+    }));
 }

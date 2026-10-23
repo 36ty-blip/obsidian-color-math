@@ -18,9 +18,6 @@ export function clearMathSpanCache(): void {
  * Decodes a base64 string into a Uint8Array across browser, Electron, and Node.
  */
 export function decodeBase64(base64: string): Uint8Array {
-  if (typeof Buffer !== "undefined") {
-    return new Uint8Array(Buffer.from(base64, "base64"));
-  }
   const binaryString = atob(base64);
   const len = binaryString.length;
   const bytes = new Uint8Array(len);

@@ -1,6 +1,6 @@
 import type { ColorMathOptions } from "../config";
 import { findUnitSpans } from "../parsers/units";
-import { matchBareSymbol, matchBareFunction, lookupCatalog } from "../parsers/catalog";
+import { matchBareSymbol, matchBareFunction, lookupCatalog, DIALECT_LATEX, DOMAIN_ALL } from "../parsers/catalog";
 
 const COMMAND_STICKY_RE = /\\(?:[A-Za-z]+|.)/y;
 
@@ -359,12 +359,28 @@ const OPAQUE_TEXT_COMMANDS = new Set([
   "\\intertext",
   "\\shortintertext",
   "\\operatorname",
+  "\\hspace",
+  "\\vspace",
+  "\\phantom",
+  "\\hphantom",
+  "\\vphantom",
+  "\\kern",
+  "\\mkern",
+  "\\mskip",
+  "\\hskip",
+  "\\label",
+  "\\ref",
+  "\\eqref",
+  "\\cite",
 ]);
 
 export function readOpaqueCommand(text: string, start: number): [string, number] | null {
   const cmd = matchCommand(text, start);
   if (!cmd || !OPAQUE_TEXT_COMMANDS.has(cmd)) return null;
   let cur = start + cmd.length;
+  if (cur < text.length && text[cur] === "*") {
+    cur++;
+  }
   while (cur < text.length && /\s/.test(text[cur])) {
     cur++;
   }
@@ -1094,13 +1110,51 @@ export function skipMacroDefinition(
   return null;
 }
 
-const TYPST_FONT_MAP: Record<string, string> = {
+function readDelimitedPair(
+  source: string,
+  start: number,
+  openChar: string = "[",
+  closeChar: string = "]"
+): { inner: string; end: number } | null {
+  if (start >= source.length || source[start] !== openChar) return null;
+  let depth = 1;
+  let i = start + 1;
+  while (i < source.length && depth > 0) {
+    if (source[i] === "\\") {
+      i += 2;
+      continue;
+    }
+    if (source[i] === openChar) depth++;
+    else if (source[i] === closeChar) depth--;
+    i++;
+  }
+  if (depth === 0) {
+    return { inner: source.slice(start + 1, i - 1), end: i };
+  }
+  return null;
+}
+
+export const UNIVERSAL_FONT_MODIFIER_MAP: Record<string, string> = {
   bb: "\\mathbb",
   cal: "\\mathcal",
   bold: "\\mathbf",
   frak: "\\mathfrak",
   scr: "\\mathscr",
+  rm: "\\mathrm",
+  sf: "\\mathsf",
+  tt: "\\mathtt",
+  text: "\\text",
+  mathbb: "\\mathbb",
+  mathcal: "\\mathcal",
+  mathbf: "\\mathbf",
+  mathfrak: "\\mathfrak",
+  mathscr: "\\mathscr",
+  mathrm: "\\mathrm",
+  mathsf: "\\mathsf",
+  mathtt: "\\mathtt",
 };
+
+const TYPST_FONT_MAP = UNIVERSAL_FONT_MODIFIER_MAP;
 
 
 /**
@@ -1223,9 +1277,14 @@ export function normalizeQuotedStrings(source: string): string {
 }
 
 /**
- * Normalizes Typst font shortcuts: bb(R) -> \mathbb{R}, cal(L) -> \mathcal{L},
- * bold(f(x)) -> \mathbf{f(x)}, frak(g) -> \mathfrak{g}, scr(F) -> \mathscr{F}.
- * Uses balanced parenthesis scanning to preserve nested arguments.
+ * Normalizes universal font modifiers across all three delimiter styles ({}, [], ()):
+ * - bb(R) / bb[R] / bb{R} -> \mathbb{R}
+ * - cal(L) / cal[L] / cal{L} -> \mathcal{L}
+ * - bold(v) / bold[v] / bold{v} -> \mathbf{v}
+ * - frak(g) / frak[g] / frak{g} -> \mathfrak{g}
+ * - scr(F) / scr[F] / scr{F} -> \mathscr{F}
+ * - Also supports native commands with brackets/braces/parens:
+ *   \bold[v], \cal[L], \frak[g], \scr[F], \bb[R], \rm[v], \sf[v], \tt[v], \text[v]
  */
 export function normalizeTypstFontShortcuts(source: string): string {
   let result = "";
@@ -1246,6 +1305,24 @@ export function normalizeTypstFontShortcuts(source: string): string {
         index = verb[0];
         continue;
       }
+
+      // Check if this backslash command is a font modifier followed by [, {, or (
+      const fontMatch = source.slice(index + 1).match(/^(bb|cal|bold|frak|scr|rm|sf|tt|text|mathbb|mathcal|mathbf|mathfrak|mathscr|mathrm|mathsf|mathtt)\s*([{[(])/);
+      if (fontMatch) {
+        const prefix = fontMatch[1];
+        const openChar = fontMatch[2];
+        const closeChar = openChar === "(" ? ")" : openChar === "[" ? "]" : "}";
+        const argStart = index + 1 + fontMatch[0].length - 1;
+        const delimited = readDelimitedPair(source, argStart, openChar, closeChar);
+        if (delimited) {
+          const macro = UNIVERSAL_FONT_MODIFIER_MAP[prefix] || `\\${prefix}`;
+          const normInner = normalizeTypstFontShortcuts(delimited.inner);
+          result += `${macro}{${normInner}}`;
+          index = delimited.end;
+          continue;
+        }
+      }
+
       const cmd = matchCommand(source, index);
       if (cmd) {
         if (OPAQUE_TEXT_COMMANDS.has(cmd)) {
@@ -1262,35 +1339,21 @@ export function normalizeTypstFontShortcuts(source: string): string {
       }
     }
 
+    // Bare font modifier keywords (bold[v], scr{F}, cal(L), etc.)
     const prevChar = index > 0 ? source[index - 1] : "";
     if (index === 0 || !/[A-Za-z0-9_\\]/.test(prevChar)) {
-      const match = source.slice(index).match(/^(bb|cal|bold|frak|scr)\s*\(/);
+      const match = source.slice(index).match(/^(bb|cal|bold|frak|scr|rm|sf|tt|text)\s*([{[(])/);
       if (match) {
         const prefix = match[1];
-        const parenStart = index + match[0].length - 1;
-        let depth = 1;
-        let j = parenStart + 1;
-        while (j < source.length && depth > 0) {
-          if (source[j] === "%") {
-            j = readCommentEnd(source, j);
-            continue;
-          }
-          if (source[j] === "\\") {
-            const cmd = matchCommand(source, j);
-            j += cmd ? cmd.length : 1;
-            continue;
-          }
-          if (source[j] === "(") depth++;
-          else if (source[j] === ")") depth--;
-          j++;
-        }
-
-        if (depth === 0) {
-          const innerArg = source.slice(parenStart + 1, j - 1);
-          const macro = TYPST_FONT_MAP[prefix];
-          const normInner = normalizeTypstFontShortcuts(innerArg);
+        const openChar = match[2];
+        const closeChar = openChar === "(" ? ")" : openChar === "[" ? "]" : "}";
+        const argStart = index + match[0].length - 1;
+        const delimited = readDelimitedPair(source, argStart, openChar, closeChar);
+        if (delimited) {
+          const macro = UNIVERSAL_FONT_MODIFIER_MAP[prefix];
+          const normInner = normalizeTypstFontShortcuts(delimited.inner);
           result += `${macro}{${normInner}}`;
-          index = j;
+          index = delimited.end;
           continue;
         }
       }
@@ -1407,6 +1470,14 @@ export function normalizeBareGreekInMath(source: string): string {
       }
       const cmd = matchCommand(source, index);
       if (cmd) {
+        if (cmd === "\\begin" || cmd === "\\end") {
+          const envHeadEnd = skipEnvironmentHead(source, cmd, index + cmd.length);
+          if (envHeadEnd !== null) {
+            result += source.slice(index, envHeadEnd);
+            index = envHeadEnd;
+            continue;
+          }
+        }
         result += cmd;
         index += cmd.length;
         continue;
@@ -1419,17 +1490,21 @@ export function normalizeBareGreekInMath(source: string): string {
       // 1. Lemire MPHF catalog match
       const bare = matchBareSymbol(source, index);
       if (bare) {
-        if (bare.entry.canonical) {
-          result += bare.entry.canonical;
+        let canonical = bare.entry.canonical;
+        if (!canonical && bare.entry.unicode) {
+          canonical = lookupCatalog(bare.entry.unicode)?.canonical;
+        }
+        // Exclude obsolete \Bbb macros (e.g. \BbbB, \BbbD) and non-LaTeX macros (\greater, \equal, \mupNu)
+        if (
+          canonical &&
+          !/^\\Bbb[A-Za-z]/.test(canonical) &&
+          canonical !== "\\greater" &&
+          canonical !== "\\equal" &&
+          canonical !== "\\mupNu"
+        ) {
+          result += canonical;
           index += bare.length;
           continue;
-        } else if (bare.entry.unicode) {
-          const rev = lookupCatalog(bare.entry.unicode);
-          if (rev && rev.canonical) {
-            result += rev.canonical;
-            index += bare.length;
-            continue;
-          }
         }
       }
     }
@@ -1484,6 +1559,14 @@ export function normalizeBareFunctions(source: string): string {
       }
       const cmd = matchCommand(source, index);
       if (cmd) {
+        if (cmd === "\\begin" || cmd === "\\end") {
+          const envHeadEnd = skipEnvironmentHead(source, cmd, index + cmd.length);
+          if (envHeadEnd !== null) {
+            result += source.slice(index, envHeadEnd);
+            index = envHeadEnd;
+            continue;
+          }
+        }
         result += cmd;
         index += cmd.length;
         continue;
@@ -1621,6 +1704,8 @@ export function normalizeAutoScaledDelimiters(source: string): string {
     envDepth: number;
     height: number;
     fracDepth: number;
+    hasMatrix?: boolean;
+    isStructuralEnclosure?: boolean;
   }
 
   const stack: DelimNode[] = [];
@@ -1643,7 +1728,8 @@ export function normalizeAutoScaledDelimiters(source: string): string {
     }
   }
 
-  function getLevelFromHeight(h: number): "Big" | "bigg" | "Bigg" | null {
+  function getLevelFromHeight(h: number): "Big" | "bigg" | "Bigg" | "left_right" | null {
+    if (h >= 4.8) return "left_right";
     if (h >= 3.4) return "Bigg";
     if (h >= 2.5) return "bigg";
     if (h >= 1.8) return "Big";
@@ -1684,6 +1770,9 @@ export function normalizeAutoScaledDelimiters(source: string): string {
       const mat = source.slice(index).match(/^\\begin\s*\{(?:matrix|pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix|cases|array|aligned|align|gather|split)\}/);
       if (mat) {
         setStackMinHeight(3.4);
+        for (let s = 0; s < stack.length; s++) {
+          stack[s].hasMatrix = true;
+        }
       }
     } else if (source.startsWith("\\end", index)) {
       envDepth = Math.max(0, envDepth - 1);
@@ -1770,7 +1859,10 @@ export function normalizeAutoScaledDelimiters(source: string): string {
           }
           if (!open.sized && !sized) {
             const level = getLevelFromHeight(open.height);
-            if (level) {
+            if (level === "left_right") {
+              replacements.push({ start: index, end: index + 2, replacement: `\\right\\}` });
+              replacements.push({ start: open.start, end: open.end, replacement: `\\left\\{` });
+            } else if (level) {
               replacements.push({ start: index, end: index + 2, replacement: `\\${level}r\\}` });
               replacements.push({ start: open.start, end: open.end, replacement: `\\${level}l\\{` });
             }
@@ -1798,7 +1890,10 @@ export function normalizeAutoScaledDelimiters(source: string): string {
           }
           if (!open.sized && !sized) {
             const level = getLevelFromHeight(open.height);
-            if (level) {
+            if (level === "left_right") {
+              replacements.push({ start: index, end: index + 2, replacement: `\\right\\|` });
+              replacements.push({ start: open.start, end: open.end, replacement: `\\left\\|` });
+            } else if (level) {
               replacements.push({ start: index, end: index + 2, replacement: `\\${level}r\\|` });
               replacements.push({ start: open.start, end: open.end, replacement: `\\${level}l\\|` });
             }
@@ -1828,7 +1923,10 @@ export function normalizeAutoScaledDelimiters(source: string): string {
       ) {
         while (
           stack.length > 0 &&
-          (stack[stack.length - 1].type === "|" || stack[stack.length - 1].type === "\\|")
+          !stack[stack.length - 1].isStructuralEnclosure &&
+          (stack[stack.length - 1].type === "|" || stack[stack.length - 1].type === "\\|") &&
+          stack[stack.length - 1].braceDepth === braceDepth &&
+          stack[stack.length - 1].envDepth === envDepth
         ) {
           stack.pop();
         }
@@ -1841,7 +1939,10 @@ export function normalizeAutoScaledDelimiters(source: string): string {
     if (source[index] === "=" || source[index] === "," || source[index] === ";" || source[index] === ">") {
       while (
         stack.length > 0 &&
-        (stack[stack.length - 1].type === "|" || stack[stack.length - 1].type === "\\|")
+        !stack[stack.length - 1].isStructuralEnclosure &&
+        (stack[stack.length - 1].type === "|" || stack[stack.length - 1].type === "\\|") &&
+        stack[stack.length - 1].braceDepth === braceDepth &&
+        stack[stack.length - 1].envDepth === envDepth
       ) {
         stack.pop();
       }
@@ -1862,16 +1963,34 @@ export function normalizeAutoScaledDelimiters(source: string): string {
         const open = stack.pop()!;
         if (stack.length > 0) {
           stack[stack.length - 1].height = Math.max(stack[stack.length - 1].height, open.height);
+          if (open.hasMatrix) stack[stack.length - 1].hasMatrix = true;
         }
         if (!open.sized && !sized) {
-          const level = getLevelFromHeight(open.height);
-          if (level) {
+          const level = open.hasMatrix ? "left_right" : getLevelFromHeight(open.height);
+          if (level === "left_right") {
+            replacements.push({ start: index, end: index + 1, replacement: `\\right|` });
+            replacements.push({ start: open.start, end: open.end, replacement: `\\left|` });
+          } else if (level) {
             replacements.push({ start: index, end: index + 1, replacement: `\\${level}r|` });
             replacements.push({ start: open.start, end: open.end, replacement: `\\${level}l|` });
           }
         }
       } else {
-        stack.push({ type: "|", start: index, end: index + 1, sized, braceDepth, envDepth, height: 1.0, fracDepth: 0 });
+        let look = index + 1;
+        while (look < source.length && /\s/.test(source[look])) look++;
+        const isPrecedingMatrix = source.startsWith("\\begin", look) ||
+          /^\\?(mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat)\s*[{[]/.test(source.slice(look));
+        stack.push({
+          type: "|",
+          start: index,
+          end: index + 1,
+          sized,
+          braceDepth,
+          envDepth,
+          height: 1.0,
+          fracDepth: 0,
+          isStructuralEnclosure: isPrecedingMatrix,
+        });
       }
       index++;
       continue;
@@ -1897,10 +2016,22 @@ export function normalizeAutoScaledDelimiters(source: string): string {
         const open = stack.pop()!;
         if (stack.length > 0) {
           stack[stack.length - 1].height = Math.max(stack[stack.length - 1].height, open.height);
+          if (open.hasMatrix) stack[stack.length - 1].hasMatrix = true;
         }
         if (!open.sized && !sized) {
-          const level = getLevelFromHeight(open.height);
-          if (level) {
+          const level = open.hasMatrix ? "left_right" : getLevelFromHeight(open.height);
+          if (level === "left_right") {
+            replacements.push({
+              start: index,
+              end: index + 1,
+              replacement: char === ")" ? `\\right)` : `\\right]`,
+            });
+            replacements.push({
+              start: open.start,
+              end: open.end,
+              replacement: open.type === "(" ? `\\left(` : `\\left[`,
+            });
+          } else if (level) {
             replacements.push({
               start: index,
               end: index + 1,
@@ -1925,8 +2056,34 @@ export function normalizeAutoScaledDelimiters(source: string): string {
   while (stack.length > 0) {
     const unclosed = stack.pop()!;
     if (!unclosed.sized) {
-      const level = getLevelFromHeight(unclosed.height);
-      if (level) {
+      const level = unclosed.hasMatrix ? "left_right" : getLevelFromHeight(unclosed.height);
+      if (level === "left_right") {
+        if (unclosed.type === "(" || unclosed.type === "[") {
+          replacements.push({
+            start: unclosed.start,
+            end: unclosed.end,
+            replacement: `\\left${unclosed.type}`,
+          });
+        } else if (unclosed.type === "{") {
+          replacements.push({
+            start: unclosed.start,
+            end: unclosed.end,
+            replacement: `\\left\\{`,
+          });
+        } else if (unclosed.type === "|") {
+          replacements.push({
+            start: unclosed.start,
+            end: unclosed.end,
+            replacement: `\\left|`,
+          });
+        } else if (unclosed.type === "\\|") {
+          replacements.push({
+            start: unclosed.start,
+            end: unclosed.end,
+            replacement: `\\left\\|`,
+          });
+        }
+      } else if (level) {
         if (unclosed.type === "(" || unclosed.type === "[") {
           replacements.push({
             start: unclosed.start,
@@ -1938,6 +2095,12 @@ export function normalizeAutoScaledDelimiters(source: string): string {
             start: unclosed.start,
             end: unclosed.end,
             replacement: `\\${level}l\\{`,
+          });
+        } else if (unclosed.type === "|") {
+          replacements.push({
+            start: unclosed.start,
+            end: unclosed.end,
+            replacement: `\\${level}l|`,
           });
         } else if (unclosed.type === "\\|") {
           replacements.push({
@@ -2310,6 +2473,24 @@ export function autoSealUnclosedDelimiters(
       output += " \\right.".repeat(root.leftCount);
       totalLeftCount = Math.max(0, totalLeftCount - root.leftCount);
     }
+
+    // 1. Auto-seal dangling caret (^) and underscore (_) with Unicode placeholder ▢
+    output = output.replace(/(\^|_)([\s]*)([+\-=<>/*,)\]};$]|$)/g, "$1{▢}$2$3");
+
+    // 2. Auto-seal incomplete dangling radicals or accents at the end of expression / before operator
+    output = output.replace(
+      /\\(sqrt|vec|hat|bar|dot|ddot|tilde|check|breve|acute|grave|mathring)([\s]*)([+\-=<>/*,)\]};$]|$)/g,
+      "\\$1{▢}$2$3"
+    );
+
+    // 3. Auto-seal dangling single-argument fraction \frac{a} without denominator
+    output = output.replace(
+      /\\frac\s*\{([^{}]+)\}([\s]*)([+\-=<>/*,)\]};$]|$)/g,
+      "\\frac{$1}{▢}$2$3"
+    );
+
+    // 4. Auto-seal lone trailing backslash at the end of input
+    output = output.replace(/\\$/g, "\\ ");
   }
 
   return output;
@@ -2365,21 +2546,283 @@ export function normalizePhysicalUnitSpacing(
   return result;
 }
 
+const ASCII_OPERATOR_EXACT_MAP: Record<string, string> = {
+  // Bidirectional double arrows
+  "<=>": "\\iff ",
+  "<==>": "\\Longleftrightarrow ",
+  // Bidirectional single arrows
+  "<->": "\\leftrightarrow ",
+  "<-->": "\\longleftrightarrow ",
+  // Right double arrows
+  "=>": "\\implies ",
+  "==>": "\\Longrightarrow ",
+  // Right single arrows
+  "->": "\\to ",
+  "-->": "\\longrightarrow ",
+  // Left double arrows
+  "<==": "\\Longleftarrow ",
+  // Left single arrows
+  "<-": "\\leftarrow ",
+  "<--": "\\longleftarrow ",
+  // Mapping
+  "|->": "\\mapsto ",
+  // Inequalities & Relations
+  ">=": "\\ge ",
+  "<=": "\\le ",
+  "!=": "\\neq ",
+  ":=": "\\coloneqq ",
+  "+-": "\\pm ",
+  "-+": "\\mp ",
+  "^^": "\\wedge ",
+  "~=": "\\approx ",
+  "<<": "\\ll ",
+  ">>": "\\gg ",
+};
+
+function isOpChar(c: string): boolean {
+  return (
+    c === "<" ||
+    c === ">" ||
+    c === "=" ||
+    c === "-" ||
+    c === "!" ||
+    c === ":" ||
+    c === "+" ||
+    c === "~" ||
+    c === "|" ||
+    c === "^"
+  );
+}
+
 /**
- * Normalizes ASCII and Typst arrow shorthands to canonical LaTeX:
- * -> to \to, <-> to \leftrightarrow, => to \implies, <=> to \iff.
+ * Normalizes pure ASCII operators and arrows to canonical LaTeX:
+ * Uses Maximal Munch (greedy continuous operator run scanning) to prevent
+ * accidental sub-token fragmentation (e.g. <==> being partially matched as < \implies >).
+ * Skips comments (% ...), \text{...}, \verb, and LaTeX commands (\cmd).
  */
-export function normalizeTypstArrows(source: string): string {
+export function normalizeAsciiOperators(source: string): string {
   let result = "";
   let index = 0;
-  while (index < source.length) {
-    if (source[index] === "%") {
+  const len = source.length;
+  while (index < len) {
+    const char = source[index];
+    if (char === "%") {
       const end = readCommentEnd(source, index);
       result += source.slice(index, end);
       index = end;
       continue;
     }
-    if (source[index] === "\\") {
+    if (char === "\\") {
+      const verb = readVerbEnd(source, index);
+      if (verb !== null) {
+        result += source.slice(index, verb[0]);
+        index = verb[0];
+        continue;
+      }
+      const opaque = readOpaqueCommand(source, index);
+      if (opaque) {
+        result += opaque[0];
+        index = opaque[1];
+        continue;
+      }
+      const cmd = matchCommand(source, index);
+      if (cmd) {
+        if (cmd === "\\begin" || cmd === "\\end") {
+          const envHeadEnd = skipEnvironmentHead(source, cmd, index + cmd.length);
+          if (envHeadEnd !== null) {
+            result += source.slice(index, envHeadEnd);
+            index = envHeadEnd;
+            continue;
+          }
+        }
+        result += cmd;
+        index += cmd.length;
+        continue;
+      }
+    }
+
+    // Multi-dialect ASCII shorthand operators (Maximal Munch: 3-char before 2-char)
+    const isPrevBoundary = index === 0 || !/[A-Za-z0-9_\\]/.test(source[index - 1]);
+    if (isPrevBoundary) {
+      // Length 3: xxx (\bigtimes), vvv (\bigvee), uuu (\bigcup), nnn (\bigcap)
+      if (index + 3 <= len) {
+        const sub3 = source.slice(index, index + 3);
+        let rep3: string | null = null;
+        if (sub3 === "xxx") rep3 = "\\bigtimes ";
+        else if (sub3 === "vvv") rep3 = "\\bigvee ";
+        else if (sub3 === "uuu") rep3 = "\\bigcup ";
+        else if (sub3 === "nnn") rep3 = "\\bigcap ";
+
+        if (rep3 !== null) {
+          const isNextBoundary = index + 3 === len || !/[A-Za-z0-9_]/.test(source[index + 3]);
+          if (isNextBoundary) {
+            result += (index + 3 >= len || source.slice(index + 3).trim().length === 0) ? rep3.trimEnd() : rep3;
+            index += 3;
+            if (index < len && source[index] === " ") index++;
+            continue;
+          }
+        }
+      }
+
+      // Length 2: xx (\times), vv (\vee), uu (\cup), nn (\cap), ox (\otimes), o+ (\oplus), o. (\odot)
+      if (index + 2 <= len) {
+        const sub2 = source.slice(index, index + 2);
+        let rep2: string | null = null;
+        if (sub2 === "xx") rep2 = "\\times ";
+        else if (sub2 === "vv") rep2 = "\\vee ";
+        else if (sub2 === "uu") rep2 = "\\cup ";
+        else if (sub2 === "nn") rep2 = "\\cap ";
+        else if (sub2 === "ox") rep2 = "\\otimes ";
+        else if (sub2 === "o+") rep2 = "\\oplus ";
+        else if (sub2 === "o.") rep2 = "\\odot ";
+
+        if (rep2 !== null) {
+          const isNextBoundary = index + 2 === len || !/[A-Za-z0-9_]/.test(source[index + 2]);
+          if (isNextBoundary) {
+            result += (index + 2 >= len || source.slice(index + 2).trim().length === 0) ? rep2.trimEnd() : rep2;
+            index += 2;
+            if (index < len && source[index] === " ") index++;
+            continue;
+          }
+        }
+      }
+    }
+
+    // Continuous Operator Run (Maximal Munch)
+    if (isOpChar(char)) {
+      let opEnd = index;
+      while (opEnd < len && isOpChar(source[opEnd])) {
+        opEnd++;
+      }
+      const cluster = source.slice(index, opEnd);
+
+      // Exact match in dictionary
+      if (ASCII_OPERATOR_EXACT_MAP[cluster]) {
+        let rep = ASCII_OPERATOR_EXACT_MAP[cluster];
+        // Do not inject trailing space at the end of expression to protect inline math closing $
+        if (opEnd >= len || source.slice(opEnd).trim().length === 0) {
+          rep = rep.trimEnd();
+        }
+        result += rep;
+        index = opEnd;
+        if (index < len && source[index] === " ") index++;
+        continue;
+      }
+
+      // Arbitrary shaft lengths:
+      // <=2 dashes/equals: standard \longleftrightarrow, \longrightarrow, etc.
+      // >=3 dashes/equals: extensible stretchy arrows (\xleftrightarrow{\hspace{...em}}) scaling with dash count
+      if (/^<={2,}>$/.test(cluster)) {
+        const eqCount = cluster.length - 2;
+        if (eqCount <= 2) {
+          result += "\\Longleftrightarrow ";
+        } else {
+          const em = (eqCount * 0.35).toFixed(2);
+          result += `\\xLeftrightarrow{\\hspace{${em}em}} `;
+        }
+        index = opEnd;
+        if (index < len && source[index] === " ") index++;
+        continue;
+      }
+      if (/^<-{2,}>$/.test(cluster)) {
+        const dashCount = cluster.length - 2;
+        if (dashCount <= 2) {
+          result += "\\longleftrightarrow ";
+        } else {
+          const em = (dashCount * 0.35).toFixed(2);
+          result += `\\xleftrightarrow{\\hspace{${em}em}} `;
+        }
+        index = opEnd;
+        if (index < len && source[index] === " ") index++;
+        continue;
+      }
+      if (/^={2,}>$/.test(cluster)) {
+        const eqCount = cluster.length - 1;
+        if (eqCount <= 2) {
+          result += "\\Longrightarrow ";
+        } else {
+          const em = (eqCount * 0.35).toFixed(2);
+          result += `\\xRightarrow{\\hspace{${em}em}} `;
+        }
+        index = opEnd;
+        if (index < len && source[index] === " ") index++;
+        continue;
+      }
+      if (/^-{2,}>$/.test(cluster)) {
+        const dashCount = cluster.length - 1;
+        if (dashCount <= 2) {
+          result += "\\longrightarrow ";
+        } else {
+          const em = (dashCount * 0.35).toFixed(2);
+          result += `\\xrightarrow{\\hspace{${em}em}} `;
+        }
+        index = opEnd;
+        if (index < len && source[index] === " ") index++;
+        continue;
+      }
+      if (/^<={2,}$/.test(cluster)) {
+        const eqCount = cluster.length - 1;
+        if (eqCount <= 2) {
+          result += "\\Longleftarrow ";
+        } else {
+          const em = (eqCount * 0.35).toFixed(2);
+          result += `\\xLeftarrow{\\hspace{${em}em}} `;
+        }
+        index = opEnd;
+        if (index < len && source[index] === " ") index++;
+        continue;
+      }
+      if (/^<-{2,}$/.test(cluster)) {
+        const dashCount = cluster.length - 1;
+        if (dashCount <= 2) {
+          result += "\\longleftarrow ";
+        } else {
+          const em = (dashCount * 0.35).toFixed(2);
+          result += `\\xleftarrow{\\hspace{${em}em}} `;
+        }
+        index = opEnd;
+        if (index < len && source[index] === " ") index++;
+        continue;
+      }
+
+      // Not a recognized operator ligature; emit verbatim
+      result += cluster;
+      index = opEnd;
+      continue;
+    }
+
+    result += char;
+    index++;
+  }
+  return result;
+}
+
+export const normalizeTypstArrows = normalizeAsciiOperators;
+
+/**
+ * Normalizes ASCII ellipses: continuous dot runs (3+ dots)
+ * - Between binary operators or relations: \cdots
+ * - Between commas, semicolons, brackets, or standard variables: \ldots
+ * Skips comments (% ...), opaque text commands (\text{...}), \verb, and LaTeX commands.
+ */
+export function normalizeAsciiEllipses(source: string): string {
+  let result = "";
+  let index = 0;
+  const len = source.length;
+
+  while (index < len) {
+    const char = source[index];
+
+    // Comments
+    if (char === "%") {
+      const end = readCommentEnd(source, index);
+      result += source.slice(index, end);
+      index = end;
+      continue;
+    }
+
+    // TeX commands and opaque blocks
+    if (char === "\\") {
       const verb = readVerbEnd(source, index);
       if (verb !== null) {
         result += source.slice(index, verb[0]);
@@ -2399,30 +2842,433 @@ export function normalizeTypstArrows(source: string): string {
         continue;
       }
     }
-    if (source.startsWith("<=>", index)) {
-      result += "\\iff ";
-      index += 3;
+
+    // Continuous dot runs (3 or more dots)
+    if (char === ".") {
+      let dotEnd = index;
+      while (dotEnd < len && source[dotEnd] === ".") {
+        dotEnd++;
+      }
+      const dotCount = dotEnd - index;
+      if (dotCount >= 3) {
+        // Inspect backward non-whitespace context
+        let prevIdx = index - 1;
+        while (prevIdx >= 0 && /\s/.test(source[prevIdx])) {
+          prevIdx--;
+        }
+        const prevChar = prevIdx >= 0 ? source[prevIdx] : "";
+
+        // Inspect forward non-whitespace context
+        let nextIdx = dotEnd;
+        while (nextIdx < len && /\s/.test(source[nextIdx])) {
+          nextIdx++;
+        }
+        const nextChar = nextIdx < len ? source[nextIdx] : "";
+
+        // Check if preceded or followed by binary operators or relations
+        const isOperatorContext =
+          prevChar === "+" ||
+          prevChar === "-" ||
+          prevChar === "*" ||
+          prevChar === "/" ||
+          prevChar === "=" ||
+          prevChar === "<" ||
+          prevChar === ">" ||
+          prevChar === "~" ||
+          nextChar === "+" ||
+          nextChar === "-" ||
+          nextChar === "*" ||
+          nextChar === "/" ||
+          nextChar === "=" ||
+          nextChar === "<" ||
+          nextChar === ">" ||
+          nextChar === "~" ||
+          source.slice(Math.max(0, prevIdx - 6), prevIdx + 1).includes("\\times") ||
+          source.slice(Math.max(0, prevIdx - 5), prevIdx + 1).includes("\\cdot") ||
+          source.slice(nextIdx, nextIdx + 7).startsWith("\\times") ||
+          source.slice(nextIdx, nextIdx + 6).startsWith("\\cdot");
+
+        const isTrailing = dotEnd >= len || source.slice(dotEnd).trim().length === 0;
+        if (isOperatorContext) {
+          result += isTrailing ? "\\cdots" : "\\cdots ";
+        } else {
+          result += isTrailing ? "\\ldots" : "\\ldots ";
+        }
+        index = dotEnd;
+        if (index < len && source[index] === " ") index++;
+        continue;
+      }
+    }
+
+    result += char;
+    index++;
+  }
+  return result;
+}
+
+const readBracketPair = readDelimitedPair;
+
+/**
+ * Normalizes chained-bracket roots with O(1) arity gating:
+ * - sqrt[expr] -> \sqrt{expr}
+ * - sqrt[n][expr] -> \sqrt[n]{expr}
+ * - sqrt[3][aj][kd] -> \sqrt[3]{aj}[kd] (3rd bracket preserved via arity gating)
+ * - Leaves standard LaTeX \sqrt[n]{x} and \sqrt{x} intact.
+ */
+export function normalizeChainedRoots(source: string): string {
+  let result = "";
+  let index = 0;
+  const len = source.length;
+
+  while (index < len) {
+    if (source[index] === "%") {
+      const end = readCommentEnd(source, index);
+      result += source.slice(index, end);
+      index = end;
       continue;
     }
-    if (source.startsWith("=>", index)) {
-      result += "\\implies ";
-      index += 2;
-      continue;
+
+    if (source[index] === "\\") {
+      const verb = readVerbEnd(source, index);
+      if (verb !== null) {
+        result += source.slice(index, verb[0]);
+        index = verb[0];
+        continue;
+      }
+      const opaque = readOpaqueCommand(source, index);
+      if (opaque) {
+        result += opaque[0];
+        index = opaque[1];
+        continue;
+      }
+      // Check for \sqrt[...] where user typed chained brackets with \sqrt
+      if (source.startsWith("\\sqrt[", index)) {
+        const firstBracket = readBracketPair(source, index + 5);
+        if (firstBracket) {
+          let afterFirst = firstBracket.end;
+          while (afterFirst < len && /\s/.test(source[afterFirst])) afterFirst++;
+          if (afterFirst < len && source[afterFirst] === "[") {
+            const secondBracket = readBracketPair(source, afterFirst);
+            if (secondBracket) {
+              result += `\\sqrt[${firstBracket.inner}]{${secondBracket.inner}}`;
+              index = secondBracket.end;
+              continue;
+            }
+          }
+        }
+      }
+      const cmd = matchCommand(source, index);
+      if (cmd) {
+        result += cmd;
+        index += cmd.length;
+        continue;
+      }
     }
-    if (source.startsWith("<->", index)) {
-      result += "\\leftrightarrow ";
-      index += 3;
-      continue;
+
+    // Bare sqrt[...
+    const prevChar = index > 0 ? source[index - 1] : "";
+    if (
+      (index === 0 || !/[A-Za-z0-9_\\]/.test(prevChar)) &&
+      source.startsWith("sqrt[", index)
+    ) {
+      const firstBracket = readBracketPair(source, index + 4);
+      if (firstBracket) {
+        let afterFirst = firstBracket.end;
+        while (afterFirst < len && /\s/.test(source[afterFirst])) afterFirst++;
+        if (afterFirst < len && source[afterFirst] === "[") {
+          const secondBracket = readBracketPair(source, afterFirst);
+          if (secondBracket) {
+            // Arity = 2 saturated! [index][radicand]
+            result += `\\sqrt[${firstBracket.inner}]{${secondBracket.inner}}`;
+            index = secondBracket.end;
+            continue;
+          }
+        }
+        // Single argument root [radicand]
+        result += `\\sqrt{${firstBracket.inner}}`;
+        index = firstBracket.end;
+        continue;
+      }
     }
-    if (source.startsWith("->", index)) {
-      result += "\\to ";
-      index += 2;
-      continue;
-    }
+
     result += source[index];
     index++;
   }
   return result;
+}
+
+export const MATRIX_SUGAR_PREFIXES: Record<string, string> = {
+  mat: "matrix",
+  pmat: "pmatrix",
+  bmat: "bmatrix",
+  Bmat: "Bmatrix",
+  cmat: "Bmatrix",
+  vmat: "vmatrix",
+  dmat: "vmatrix",
+  Vmat: "Vmatrix",
+  nmat: "Vmatrix",
+};
+
+/**
+ * Parses and formats matrix row/cell content with depth shielding.
+ */
+function formatMatrixCells(inner: string): string {
+  const rows: string[] = [];
+  let currentRow: string[] = [];
+  let currentCell = "";
+  let parenDepth = 0;
+  let braceDepth = 0;
+  let bracketDepth = 0;
+
+  let k = 0;
+  while (k < inner.length) {
+    const ch = inner[k];
+
+    if (ch === "\\") {
+      if (inner.startsWith("\\\\", k)) {
+        if (parenDepth === 0 && braceDepth === 0 && bracketDepth === 0) {
+          currentRow.push(currentCell.trim());
+          currentCell = "";
+          if (currentRow.some((c) => c.length > 0)) {
+            rows.push(currentRow.join(" & "));
+          }
+          currentRow = [];
+          k += 2;
+          continue;
+        }
+      }
+      const subCmd = matchCommand(inner, k);
+      const cmdLen = subCmd ? subCmd.length : 2;
+      currentCell += inner.slice(k, k + cmdLen);
+      k += cmdLen;
+      continue;
+    }
+
+    if (ch === "(") parenDepth++;
+    else if (ch === ")" && parenDepth > 0) parenDepth--;
+    else if (ch === "{") braceDepth++;
+    else if (ch === "}" && braceDepth > 0) braceDepth--;
+    else if (ch === "[") bracketDepth++;
+    else if (ch === "]" && bracketDepth > 0) bracketDepth--;
+
+    if (parenDepth === 0 && braceDepth === 0 && bracketDepth === 0) {
+      if (ch === ";" || ch === "\n" || (ch === "\r" && inner[k + 1] === "\n")) {
+        currentRow.push(currentCell.trim());
+        currentCell = "";
+        if (currentRow.some((c) => c.length > 0)) {
+          rows.push(currentRow.join(" & "));
+        }
+        currentRow = [];
+        if (ch === "\r" && inner[k + 1] === "\n") k++;
+        k++;
+        continue;
+      }
+      if (ch === "," || ch === "&") {
+        currentRow.push(currentCell.trim());
+        currentCell = "";
+        k++;
+        continue;
+      }
+    }
+
+    currentCell += ch;
+    k++;
+  }
+
+  if (currentCell.trim().length > 0 || currentRow.length > 0) {
+    currentRow.push(currentCell.trim());
+    if (currentRow.some((c) => c.length > 0)) {
+      rows.push(currentRow.join(" & "));
+    }
+  }
+
+  return rows.filter((r) => r.length > 0).join(" \\\\ ");
+}
+
+/**
+ * Normalizes shift-free breathing-room matrices and delimiter-wrapped matrices:
+ * - mat[1, 2; 3, 4] -> \begin{matrix}
+ * - pmat[1, 2; 3, 4] -> \begin{pmatrix}
+ * - bmat[1, 2; 3, 4] -> \begin{bmatrix}
+ * - cmat[1, 2; 3, 4] / Bmat[...] -> \begin{Bmatrix}
+ * - dmat[1, 2; 3, 4] / vmat[...] -> \begin{vmatrix}
+ * - nmat[1, 2; 3, 4] / Vmat[...] -> \begin{Vmatrix}
+ * - |mat[...]| -> \begin{vmatrix}
+ * - ||mat[...]|| / \|mat[...]\| -> \begin{Vmatrix}
+ * - \{mat[...]\} / \{dmat[...]\} -> \begin{Bmatrix}
+ * - (mat[...]) -> \begin{pmatrix}
+ * - [mat[...]] -> \begin{bmatrix}
+ */
+export function normalizeBracketMatrices(
+  source: string,
+  defaultEnv: string = "matrix"
+): string {
+  let result = "";
+  let index = 0;
+  const len = source.length;
+
+  while (index < len) {
+    if (source[index] === "%") {
+      const end = readCommentEnd(source, index);
+      result += source.slice(index, end);
+      index = end;
+      continue;
+    }
+
+    if (source[index] === "\\") {
+      const verb = readVerbEnd(source, index);
+      if (verb !== null) {
+        result += source.slice(index, verb[0]);
+        index = verb[0];
+        continue;
+      }
+      const opaque = readOpaqueCommand(source, index);
+      if (opaque) {
+        result += opaque[0];
+        index = opaque[1];
+        continue;
+      }
+      // Check if this backslash starts an escaped wrapper like \| or \{
+      if (!source.startsWith("\\|", index) && !source.startsWith("\\{", index)) {
+        const isBackslashedMat = /^\\(mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat)\s*([{[])/.test(source.slice(index));
+        if (!isBackslashedMat) {
+          const cmd = matchCommand(source, index);
+          if (cmd) {
+            result += cmd;
+            index += cmd.length;
+            continue;
+          }
+        }
+      }
+    }
+
+    // 1. Check delimiter-wrapped matrix shorthand:
+    // ||mat[...]||, \|mat[...]\|, |mat[...]|, \{mat[...]\}, (mat[...]), [mat[...]]
+    let wrapOpen: string | null = null;
+    let wrapClose: string | null = null;
+    let wrapEnv: string | null = null;
+
+    if (source.startsWith("||", index)) {
+      wrapOpen = "||";
+      wrapClose = "||";
+      wrapEnv = "Vmatrix";
+    } else if (source.startsWith("\\|", index)) {
+      wrapOpen = "\\|";
+      wrapClose = "\\|";
+      wrapEnv = "Vmatrix";
+    } else if (source[index] === "|") {
+      wrapOpen = "|";
+      wrapClose = "|";
+      wrapEnv = "vmatrix";
+    } else if (source.startsWith("\\{", index)) {
+      wrapOpen = "\\{";
+      wrapClose = "\\}";
+      wrapEnv = "Bmatrix";
+    } else if (source[index] === "{" && (index === 0 || source[index - 1] !== "\\")) {
+      wrapOpen = "{";
+      wrapClose = "}";
+      wrapEnv = "Bmatrix";
+    } else if (source[index] === "(") {
+      wrapOpen = "(";
+      wrapClose = ")";
+      wrapEnv = "pmatrix";
+    } else if (source[index] === "[") {
+      wrapOpen = "[";
+      wrapClose = "]";
+      wrapEnv = "bmatrix";
+    }
+
+    if (wrapOpen !== null && wrapClose !== null && wrapEnv !== null) {
+      const afterOpen = source.slice(index + wrapOpen.length);
+      const wrapMatMatch = afterOpen.match(
+        /^\s*\\?(mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat)\s*([{[])/
+      );
+      if (wrapMatMatch) {
+        const openChar = wrapMatMatch[2];
+        const closeChar = openChar === "{" ? "}" : "]";
+        const matStart = index + wrapOpen.length + wrapMatMatch[0].length - 1;
+        const bracket = readDelimitedPair(source, matStart, openChar, closeChar);
+        if (bracket) {
+          const afterBracket = source.slice(bracket.end);
+          const closeLeadWhitespace = afterBracket.match(/^\s*/)?.[0].length || 0;
+          const targetSlice = afterBracket.slice(closeLeadWhitespace);
+          if (targetSlice.startsWith(wrapClose)) {
+            const renderedRows = formatMatrixCells(bracket.inner);
+            result += `\\begin{${wrapEnv}} ${renderedRows} \\end{${wrapEnv}}`;
+            index = bracket.end + closeLeadWhitespace + wrapClose.length;
+            continue;
+          }
+        }
+      }
+    }
+
+    // 2. Unwrapped matrix prefix shorthand (supports both bare mat[...] and backslashed \mat[...]):
+    const isBackslashedMat = source[index] === "\\";
+    const matSliceStart = isBackslashedMat ? index + 1 : index;
+    const prevChar = index > 0 ? source[index - 1] : "";
+    if (isBackslashedMat || index === 0 || !/[A-Za-z0-9_\\]/.test(prevChar)) {
+      const match = source
+        .slice(matSliceStart)
+        .match(/^(mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat)\s*([{[])/);
+      if (match) {
+        const prefix = match[1];
+        const openChar = match[2];
+        const closeChar = openChar === "{" ? "}" : "]";
+        const envName =
+          prefix === "mat"
+            ? defaultEnv
+            : MATRIX_SUGAR_PREFIXES[prefix] || "matrix";
+        const bracketStart = matSliceStart + match[0].length - 1;
+        const bracket = readDelimitedPair(source, bracketStart, openChar, closeChar);
+        if (bracket) {
+          const renderedRows = formatMatrixCells(bracket.inner);
+          result += `\\begin{${envName}} ${renderedRows} \\end{${envName}}`;
+          index = bracket.end;
+          continue;
+        }
+      }
+    }
+
+    result += source[index];
+    index++;
+  }
+  return result;
+}
+
+/**
+ * Diagnostic matrix delimiter validator:
+ * Validates column balance across rows in LaTeX matrix environments.
+ * Non-blocking: returns ragged row indices without failing compilation.
+ */
+export function validateMatrixDelimiters(
+  latex: string
+): { isRagged: boolean; raggedRows: number[] } {
+  const envMatch = latex.match(
+    /\\begin\s*\{((?:p|b|B|v|V|small)?matrix)\}([\s\S]*?)\\end\s*\{\1\}/
+  );
+  if (!envMatch) return { isRagged: false, raggedRows: [] };
+
+  const inner = envMatch[2];
+  const rows = inner.split(/\\\\/);
+  if (rows.length <= 1) return { isRagged: false, raggedRows: [] };
+
+  const colCounts = rows.map((row) => {
+    let count = 1;
+    for (let i = 0; i < row.length; i++) {
+      if (row[i] === "&") count++;
+    }
+    return count;
+  });
+
+  const expected = colCounts[0];
+  const raggedRows: number[] = [];
+  for (let i = 1; i < colCounts.length; i++) {
+    if (colCounts[i] !== expected) {
+      raggedRows.push(i + 1);
+    }
+  }
+
+  return { isRagged: raggedRows.length > 0, raggedRows };
 }
 
 /**
@@ -2507,14 +3353,60 @@ export function normalizeMathSyntax(
     text = text.replace(/([A-Za-z])\u20D7/g, "\\vec{$1}");
     text = text.replace(/([A-Za-z])\u030C/g, "\\check{$1}");
   }
-  if (text.includes('"')) {
+  if (
+    options?.speedSyntacticSugar !== false &&
+    options?.sugarQuotedStrings !== false &&
+    text.includes('"')
+  ) {
     text = normalizeQuotedStrings(text);
   }
-  if (/\b(?:bb|cal|bold|frak|scr)\s*\(/.test(text)) {
+  if (/(?:^|[^A-Za-z0-9_\\])\\?(?:bb|cal|bold|frak|scr|rm|sf|tt|text|mathbb|mathcal|mathbf|mathfrak|mathscr|mathrm|mathsf|mathtt)\s*([{[(])/.test(text)) {
     text = normalizeTypstFontShortcuts(text);
   }
-  if (text.includes("-") || text.includes("=")) {
-    text = normalizeTypstArrows(text);
+  if (
+    options?.speedSyntacticSugar !== false &&
+    options?.sugarBracketMatrices !== false &&
+    /(?:^|[^A-Za-z0-9_])\\?(?:mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat)\s*[{[]/.test(text)
+  ) {
+    text = normalizeBracketMatrices(text);
+  }
+  if (
+    options?.speedSyntacticSugar !== false &&
+    options?.sugarChainedRoots !== false &&
+    (text.includes("sqrt[") || text.includes("\\sqrt["))
+  ) {
+    text = normalizeChainedRoots(text);
+  }
+  if (
+    options?.speedSyntacticSugar !== false &&
+    options?.sugarAsciiEllipses !== false &&
+    text.includes("...")
+  ) {
+    text = normalizeAsciiEllipses(text);
+  }
+  if (
+    options?.speedSyntacticSugar !== false &&
+    options?.sugarAsciiOperators !== false &&
+    (text.includes("-") ||
+      text.includes("=") ||
+      text.includes(">") ||
+      text.includes("<") ||
+      text.includes("!") ||
+      text.includes(":") ||
+      text.includes("+") ||
+      text.includes("~") ||
+      text.includes("|") ||
+      text.includes("^") ||
+      text.includes(".") ||
+      text.includes("xx") ||
+      text.includes("vv") ||
+      text.includes("uu") ||
+      text.includes("nn") ||
+      text.includes("ox") ||
+      text.includes("o+") ||
+      text.includes("o."))
+  ) {
+    text = normalizeAsciiOperators(text);
   }
   if (text.includes("/")) {
     text = normalizeInfixDivision(text, options?.requireBracesForSlashDivision);
@@ -2537,6 +3429,68 @@ export function normalizeMathSyntax(
     text = autoSealUnclosedDelimiters(text, options?.crashImmunityAutoSeal === true);
   }
   return text;
+}
+
+/**
+ * SIMD-accelerated O(K) comment masking (where K is the number of comment lines, not N characters):
+ * Uses native C++/SIMD indexOf to jump directly across comments, blanking out comment bodies
+ * (% ... \n) with space characters (' ') via " ".repeat(len).
+ * Preserves exact character offsets and string length while completely shielding downstream
+ * tokenizers, parsers, and regex engines from executing inside comments.
+ */
+export function maskComments(text: string): string {
+  if (!text.includes("%")) return text;
+  let result = "";
+  let cursor = 0;
+  const len = text.length;
+
+  while (cursor < len) {
+    const percentIdx = text.indexOf("%", cursor);
+    if (percentIdx === -1) {
+      result += text.slice(cursor);
+      break;
+    }
+
+    result += text.slice(cursor, percentIdx);
+
+    // Check if % is escaped by an odd number of preceding backslashes
+    let backslashCount = 0;
+    let b = percentIdx - 1;
+    while (b >= 0 && text.charCodeAt(b) === 92 /* '\\' */) {
+      backslashCount++;
+      b--;
+    }
+
+    if (backslashCount % 2 === 1) {
+      // Escaped \% -> keep verbatim
+      result += "%";
+      cursor = percentIdx + 1;
+    } else {
+      // True unescaped comment -> keep '%' and blank out body up to \r or \n with spaces
+      result += "%";
+      let endOfLine = text.indexOf("\n", percentIdx + 1);
+      if (endOfLine === -1) {
+        endOfLine = len;
+      }
+      // If line ends with \r\n, do not blank out \r so CRLF line termination remains intact
+      let commentBodyEnd = endOfLine;
+      if (commentBodyEnd > percentIdx + 1 && text.charCodeAt(commentBodyEnd - 1) === 13 /* '\r' */) {
+        commentBodyEnd--;
+      }
+      // Also handle standalone \r if earlier than \n
+      const crIdx = text.indexOf("\r", percentIdx + 1);
+      if (crIdx !== -1 && crIdx < commentBodyEnd) {
+        commentBodyEnd = crIdx;
+      }
+
+      const commentLen = commentBodyEnd - (percentIdx + 1);
+      if (commentLen > 0) {
+        result += " ".repeat(commentLen);
+      }
+      cursor = commentBodyEnd;
+    }
+  }
+  return result;
 }
 
 

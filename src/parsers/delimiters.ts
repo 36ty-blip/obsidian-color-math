@@ -289,6 +289,18 @@ export function findDelimiterScan(
       }
     }
 
+    if (
+      text.startsWith("\\middle", index) &&
+      (index + 7 === text.length || !/[A-Za-z]/.test(text[index + 7]))
+    ) {
+      const afterMiddle = skipWhitespace(text, index + 7);
+      const delimMatch = text.slice(afterMiddle).match(EXTENSIBLE_DELIM_RE);
+      if (delimMatch) {
+        index = afterMiddle + delimMatch[0].length;
+        continue;
+      }
+    }
+
     // Sized delimiters: \big, \bigl, \bigr, \bigm, \Big, \Bigl, \Bigr, \Bigm, \bigg, \biggl, \biggr, \biggm, \Bigg, \Biggl, \Biggr, \Biggm
     const sizedPrefix = text.slice(index).match(/^(\\(?:Bigg|bigg|Big|big)[lrm]?)/);
     if (sizedPrefix) {
@@ -589,7 +601,13 @@ export function findDelimiterScan(
         }
       }
       if (matchIdx !== -1) {
-        const matched = stack.splice(matchIdx, 1)[0];
+        const matched = stack[matchIdx];
+        while (stack.length > matchIdx) {
+          const popped = stack.pop()!;
+          if (popped !== matched) {
+            unmatched.push(popped.item);
+          }
+        }
         pairs.push({
           open: matched.item,
           close: {
@@ -697,6 +715,60 @@ export function findDelimiterScan(
       continue;
     }
 
+    // Bare vertical bars | ... |
+    if (
+      text[index] === "|" &&
+      (index + 1 === text.length || text[index + 1] !== "|") &&
+      (index === 0 || text[index - 1] !== "|")
+    ) {
+      let matchIdx = -1;
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (!stack[i].item.isLeftRight && stack[i].item.type === "pipe") {
+          matchIdx = i;
+          break;
+        }
+      }
+      if (matchIdx !== -1) {
+        const matched = stack[matchIdx];
+        while (stack.length > matchIdx) {
+          const popped = stack.pop()!;
+          if (popped !== matched) {
+            unmatched.push(popped.item);
+          }
+        }
+        pairs.push({
+          open: matched.item,
+          close: {
+            type: "pipe",
+            start: index,
+            end: index + 1,
+            isLeftRight: false,
+          },
+          depth: matched.depth,
+        });
+      } else {
+        const depth = stack.length;
+        stack.push({
+          item: {
+            type: "pipe",
+            start: index,
+            end: index + 1,
+            isLeftRight: false,
+          },
+          depth,
+        });
+      }
+      index += 1;
+      continue;
+    }
+
+    // Reset stray pipe parity on top-level binary relation operators
+    if (text[index] === "=") {
+      while (stack.length > 0 && stack[stack.length - 1].item.type === "pipe") {
+        unmatched.push(stack.pop()!.item);
+      }
+    }
+
     // Skip generic LaTeX commands like \frac, \sqrt, etc.
     if (text[index] === "\\") {
       const cmdMatch = text.slice(index).match(/^(\\[A-Za-z]+|\\.)/);
@@ -776,19 +848,15 @@ export function collectDelimiterSpans(
 
       const color = palette[pair.depth % palette.length];
       if (forLatexWrap && pair.open.isLeftRight) {
-        const innerText = text.slice(pair.open.end, pair.close.start);
-        if (/\\begin\s*\{|&|\\\\/.test(innerText)) {
-          // Never wrap across environment blocks or alignment tabs (&, \\):
-          // In MathJax and KaTeX, wrapping across & breaks alignment tables
-          continue;
-        }
-        // Wrap entire \left...\right expression so KaTeX/MathJax does not fail group boundaries
-        spans.push({
-          start: pair.open.start,
-          end: pair.close.end,
-          color,
-          priority: 24,
-        });
+        // SAFETY & SCOPE FLOODING IMMUNITY:
+        // Never wrap entire \left...\right expressions with \textcolor.
+        // Wrapping the outer scope causes uncolored inner operators (+, -, =)
+        // and relations to erroneously flood with the delimiter color.
+        // In LaTeX, \left and \right cannot be individually wrapped with \textcolor
+        // without violating TeX grouping boundaries, so we skip emitting \textcolor
+        // during LaTeX string baking. CodeMirror 6 Live Preview (forLatexWrap: false)
+        // continues to style them via discrete DOM decorations.
+        continue;
       } else {
         // Discrete opening and closing spans
         spans.push({

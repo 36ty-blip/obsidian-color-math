@@ -285,6 +285,19 @@ export const OPAQUE_MACROS = new Set([
   "tag",
   "mathrm",
   "verb",
+  "hspace",
+  "vspace",
+  "phantom",
+  "hphantom",
+  "vphantom",
+  "kern",
+  "mkern",
+  "mskip",
+  "hskip",
+  "label",
+  "ref",
+  "eqref",
+  "cite",
 ]);
 
 export const MATRIX_ENVIRONMENTS = new Set([
@@ -853,7 +866,7 @@ export function readOperand(
     const command = readCommand(source, start, end);
     if (command === null) return null;
     let [name, commandEnd] = command;
-    if (name === "operatorname" && commandEnd < end && source[commandEnd] === "*") {
+    if ((name === "operatorname" || name === "hspace" || name === "vspace") && commandEnd < end && source[commandEnd] === "*") {
       commandEnd++;
     }
 
@@ -1030,6 +1043,18 @@ export function readOperand(
     }
 
     if (!argumentCount && !isFunctionMacro(name)) {
+      if (/^(mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat|bb|cal|bold|frak|scr|rm|sf|tt)$/.test(name)) {
+        const nextDelim = skipIgnorable(source, commandEnd, end);
+        const isMatrix = /^(mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat)$/.test(name);
+        const validDelim = nextDelim < end && (source[nextDelim] === "[" || source[nextDelim] === "{" || (!isMatrix && source[nextDelim] === "("));
+        if (validDelim) {
+          return {
+            kind: "function",
+            start,
+            end: commandEnd,
+          };
+        }
+      }
       // Unknown commands have unknown arity, but hiding the remaining
       // equation is worse than leaving their arguments unclassified.
       return { kind: "structural", start, end: commandEnd };
@@ -1131,6 +1156,24 @@ export function readOperand(
       start,
       end: consumePostfix(source, atomEnd, end),
     };
+  }
+
+  const sugarMatch = source
+    .slice(start, end)
+    .match(/^(mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat|sqrt|bb|cal|bold|frak|scr)(?![A-Za-z])/);
+  if (sugarMatch) {
+    const fnName = sugarMatch[1];
+    let lookahead = start + fnName.length;
+    while (lookahead < end && /\s/.test(source[lookahead])) lookahead++;
+    const isFont = /^(bb|cal|bold|frak|scr)$/.test(fnName);
+    const validDelim = source[lookahead] === "[" || source[lookahead] === "{" || (isFont && source[lookahead] === "(");
+    if (lookahead < end && validDelim) {
+      return {
+        kind: "function",
+        start,
+        end: start + fnName.length,
+      };
+    }
   }
 
   if (/[A-Za-z]/.test(source[start])) {

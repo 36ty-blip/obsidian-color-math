@@ -51,8 +51,8 @@ export class MathJaxInterceptor {
   }
 
   private getContextKey(): string {
-    const p = this.getPalette() || ({} as ColorPalette);
-    const o = this.getOptions() || ({} as ColorMathOptions);
+    const p = this.getPalette();
+    const o = this.getOptions();
     const rainbow = (o.rainbowColors || []).join(",");
     return [
       p.main,
@@ -68,6 +68,9 @@ export class MathJaxInterceptor {
       p.parameter,
       p.unit,
       p.energyOperator,
+      p.structural,
+      p.transform,
+      p.arithmetic,
       rainbow,
       o.activeMode || "",
       o.enableTaxonomy ? "t1" : "t0",
@@ -145,10 +148,15 @@ export class MathJaxInterceptor {
       console.error("Color Math: Failed to load MathJax", e);
     }
 
-    const mathJax = (window as Window & { MathJax?: MathJaxObject })?.MathJax;
+    const mathJax = (window as Window & { MathJax?: MathJaxObject & { config?: { tex?: { linebreaks?: { inline?: boolean; display?: boolean } } } } })?.MathJax;
     if (!mathJax || typeof mathJax.tex2chtml !== "function") {
       this.scheduleRetry(onSuccess);
       return false;
+    }
+
+    if (mathJax.config?.tex && this.getOptions().mathJaxLineBreaking !== false) {
+      mathJax.config.tex.linebreaks = mathJax.config.tex.linebreaks || {};
+      mathJax.config.tex.linebreaks.display = true;
     }
 
     const transform = (latex: string): string => {

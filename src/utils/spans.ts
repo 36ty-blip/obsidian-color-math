@@ -98,7 +98,31 @@ export function selectColorSpans(source: string, spans: ColorSpan[]): ColorSpan[
 }
 
 export function applyColorSpans(source: string, spans: ColorSpan[]): string {
-  const selected = selectColorSpans(source, spans);
+  // Suppress \textcolor wrappers when color is "none", "off", "transparent", "default", or "white",
+  // and unconditionally suppress \textcolor on spacing macros (\quad, \qquad, \,, \:, \;, \!)
+  // to eliminate AST pollution while allowing tokens to naturally inherit theme typography.
+  const filteredSpans = spans.filter((span) => {
+    if (!span.color) return false;
+    const c = span.color.trim().toLowerCase();
+    if (
+      c === "none" ||
+      c === "off" ||
+      c === "transparent" ||
+      c === "default" ||
+      c === "white" ||
+      c === "#ffffff" ||
+      c === "#fff"
+    ) {
+      return false;
+    }
+    const spanText = source.slice(span.start, span.end).trim();
+    if (/^(\\(?:quad|qquad|,|:|;|!|\s)+)$/.test(spanText)) {
+      return false;
+    }
+    return true;
+  });
+
+  const selected = selectColorSpans(source, filteredSpans);
   if (selected.length === 0) {
     return source;
   }

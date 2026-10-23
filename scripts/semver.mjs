@@ -43,11 +43,16 @@ export async function readCurrentVersions(rootDir) {
   const manifest = JSON.parse(manifestRaw);
   const versions = JSON.parse(versionsRaw);
 
+  const inSync =
+    pkg.version === manifest.version &&
+    Boolean(versions[pkg.version]);
+
   return {
     pkgVersion: pkg.version,
     manifestVersion: manifest.version,
     minAppVersion: manifest.minAppVersion,
     versionsKeys: Object.keys(versions),
+    inSync,
     pkg,
     manifest,
     versions,
@@ -76,8 +81,6 @@ export async function atomicVersionSync(rootDir, targetVersion, dryRun = false) 
       files: [pkgPath, manifestPath, versionsPath],
     };
   }
-
-import { atomicWriteFile } from "./transaction.mjs";
 
   // Write all 3 files via staged hardware-synced atomic writes
   await Promise.all([

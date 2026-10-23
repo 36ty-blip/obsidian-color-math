@@ -6,6 +6,8 @@ export default defineConfig({
     globals: true,
     environment: "node",
     exclude: ["**/node_modules/**", "**/dist/**", "**/release_pipeline.test.ts"],
+    maxWorkers: 6,
+    minWorkers: 1,
   },
   resolve: {
     alias: {

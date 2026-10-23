@@ -17,3 +17,4 @@ reports/
 CHECKPOINT.md
 *_old.md
 tests/test_scratch*.ts
+.eslintcache

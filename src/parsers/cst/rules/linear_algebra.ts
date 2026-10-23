@@ -29,13 +29,13 @@ export function matchLinearAlgebraRules(node: CSTNode, options?: CSTCollectorOpt
     return spans;
   }
 
-  // 5.1 Matrix Transformation: \mathbf{A}^T, A^T, \mathbf{A}^* -> palette.orange
+  // 5.1 Matrix Transformation: \mathbf{A}^T, A^T, \mathbf{A}^*, A^\dagger, A^\top -> palette.transform
   if (node.kind === "script" && node.isMatrixTransformation) {
     return [
       {
         start: node.start,
         end: node.end,
-        color: palette?.orange || "#e0af68",
+        color: palette?.transform || "#e0af68",
         priority: 26,
       },
     ];

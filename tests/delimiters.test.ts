@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { findDelimiterPairs, collectDelimiterSpans, findDelimiterScan } from "../src/parsers/delimiters";
 import { colorLatexBody } from "../src/converters/generic";
-import { autoSealUnclosedDelimiters } from "../src/utils/latex_helpers";
+import { autoSealUnclosedDelimiters, normalizeAutoScaledDelimiters, normalizeTypstFontShortcuts, normalizeBracketMatrices, normalizeMathSyntax } from "../src/utils/latex_helpers";
 import { RAINBOW_DELIMITER_COLORS } from "../src/config";
 
 describe("Rainbow Delimiters Parser", () => {
@@ -99,8 +99,8 @@ describe("Rainbow Delimiters Parser", () => {
     // Both angle brackets are colored
     expect(res1).toMatch(/\\textcolor\{[^}]+\}\{\\langle\}/);
     expect(res1).toMatch(/\\textcolor\{[^}]+\}\{\\rangle\}/);
-    // |x| must not be swallowed into a single ket
-    expect(res1).toContain("|\\textcolor{");
+    // |x| must not be swallowed into a single ket, and must be recognized as balanced delimiters
+    expect(res1).toMatch(/\\textcolor\{[^}]+\}\{\|\}/);
 
     const expr2 = "\\cos\\theta=\\frac{\\langle x,y\\rangle}{|x||y|},";
     const res2 = colorLatexBody(expr2, undefined, {
@@ -327,6 +327,149 @@ describe("Rainbow Delimiters Parser", () => {
       expect(pairs.length).toBe(1);
       expect(pairs[0].open.isLeftRight).toBe(true);
       expect(pairs[0].open.type).toBe("bracket");
+    });
+  });
+
+  describe("MathJax 4 Delimiter Sizing & Scope Isolation", () => {
+    it("promotes tall 3-row matrix delimiters to extensible \\left / \\right", () => {
+      const mat3 = "[ \\begin{matrix} 1 & 0 & 0 \\\\ 0 & 1 & 0 \\\\ 0 & 0 & 1 \\end{matrix} ]";
+      expect(normalizeAutoScaledDelimiters(mat3)).toBe(
+        "\\left[ \\begin{matrix} 1 & 0 & 0 \\\\ 0 & 1 & 0 \\\\ 0 & 0 & 1 \\end{matrix} \\right]"
+      );
+    });
+
+    it("promotes deep continued fractions (h >= 4.8) to \\left( ... \\right)", () => {
+      const cfrac = "( \\cfrac{1}{1 + \\cfrac{1}{1 + \\cfrac{1}{2}}} )";
+      expect(normalizeAutoScaledDelimiters(cfrac)).toBe(
+        "\\left( \\cfrac{1}{1 + \\cfrac{1}{1 + \\cfrac{1}{2}}} \\right)"
+      );
+    });
+
+    it("isolates pipe eviction so commas inside inner function calls do not evict outer vertical bars", () => {
+      const scopedPipe = "| \\frac{f(x, y)}{g(z)} |";
+      expect(normalizeAutoScaledDelimiters(scopedPipe)).toBe(
+        "\\Bigl| \\frac{f(x, y)}{g(z)} \\Bigr|"
+      );
+    });
+
+    it("promotes determinants around multi-line matrices to extensible \\left| ... \\right|", () => {
+      const det = "| \\begin{matrix} a & b \\\\ c & d \\end{matrix} |";
+      expect(normalizeAutoScaledDelimiters(det)).toBe(
+        "\\left| \\begin{matrix} a & b \\\\ c & d \\end{matrix} \\right|"
+      );
+    });
+
+    it("protects determinant pipes from eviction by inner subscript indices like a_{1,1}", () => {
+      const det = "| \\begin{matrix} a_{1,1} & a_{1,2} \\\\ a_{2,1} & a_{2,2} \\end{matrix} |";
+      expect(normalizeAutoScaledDelimiters(det)).toBe(
+        "\\left| \\begin{matrix} a_{1,1} & a_{1,2} \\\\ a_{2,1} & a_{2,2} \\end{matrix} \\right|"
+      );
+    });
+
+    it("scales unclosed opening determinant bar to extensible \\left| during mid-typing", () => {
+      const unclosed = "| \\begin{matrix} 1 & 2 \\\\ 3 & 4 \\end{matrix}";
+      expect(normalizeAutoScaledDelimiters(unclosed)).toBe(
+        "\\left| \\begin{matrix} 1 & 2 \\\\ 3 & 4 \\end{matrix}"
+      );
+    });
+  });
+
+  describe("Scope Color Flooding Immunity (\\left / \\right)", () => {
+    it("never wraps \\left...\\right with outer \\textcolor during LaTeX baking", () => {
+      const res = colorLatexBody("\\left( a + b = c \\right)", undefined, {
+        rainbowDelimiters: true,
+        variableDataFlow: true,
+      });
+      // Delimiters \left( and \right) are not wrapped in \textcolor in the LaTeX string,
+      // preventing scope color flooding across inner operators (+, =)
+      expect(res).not.toMatch(/\\textcolor\{[^}]+\}\{\\left\(/);
+      expect(res).not.toMatch(/\\textcolor\{[^}]+\}\{\\left\(.*\\right\)\}/);
+      // Variables remain properly colored
+      expect(res).toContain("\\textcolor{");
+      // Operators remain unpolluted
+      expect(res).toContain(" + ");
+      expect(res).toContain(" = ");
+    });
+
+    it("eliminates color bleeding in composite structures like {|mat[...]|+|mat[...]|}", () => {
+      const res = colorLatexBody("{|mat[1, 2; 3, 4]| + |mat[5, 6; 7, 8]|}", undefined, {
+        rainbowDelimiters: true,
+        speedSyntacticSugar: true,
+        sugarBracketMatrices: true,
+      });
+      // The '+' operator between the matrices must not be wrapped in delimiter color
+      expect(res).toContain(" + ");
+      expect(res).not.toMatch(/\\textcolor\{[^}]+\}\{\\left\{.*\\right\}\}/);
+    });
+  });
+
+  describe("Universal Font Modifiers across {}, [], ()", () => {
+    it("normalizes bare font modifiers across braces, brackets, and parentheses", () => {
+      expect(normalizeTypstFontShortcuts("bold{v}")).toBe("\\mathbf{v}");
+      expect(normalizeTypstFontShortcuts("bold[v]")).toBe("\\mathbf{v}");
+      expect(normalizeTypstFontShortcuts("bold(v)")).toBe("\\mathbf{v}");
+
+      expect(normalizeTypstFontShortcuts("scr{F}")).toBe("\\mathscr{F}");
+      expect(normalizeTypstFontShortcuts("scr[F]")).toBe("\\mathscr{F}");
+      expect(normalizeTypstFontShortcuts("scr(F)")).toBe("\\mathscr{F}");
+
+      expect(normalizeTypstFontShortcuts("cal{L}")).toBe("\\mathcal{L}");
+      expect(normalizeTypstFontShortcuts("cal[L]")).toBe("\\mathcal{L}");
+      expect(normalizeTypstFontShortcuts("cal(L)")).toBe("\\mathcal{L}");
+
+      expect(normalizeTypstFontShortcuts("frak{g}")).toBe("\\mathfrak{g}");
+      expect(normalizeTypstFontShortcuts("frak[g]")).toBe("\\mathfrak{g}");
+      expect(normalizeTypstFontShortcuts("frak(g)")).toBe("\\mathfrak{g}");
+
+      expect(normalizeTypstFontShortcuts("bb{R}")).toBe("\\mathbb{R}");
+      expect(normalizeTypstFontShortcuts("bb[R]")).toBe("\\mathbb{R}");
+      expect(normalizeTypstFontShortcuts("bb(R)")).toBe("\\mathbb{R}");
+    });
+
+    it("normalizes native backslash font commands across brackets and braces", () => {
+      expect(normalizeTypstFontShortcuts("\\bold[v]")).toBe("\\mathbf{v}");
+      expect(normalizeTypstFontShortcuts("\\bold{v}")).toBe("\\mathbf{v}");
+      expect(normalizeTypstFontShortcuts("\\scr[F]")).toBe("\\mathscr{F}");
+      expect(normalizeTypstFontShortcuts("\\cal[L]")).toBe("\\mathcal{L}");
+      expect(normalizeTypstFontShortcuts("\\frak[g]")).toBe("\\mathfrak{g}");
+      expect(normalizeTypstFontShortcuts("\\bb[R]")).toBe("\\mathbb{R}");
+      expect(normalizeTypstFontShortcuts("\\rm[x]")).toBe("\\mathrm{x}");
+      expect(normalizeTypstFontShortcuts("\\sf[y]")).toBe("\\mathsf{y}");
+      expect(normalizeTypstFontShortcuts("\\tt[z]")).toBe("\\mathtt{z}");
+      expect(normalizeTypstFontShortcuts("\\text[hello world]")).toBe("\\text{hello world}");
+    });
+
+    it("strictly preserves bare words without delimiters to prevent prose collisions", () => {
+      expect(normalizeTypstFontShortcuts("a bold move")).toBe("a bold move");
+      expect(normalizeTypstFontShortcuts("the cal machine")).toBe("the cal machine");
+      expect(normalizeTypstFontShortcuts("bb = 42")).toBe("bb = 42");
+    });
+  });
+
+  describe("Backslashed Matrix Macros (\\mat[...] and \\mat{...}) with Strict () Disallowance", () => {
+    it("normalizes \\mat[...] and \\mat{...} to matrix environments", () => {
+      expect(normalizeBracketMatrices("\\mat[1, 2; 3, 4]")).toBe(
+        "\\begin{matrix} 1 & 2 \\\\ 3 & 4 \\end{matrix}"
+      );
+      expect(normalizeBracketMatrices("\\mat{1, 2; 3, 4}")).toBe(
+        "\\begin{matrix} 1 & 2 \\\\ 3 & 4 \\end{matrix}"
+      );
+      expect(normalizeBracketMatrices("\\pmat[1, 2; 3, 4]")).toBe(
+        "\\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}"
+      );
+      expect(normalizeBracketMatrices("\\bmat{1, 2; 3, 4}")).toBe(
+        "\\begin{bmatrix} 1 & 2 \\\\ 3 & 4 \\end{bmatrix}"
+      );
+      expect(normalizeBracketMatrices("\\dmat[1, 2; 3, 4]")).toBe(
+        "\\begin{vmatrix} 1 & 2 \\\\ 3 & 4 \\end{vmatrix}"
+      );
+    });
+
+    it("strictly disallows parentheses () for matrix macros to preserve function semantics", () => {
+      expect(normalizeBracketMatrices("mat(1, 2)")).toBe("mat(1, 2)");
+      expect(normalizeBracketMatrices("\\mat(1, 2)")).toBe("\\mat(1, 2)");
+      expect(normalizeBracketMatrices("pmat(1, 2)")).toBe("pmat(1, 2)");
+      expect(normalizeBracketMatrices("\\pmat(1, 2)")).toBe("\\pmat(1, 2)");
     });
   });
 });

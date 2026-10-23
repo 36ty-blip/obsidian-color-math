@@ -104,5 +104,8 @@ export function extractThemePalette(isLight?: boolean): ColorPalette {
     parameter: purple,
     unit: teal,
     energyOperator: energy,
+    structural: "none",
+    transform: orange,
+    arithmetic: "none",
   };
 }

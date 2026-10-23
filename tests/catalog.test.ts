@@ -9,6 +9,14 @@ import {
   DOMAIN_CORE,
   DOMAIN_LINEAR_ALGEBRA,
   DOMAIN_QUANTUM,
+  DIALECT_ALL,
+  DIALECT_LATEX,
+  DIALECT_TYPST,
+  DIALECT_ASCIIMATH,
+  DIALECT_MATLAB,
+  DIALECT_PYTHON,
+  DIALECT_WOLFRAM,
+  getActiveDialects,
 } from "../src/parsers/catalog";
 
 describe("Minimal Perfect Hash (MPHF) Catalog Engine", () => {
@@ -316,6 +324,141 @@ describe("Minimal Perfect Hash (MPHF) Catalog Engine", () => {
     it("does not match non-catalog words", () => {
       expect(matchBareSymbol("variableName", 0)).toBeNull();
       expect(matchBareSymbol("foobar", 0)).toBeNull();
+    });
+  });
+
+  describe("MathJax 4 & Upstream Packages (mathtools)", () => {
+    it("resolves newly ingested mathtools relations in O(1)", () => {
+      const coloneqq = lookupCatalog("\\coloneqq");
+      expect(coloneqq).not.toBeNull();
+      expect(coloneqq?.role).toBe("relation");
+      expect(coloneqq?.unicode).toBe("≔");
+      expect(coloneqq?.package).toBe("mathtools");
+
+      const eqqcolon = lookupCatalog("\\eqqcolon");
+      expect(eqqcolon).not.toBeNull();
+      expect(eqqcolon?.role).toBe("relation");
+      expect(eqqcolon?.unicode).toBe("≕");
+
+      const xrightarrow = lookupCatalog("\\xleftrightarrow");
+      expect(xrightarrow).not.toBeNull();
+      expect(xrightarrow?.role).toBe("relation");
+    });
+
+    it("resolves mathtools operators, environments and prescript", () => {
+      const prescript = lookupCatalog("\\prescript");
+      expect(prescript).not.toBeNull();
+      expect(prescript?.role).toBe("operator");
+
+      const cramped = lookupCatalog("\\cramped");
+      expect(cramped).not.toBeNull();
+      expect(cramped?.role).toBe("operator");
+
+      const dcases = lookupCatalog("dcases");
+      expect(dcases).not.toBeNull();
+      expect(dcases?.role).toBe("delimiter");
+
+      const rcases = lookupCatalog("rcases");
+      expect(rcases).not.toBeNull();
+      expect(rcases?.role).toBe("delimiter");
+
+      const pmatrixStar = lookupCatalog("pmatrix*");
+      expect(pmatrixStar).not.toBeNull();
+      expect(pmatrixStar?.role).toBe("delimiter");
+    });
+  });
+
+  describe("Typst sym.txt & Multi-Dialect Catalog Ingestion", () => {
+    it("resolves official Typst dotted symbols in O(1)", () => {
+      const arrowR = lookupCatalog("arrow.r");
+      expect(arrowR).not.toBeNull();
+      expect(arrowR?.role).toBe("relation");
+      expect(arrowR?.unicode).toBe("→");
+
+      const subsetEq = lookupCatalog("subset.eq");
+      expect(subsetEq).not.toBeNull();
+      expect(subsetEq?.role).toBe("relation");
+      expect(subsetEq?.unicode).toBe("⊆");
+
+      const parenLFlat = lookupCatalog("paren.l.flat");
+      expect(parenLFlat).not.toBeNull();
+      expect(parenLFlat?.role).toBe("delimiter");
+    });
+
+    it("resolves AsciiMath symbols", () => {
+      const xx = lookupCatalog("xx");
+      expect(xx).not.toBeNull();
+      expect(xx?.role).toBe("operator");
+
+      const neq = lookupCatalog("!=");
+      expect(neq).not.toBeNull();
+      expect(neq?.role).toBe("relation");
+    });
+
+    it("resolves MATLAB matrix operators & functions", () => {
+      const dotMul = lookupCatalog(".*");
+      expect(dotMul).not.toBeNull();
+      expect(dotMul?.role).toBe("operator");
+      expect(dotMul?.canonical).toBe("\\odot");
+
+      const rref = lookupCatalog("rref");
+      expect(rref).not.toBeNull();
+      expect(rref?.role).toBe("function");
+    });
+
+    it("resolves SymPy / Python mathematical entities", () => {
+      const symMatrix = lookupCatalog("Matrix");
+      expect(symMatrix).not.toBeNull();
+      expect(symMatrix?.role).toBe("delimiter");
+
+      const diracDelta = lookupCatalog("DiracDelta");
+      expect(diracDelta).not.toBeNull();
+      expect(diracDelta?.role).toBe("function");
+    });
+
+    it("resolves Wolfram Language named characters and functions", () => {
+      const diffD = lookupCatalog("\\[DifferentialD]");
+      expect(diffD).not.toBeNull();
+      expect(diffD?.role).toBe("differential");
+      expect(diffD?.unicode).toBe("ⅆ");
+
+      const sinWolfram = lookupCatalog("Sin");
+      expect(sinWolfram).not.toBeNull();
+      expect(sinWolfram?.role).toBe("function");
+    });
+  });
+
+  describe("Dialect Bitmask Gating (O(1) Branchless Filtering)", () => {
+    it("filters out inactive dialects in O(1) when dialect mask is applied", () => {
+      // By default with DIALECT_ALL, MATLAB operator '.*' resolves
+      expect(lookupCatalog(".*", DOMAIN_ALL, DIALECT_ALL)).not.toBeNull();
+
+      // When only DIALECT_LATEX is active, '.*' is filtered out (returns null)
+      expect(lookupCatalog(".*", DOMAIN_ALL, DIALECT_LATEX)).toBeNull();
+
+      // When only DIALECT_MATLAB is active, '.*' resolves
+      expect(lookupCatalog(".*", DOMAIN_ALL, DIALECT_MATLAB)).not.toBeNull();
+
+      // Core LaTeX macro \sin always resolves with DIALECT_LATEX
+      expect(lookupCatalog("\\sin", DOMAIN_ALL, DIALECT_LATEX)).not.toBeNull();
+
+      // Wolfram 'Sin' is filtered out if DIALECT_WOLFRAM is disabled
+      expect(lookupCatalog("Sin", DOMAIN_ALL, DIALECT_LATEX)).toBeNull();
+      expect(lookupCatalog("Sin", DOMAIN_ALL, DIALECT_WOLFRAM)).not.toBeNull();
+
+      // Typst 'arrow.r' is filtered out if DIALECT_TYPST is disabled
+      expect(lookupCatalog("arrow.r", DOMAIN_ALL, DIALECT_LATEX)).toBeNull();
+      expect(lookupCatalog("arrow.r", DOMAIN_ALL, DIALECT_TYPST)).not.toBeNull();
+    });
+
+    it("computes activeDialects bitmask from options correctly", () => {
+      expect(getActiveDialects(undefined)).toBe(DIALECT_ALL);
+      expect(getActiveDialects({})).toBe(DIALECT_ALL);
+      expect(getActiveDialects({ dialectMatlab: false })).toBe((DIALECT_ALL & ~DIALECT_MATLAB) >>> 0);
+      expect(getActiveDialects({ dialectPython: false, dialectWolfram: false })).toBe(
+        (DIALECT_ALL & ~DIALECT_PYTHON & ~DIALECT_WOLFRAM) >>> 0
+      );
+      expect(getActiveDialects({ dialectLatex: false, dialectTypst: false, dialectAsciiMath: false, dialectMatlab: false, dialectPython: false, dialectWolfram: false })).toBe((DIALECT_ALL & ~0x3F) >>> 0);
     });
   });
 

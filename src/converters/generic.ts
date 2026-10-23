@@ -14,7 +14,7 @@ import { collectDomainOperatorSpans, generateModeAwareDerivativeSpans } from "..
 import { collectUnitSpans, findUnitSpans } from "../parsers/units";
 import { collectVariableSpans } from "../parsers/variable_hash";
 import { parseMathWithCST } from "../parsers/cst/index";
-import { containsColorWrapper, normalizeMathSyntax, autoSealUnclosedDelimiters } from "../utils/latex_helpers";
+import { containsColorWrapper, normalizeMathSyntax, autoSealUnclosedDelimiters, maskComments } from "../utils/latex_helpers";
 import { ColorSpan, applyColorSpans } from "../utils/spans";
 import { uncolorFragment } from "../undo";
 import { LruCache } from "../utils/lru_cache";
@@ -85,6 +85,8 @@ function getOptionsHash(palette: ColorPalette, options?: ColorMathOptions): stri
     options.extendedFunctions !== false ? "1" : "0",
     options.field || "",
     options.useCST ? "1" : "0",
+    options.speedSyntacticSugar !== false ? "1" : "0",
+    options.sugarAsciiOperators !== false ? "1" : "0",
   ].join(";");
 }
 
@@ -94,24 +96,29 @@ export function computeSemanticMathSpans(
   options?: ColorMathOptions,
   forLatexWrap: boolean = false
 ): ColorSpan[] {
+  // Fast zero-overhead comment mask: blank out LaTeX comments (% ... \n) with spaces
+  // so sub-scanners (units, differentials, constants, brackets, CST) spend 0ns inside comments
+  // and never emit false-positive spans on comment bodies, while preserving exact character offsets.
+  const scanBody = maskComments(body);
+
   const needUnits = options?.colorUnits !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
   const needDiffs = options?.colorDifferentials !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
   const needDims = options?.colorDimensionless !== false || Boolean(options?.enableTaxonomy) || Boolean(options?.variableDataFlow);
 
-  const unitSpans = needUnits ? findUnitSpans(body, {
+  const unitSpans = needUnits ? findUnitSpans(scanBody, {
     allowSingleLetterUnits: options?.allowSingleLetterUnits,
     activeMode: options?.activeMode,
     colorUnits: options?.colorUnits,
   }) : [];
-  const diffSpans = needDiffs ? findDifferentialSpans(body) : [];
-  const dimSpans = needDims ? findDimensionlessSpans(body) : [];
-  const boundarySpans = findBoundarySpans(body);
+  const diffSpans = needDiffs ? findDifferentialSpans(scanBody) : [];
+  const dimSpans = needDims ? findDimensionlessSpans(scanBody) : [];
+  const boundarySpans = findBoundarySpans(scanBody);
 
   const bareFunctions = getBareFunctions(options);
 
   const spans: ColorSpan[] = [
-    ...collectFunctionSpans(body, palette, bareFunctions, options),
-    ...collectScannerSpans(body, palette, forLatexWrap),
+    ...collectFunctionSpans(scanBody, palette, bareFunctions, options),
+    ...collectScannerSpans(scanBody, palette, forLatexWrap),
   ];
 
   // Domain boundary surfaces (\partial\Omega, \partial V, ∂D, etc.) -> operator in palette.chain (#9ece6a)
@@ -125,34 +132,34 @@ export function computeSemanticMathSpans(
   }
 
   if (options?.colorUnits !== false) {
-    spans.push(...collectUnitSpans(body, palette, unitSpans));
+    spans.push(...collectUnitSpans(scanBody, palette, unitSpans));
   }
 
   if (options?.colorDifferentials !== false) {
     if (options?.activeMode) {
       spans.push(
-        ...generateModeAwareDerivativeSpans(body, palette, diffSpans, options.activeMode, options)
+        ...generateModeAwareDerivativeSpans(scanBody, palette, diffSpans, options.activeMode, options)
       );
     } else {
-      spans.push(...collectDifferentialSpans(body, palette, diffSpans, options));
+      spans.push(...collectDifferentialSpans(scanBody, palette, diffSpans, options));
     }
   }
 
   if (options?.colorDimensionless !== false) {
-    spans.push(...collectDimensionlessSpans(body, palette, dimSpans));
+    spans.push(...collectDimensionlessSpans(scanBody, palette, dimSpans));
   }
 
   if (options?.colorBraKet !== false) {
-    spans.push(...collectBraKetDelimiterSpans(body, palette));
+    spans.push(...collectBraKetDelimiterSpans(scanBody, palette));
   }
 
   if (options?.colorSingleConstants !== false) {
-    spans.push(...collectSingleConstantSpans(body, palette));
+    spans.push(...collectSingleConstantSpans(scanBody, palette));
   }
 
   if (options?.rainbowDelimiters) {
     spans.push(
-      ...collectDelimiterSpans(body, {
+      ...collectDelimiterSpans(scanBody, {
         forLatexWrap,
         palette: options?.rainbowColors,
         includeBareBraces: !forLatexWrap && options?.rainbowBareBraces !== false,
@@ -162,7 +169,7 @@ export function computeSemanticMathSpans(
     );
   } else if (!forLatexWrap && options?.highlightUnmatchedBraces !== false) {
     spans.push(
-      ...collectDelimiterSpans(body, {
+      ...collectDelimiterSpans(scanBody, {
         forLatexWrap: false,
         includeBareBraces: true,
         onlyUnmatched: true,
@@ -174,14 +181,14 @@ export function computeSemanticMathSpans(
 
   if (options?.enableTaxonomy) {
     spans.push(
-      ...collectTaxonomySpans(body, palette, unitSpans, diffSpans, dimSpans, options)
+      ...collectTaxonomySpans(scanBody, palette, unitSpans, diffSpans, dimSpans, options)
     );
   }
 
   if (options?.variableDataFlow) {
     spans.push(
       ...collectVariableSpans(
-        body,
+        scanBody,
         undefined,
         unitSpans,
         diffSpans,
@@ -193,7 +200,7 @@ export function computeSemanticMathSpans(
   }
 
   if (options?.activeMode) {
-    const domainSpans = collectDomainOperatorSpans(body, palette, options.activeMode);
+    const domainSpans = collectDomainOperatorSpans(scanBody, palette, options.activeMode);
     if (domainSpans.length > 0) {
       const filtered = spans.filter(
         (s) => !domainSpans.some((d) => d.start <= s.start && s.end <= d.end)
@@ -205,7 +212,7 @@ export function computeSemanticMathSpans(
 
   const isQuantumMode = options?.activeMode === "quantum" || options?.activeMode === "quantum_stochastic";
   if (options?.colorQuantumOperators || options?.field === "quantum" || options?.field === "physics" || isQuantumMode) {
-    const quantumSpans = collectQuantumOperatorSpans(body, palette, options);
+    const quantumSpans = collectQuantumOperatorSpans(scanBody, palette, options);
     if (quantumSpans.length > 0) {
       const filtered = spans.filter(
         (s) => !quantumSpans.some((q) => q.start <= s.start && s.end <= q.end)
@@ -217,7 +224,7 @@ export function computeSemanticMathSpans(
 
   if (options?.useCST) {
     try {
-      const cstSpans = parseMathWithCST(body, {
+      const cstSpans = parseMathWithCST(scanBody, {
         palette,
         rainbowColors: options?.rainbowColors,
         highlightUnmatched: options?.highlightUnmatchedBraces !== false,

@@ -1,9 +1,9 @@
 {
   "id": "color-math",
   "name": "Color Math",
-  "version": "1.0.66",
+  "version": "1.0.79",
   "minAppVersion": "1.4.0",
-  "description": "Automatically apply semantic colors to LaTeX and MathJax equations in markdown notes.",
+  "description": "AST-driven semantic syntax highlighting and real-time MathJax CHTML decoration for mathematical expressions in markdown notes.",
   "author": "36ty-blip",
   "authorUrl": "https://github.com/36ty-blip",
   "isDesktopOnly": false
