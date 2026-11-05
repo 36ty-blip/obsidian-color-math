@@ -1,5 +1,6 @@
 import esbuild from "esbuild";
 import process from "process";
+import "./scripts/embed_wasm.mjs";
 
 const prod = process.argv[2] === "production";
 

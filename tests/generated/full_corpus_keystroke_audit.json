@@ -1,0 +1,51 @@
+{
+  "totalFiles": 6392,
+  "uniqueEquationsTested": 1500,
+  "totalUniqueKeystrokes": 7483,
+  "totalWeightedKeystrokes": 179017,
+  "uniquePassRate": "98.6%",
+  "weightedPassRate": "98.1%",
+  "rankedMacroArgs": [],
+  "rankedIncompleteCmds": [
+    [
+      "\\scr",
+      {
+        "unique": 73,
+        "weighted": 2858,
+        "samples": [
+          "\\scr -> \\scr",
+          "\\scr  -> \\scr ",
+          "\\scr A -> \\scr A"
+        ]
+      }
+    ],
+    [
+      "\\mu",
+      {
+        "unique": 10,
+        "weighted": 242,
+        "samples": [
+          "(X, {\\scr A}, \\mu -> (X, {\\scr A}, \\mu)",
+          "(X, {\\scr A}, \\mu) -> (X, {\\scr A}, \\mu)",
+          "(X, {\\scr A},\\mu -> (X, {\\scr A},\\mu)"
+        ]
+      }
+    ],
+    [
+      "\\Bbb",
+      {
+        "unique": 4,
+        "weighted": 96,
+        "samples": [
+          "(\\Omega, {\\scr A}, \\Bbb -> (\\Omega, {\\scr A}, \\Bbb{▢})",
+          "(\\Omega, {\\scr A}, \\Bbb  -> (\\Omega, {\\scr A}, \\Bbb{▢} )",
+          "(\\Omega, {\\scr A}, \\Bbb P -> (\\Omega, {\\scr A}, \\mathbb{P})"
+        ]
+      }
+    ]
+  ],
+  "combinedTypes": {
+    "INCOMPLETE_COMMAND": 3196,
+    "OTHER": 269
+  }
+}

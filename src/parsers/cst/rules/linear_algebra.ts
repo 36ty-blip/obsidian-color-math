@@ -31,10 +31,20 @@ export function matchLinearAlgebraRules(node: CSTNode, options?: CSTCollectorOpt
 
   // 5.1 Matrix Transformation: \mathbf{A}^T, A^T, \mathbf{A}^*, A^\dagger, A^\top -> palette.transform
   if (node.kind === "script" && node.isMatrixTransformation) {
+    const start = options?.forLatexWrap
+      ? node.arg.length > 0
+        ? node.arg[0].start
+        : node.start + 1
+      : node.start;
+    const end = options?.forLatexWrap
+      ? node.arg.length > 0
+        ? node.arg[node.arg.length - 1].end
+        : node.end
+      : node.end;
     return [
       {
-        start: node.start,
-        end: node.end,
+        start,
+        end,
         color: palette?.transform || "#e0af68",
         priority: 26,
       },
@@ -61,12 +71,14 @@ export function matchLinearAlgebraRules(node: CSTNode, options?: CSTCollectorOpt
     }
     if (node.normLimits) {
       for (const limit of node.normLimits) {
-        spans.push({
-          start: limit.start,
-          end: limit.end,
-          color: normColor,
-          priority: 26,
-        });
+        if (limit.kind === "script" && limit.arg.length > 0) {
+          spans.push({
+            start: limit.arg[0].start,
+            end: limit.arg[limit.arg.length - 1].end,
+            color: normColor,
+            priority: 26,
+          });
+        }
       }
     }
     return spans;

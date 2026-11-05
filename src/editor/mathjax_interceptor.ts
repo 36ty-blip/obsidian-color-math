@@ -1,8 +1,10 @@
 // src/editor/mathjax_interceptor.ts
 
 import { loadMathJax, Notice } from "obsidian";
-import { ColorPalette, ColorMathOptions } from "../config";
+import { ColorPalette, ColorMathOptions, getLiveCssPalette } from "../config";
 import { colorLatexBody } from "../converters/generic";
+import { stampMathJaxDOM } from "./dom_stamper";
+import { RenderCacheData, hydrateElementFromHtml } from "../cache/render_cache";
 
 interface MathJaxObject {
   tex2chtml?: (latex: string, options?: unknown) => HTMLElement;
@@ -35,6 +37,11 @@ export function computeMathHash(latex: string, contextKey: string = ""): string 
   return h.toString(36);
 }
 
+function isQueryableElement(val: unknown): val is Element {
+  if (!val || typeof val !== "object") return false;
+  return "querySelectorAll" in val && typeof val.querySelectorAll === "function";
+}
+
 export class MathJaxInterceptor {
   private unpatchFns: (() => void)[] = [];
   private getPalette: () => ColorPalette;
@@ -45,32 +52,42 @@ export class MathJaxInterceptor {
   private lastNoticeTime: number = 0;
   private renderCache = new Map<string, HTMLElement | SVGElement>();
   private maxCacheEntries: number = 500;
+  private persistentCache: RenderCacheData | null = null;
+  private onCacheDirty?: () => void;
+  private pluginVersion: string = "";
+
+  setPluginVersion(version: string): void {
+    this.pluginVersion = version;
+  }
 
   clearCache(): void {
     this.renderCache.clear();
+  }
+
+  setPersistentCache(cache: RenderCacheData | null, onDirty?: () => void): void {
+    this.persistentCache = cache;
+    this.onCacheDirty = onDirty;
+  }
+
+  getPersistentCache(): RenderCacheData | null {
+    return this.persistentCache;
   }
 
   private getContextKey(): string {
     const p = this.getPalette();
     const o = this.getOptions();
     const rainbow = (o.rainbowColors || []).join(",");
+    // Encode roles that are explicitly configured as "none" to preserve clean AST suppression.
+    // Hex colors themselves are not in the key because CSS variables decouple color updates.
+    const noneRoles = Object.entries(p)
+      .filter(([_, val]) => val === "none")
+      .map(([k]) => k)
+      .sort()
+      .join(",");
+    const vPrefix = this.pluginVersion ? `v:${this.pluginVersion}` : "";
     return [
-      p.main,
-      p.orange,
-      p.dot,
-      p.derivative,
-      p.chain,
-      p.upper,
-      p.relation,
-      p.arrow,
-      p.set,
-      p.spacing,
-      p.parameter,
-      p.unit,
-      p.energyOperator,
-      p.structural,
-      p.transform,
-      p.arithmetic,
+      vPrefix,
+      noneRoles,
       rainbow,
       o.activeMode || "",
       o.enableTaxonomy ? "t1" : "t0",
@@ -79,20 +96,71 @@ export class MathJaxInterceptor {
       o.variableDataFlow ? "v1" : "v0",
       o.colorDifferentials ? "d1" : "d0",
       o.colorBraKet ? "b1" : "b0",
-    ].join("|");
+    ].filter(Boolean).join("|");
   }
 
-  private getCachedElement<T extends HTMLElement | SVGElement>(hash: string): T | null {
+  private getCachedElement<T extends HTMLElement | SVGElement>(hash: string, latex?: string): T | null {
     const cached = this.renderCache.get(hash);
-    if (!cached) return null;
-    if ("cloneNode" in cached && typeof cached.cloneNode === "function") {
-      return cached.cloneNode(true) as T;
+    if (cached) {
+      // Read Gate: detect and evict toxic cached errors
+      if (this.getMathJaxError(cached)) {
+        this.renderCache.delete(hash);
+        if (this.persistentCache?.renders?.[hash]) {
+          delete this.persistentCache.renders[hash];
+          if (this.onCacheDirty) this.onCacheDirty();
+        }
+      } else {
+        if ("cloneNode" in cached && typeof cached.cloneNode === "function") {
+          return cached.cloneNode(true) as T;
+        }
+        return cached as T;
+      }
     }
-    return cached as T;
+
+    // Secondary check: Persistent Zero-MathJax Render Cache
+    if (this.persistentCache && this.persistentCache.renders && this.persistentCache.renders[hash]) {
+      const record = this.persistentCache.renders[hash];
+      record.ts = Date.now();
+      const hydrated = hydrateElementFromHtml<T>(record.html);
+      if (hydrated) {
+        // Read Gate: auto-purge toxic cached error markup from disk
+        const err = this.getMathJaxError(hydrated);
+        if (err) {
+          delete this.persistentCache.renders[hash];
+          this.renderCache.delete(hash);
+          if (this.onCacheDirty) this.onCacheDirty();
+          return null;
+        }
+
+        if (latex && this.getOptions().targetedMathNavigation !== false && isQueryableElement(hydrated)) {
+          stampMathJaxDOM(hydrated, latex);
+        }
+        // Seed into in-memory cache for O(1) repeat hits without re-serializing
+        this.cacheElement(hash, hydrated, record.display, false);
+        return hydrated;
+      }
+    }
+
+    return null;
   }
 
-  private cacheElement<T extends HTMLElement | SVGElement>(hash: string, el: T): void {
+  private cacheElement<T extends HTMLElement | SVGElement>(
+    hash: string,
+    el: T,
+    isDisplay: boolean = false,
+    persist: boolean = true
+  ): void {
     if (!el) return;
+    // Write Gate: Strictly NEVER cache MathJax error elements
+    if (this.getMathJaxError(el)) {
+      this.renderCache.delete(hash);
+      if (this.persistentCache?.renders?.[hash]) {
+        delete this.persistentCache.renders[hash];
+        if (this.onCacheDirty) this.onCacheDirty();
+      }
+      return;
+    }
+
     if ("setAttribute" in el && typeof el.setAttribute === "function") {
       el.setAttribute("data-math-hash", hash);
     }
@@ -104,6 +172,18 @@ export class MathJaxInterceptor {
       this.renderCache.set(hash, el.cloneNode(true) as HTMLElement | SVGElement);
     } else {
       this.renderCache.set(hash, el);
+    }
+
+    // Persist serialized markup for instant Zero-MathJax startup on subsequent sessions
+    if (persist && this.persistentCache && this.persistentCache.renders && "outerHTML" in el && typeof (el as any).outerHTML === "string") {
+      this.persistentCache.renders[hash] = {
+        html: (el as any).outerHTML,
+        display: isDisplay,
+        ts: Date.now(),
+      };
+      if (this.onCacheDirty) {
+        this.onCacheDirty();
+      }
     }
   }
 
@@ -130,7 +210,7 @@ export class MathJaxInterceptor {
   }
 
   private installed: boolean = false;
-  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryTimer: number | ReturnType<typeof setTimeout> | null = null;
   private retryCount: number = 0;
 
   isInstalled(): boolean {
@@ -168,7 +248,8 @@ export class MathJaxInterceptor {
           ...opts,
           useCST: opts.useCST !== false,
         };
-        return colorLatexBody(latex, this.getPalette(), effectiveOpts);
+        const livePalette = getLiveCssPalette(this.getPalette());
+        return colorLatexBody(latex, livePalette, effectiveOpts);
       } catch (err) {
         console.error("Color Math transformation error:", err);
         return latex;
@@ -178,22 +259,42 @@ export class MathJaxInterceptor {
     // 1. Hook tex2chtml
     if (typeof mathJax.tex2chtml === "function") {
       const orig = mathJax.tex2chtml;
-      mathJax.tex2chtml = (latex: string, options?: unknown) => {
+      const wrappedTex2chtml = (latex: string, options?: unknown) => {
         if (!this.isEnabled()) return orig.call(mathJax, latex, options);
-        const hash = computeMathHash(latex, this.getContextKey());
-        const cached = this.getCachedElement<HTMLElement>(hash);
+        const isDisplay = Boolean((options as { display?: boolean } | undefined)?.display);
+        const hash = computeMathHash(latex, this.getContextKey() + (isDisplay ? "|D" : "|I"));
+        const cached = this.getCachedElement<HTMLElement>(hash, latex);
         if (cached) return cached;
         try {
           const transformed = transform(latex);
           const res = orig.call(mathJax, transformed, options);
           const finalResult = this.handleResult(res, orig, mathJax, latex, transformed, options);
-          this.cacheElement(hash, finalResult);
+          if (isQueryableElement(finalResult)) {
+            if (typeof finalResult.setAttribute === "function") {
+              finalResult.setAttribute("data-math-latex", latex);
+            }
+            if (this.getOptions().targetedMathNavigation !== false) {
+              stampMathJaxDOM(finalResult, latex);
+            }
+          }
+          if (this.getMathJaxError(finalResult)) {
+            this.renderCache.delete(hash);
+            if (this.persistentCache?.renders?.[hash]) {
+              delete this.persistentCache.renders[hash];
+              if (this.onCacheDirty) this.onCacheDirty();
+            }
+          } else {
+            this.cacheElement(hash, finalResult, isDisplay);
+          }
           return finalResult;
         } catch (err) {
           console.warn("Color Math: Exception during tex2chtml, falling back to original LaTeX:", err);
           return orig.call(mathJax, latex, options);
         }
       };
+      (wrappedTex2chtml as unknown as { __colorMathActive?: () => boolean }).__colorMathActive = () =>
+        this.isEnabled() && !(this.isSourceMode && this.isSourceMode());
+      mathJax.tex2chtml = wrappedTex2chtml;
       this.unpatchFns.push(() => {
         mathJax.tex2chtml = orig;
       });
@@ -204,8 +305,9 @@ export class MathJaxInterceptor {
       const orig = mathJax.tex2chtmlPromise;
       mathJax.tex2chtmlPromise = async (latex: string, options?: unknown) => {
         if (!this.isEnabled()) return orig.call(mathJax, latex, options);
-        const hash = computeMathHash(latex, this.getContextKey());
-        const cached = this.getCachedElement<HTMLElement>(hash);
+        const isDisplay = Boolean((options as { display?: boolean } | undefined)?.display);
+        const hash = computeMathHash(latex, this.getContextKey() + (isDisplay ? "|D" : "|I"));
+        const cached = this.getCachedElement<HTMLElement>(hash, latex);
         if (cached) return cached;
         try {
           const transformed = transform(latex);
@@ -217,7 +319,23 @@ export class MathJaxInterceptor {
             transformed,
             options
           );
-          this.cacheElement(hash, finalResult);
+          if (isQueryableElement(finalResult)) {
+            if (typeof finalResult.setAttribute === "function") {
+              finalResult.setAttribute("data-math-latex", latex);
+            }
+            if (this.getOptions().targetedMathNavigation !== false) {
+              stampMathJaxDOM(finalResult, latex);
+            }
+          }
+          if (this.getMathJaxError(finalResult)) {
+            this.renderCache.delete(hash);
+            if (this.persistentCache?.renders?.[hash]) {
+              delete this.persistentCache.renders[hash];
+              if (this.onCacheDirty) this.onCacheDirty();
+            }
+          } else {
+            this.cacheElement(hash, finalResult, isDisplay);
+          }
           return finalResult;
         } catch (err) {
           console.warn("Color Math: Exception during tex2chtmlPromise, falling back to original LaTeX:", err);
@@ -235,13 +353,24 @@ export class MathJaxInterceptor {
       mathJax.tex2svg = (latex: string, options?: unknown) => {
         if (!this.isEnabled()) return orig.call(mathJax, latex, options);
         const hash = computeMathHash(latex, this.getContextKey());
-        const cached = this.getCachedElement<SVGElement>(hash);
+        const cached = this.getCachedElement<SVGElement>(hash, latex);
         if (cached) return cached;
         try {
           const transformed = transform(latex);
           const res = orig.call(mathJax, transformed, options);
           const finalResult = this.handleResult(res, orig, mathJax, latex, transformed, options);
-          this.cacheElement(hash, finalResult);
+          if (this.getOptions().targetedMathNavigation !== false && isQueryableElement(finalResult)) {
+            stampMathJaxDOM(finalResult, latex);
+          }
+          if (this.getMathJaxError(finalResult)) {
+            this.renderCache.delete(hash);
+            if (this.persistentCache?.renders?.[hash]) {
+              delete this.persistentCache.renders[hash];
+              if (this.onCacheDirty) this.onCacheDirty();
+            }
+          } else {
+            this.cacheElement(hash, finalResult, false);
+          }
           return finalResult;
         } catch (err) {
           console.warn("Color Math: Exception during tex2svg, falling back to original LaTeX:", err);
@@ -259,7 +388,7 @@ export class MathJaxInterceptor {
       mathJax.tex2svgPromise = async (latex: string, options?: unknown) => {
         if (!this.isEnabled()) return orig.call(mathJax, latex, options);
         const hash = computeMathHash(latex, this.getContextKey());
-        const cached = this.getCachedElement<SVGElement>(hash);
+        const cached = this.getCachedElement<SVGElement>(hash, latex);
         if (cached) return cached;
         try {
           const transformed = transform(latex);
@@ -271,7 +400,18 @@ export class MathJaxInterceptor {
             transformed,
             options
           );
-          this.cacheElement(hash, finalResult);
+          if (this.getOptions().targetedMathNavigation !== false && isQueryableElement(finalResult)) {
+            stampMathJaxDOM(finalResult, latex);
+          }
+          if (this.getMathJaxError(finalResult)) {
+            this.renderCache.delete(hash);
+            if (this.persistentCache?.renders?.[hash]) {
+              delete this.persistentCache.renders[hash];
+              if (this.onCacheDirty) this.onCacheDirty();
+            }
+          } else {
+            this.cacheElement(hash, finalResult, false);
+          }
           return finalResult;
         } catch (err) {
           console.warn("Color Math: Exception during tex2svgPromise, falling back to original LaTeX:", err);

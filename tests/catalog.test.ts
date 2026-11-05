@@ -16,22 +16,72 @@ import {
   DIALECT_MATLAB,
   DIALECT_PYTHON,
   DIALECT_WOLFRAM,
+  DIALECT_JULIA,
+  DIALECT_LEAN4,
+  DIALECT_R,
   getActiveDialects,
+  getRoleName,
+  getPackageOrigin,
+  ROLE_FUNCTION,
+  ROLE_PARAMETER,
+  ROLE_CONSTANT,
+  ROLE_OPERATOR,
+  ROLE_RELATION,
+  getExpectedChildTag,
+  getTagName,
+  getTagIdFromNodeName,
+  tagMatchesMask,
+  ChtmlTagMask,
+  MASK_TRANSPARENT_INTERMEDIATE,
+  MASK_STRETCHY_FRAGMENTS,
+  MASK_SLOT_CONTAINERS,
+  TAG_NONE,
+  TAG_MFRAC,
+  TAG_FRAC,
+  TAG_NUM,
+  TAG_DEN,
+  TAG_DBOX,
+  TAG_DTABLE,
+  TAG_LINE,
+  TAG_DSTRUT,
+  TAG_MUNDEROVER,
+  TAG_MUNDER,
+  TAG_MOVER,
+  TAG_UNDER,
+  TAG_OVER,
+  TAG_BOX,
+  TAG_BASE,
+  TAG_ROW,
+  TAG_SUB,
+  TAG_SUP,
+  TAG_SCRIPT,
+  TAG_SPACER,
+  TAG_EXT,
+  TAG_SURD,
+  TAG_ROOT,
+  TAG_MTR,
+  TAG_MTD,
+  TAG_MSPACE,
+  TAG_TABLE,
+  TAG_MROW,
+  TAG_TEXATOM,
+  TAG_STRETCHY_H,
+  TAG_STRETCHY_V,
 } from "../src/parsers/catalog";
 
 describe("Minimal Perfect Hash (MPHF) Catalog Engine", () => {
   it("resolves standard LaTeX macros with O(1) direct lookup", () => {
     const sin = lookupCatalog("\\sin");
     expect(sin).not.toBeNull();
-    expect(sin?.role).toBe("function");
+    expect(getRoleName(sin!.roleId)).toBe("function");
 
     const alpha = lookupCatalog("\\alpha");
     expect(alpha).not.toBeNull();
-    expect(alpha?.role).toBe("parameter");
+    expect(getRoleName(alpha!.roleId)).toBe("parameter");
 
     const pi = lookupCatalog("\\pi");
     expect(pi).not.toBeNull();
-    expect(pi?.role).toBe("constant");
+    expect(getRoleName(pi!.roleId)).toBe("constant");
 
     const bra = lookupCatalog("\\bra");
     expect(bra).not.toBeNull();
@@ -84,16 +134,17 @@ describe("Minimal Perfect Hash (MPHF) Catalog Engine", () => {
       const overbrace = lookupCatalog("\\overbrace");
       expect(overbrace).not.toBeNull();
       expect(overbrace?.extensible).toBe(true);
-      expect(overbrace?.arity).toBeUndefined();
+      expect(overbrace?.arity).toBe(1);
 
       const underbrace = lookupCatalog("\\underbrace");
       expect(underbrace).not.toBeNull();
       expect(underbrace?.extensible).toBe(true);
-      expect(underbrace?.arity).toBeUndefined();
+      expect(underbrace?.arity).toBe(1);
 
       const underline = lookupCatalog("\\underline");
       expect(underline).not.toBeNull();
       expect(underline?.extensible).toBe(true);
+      expect(underline?.arity).toBe(1);
     });
 
     it("maps Unicode characters for operators and relations", () => {
@@ -140,17 +191,17 @@ describe("Minimal Perfect Hash (MPHF) Catalog Engine", () => {
 
   describe("Package Origin Tags", () => {
     it("identifies package origin for diverse LaTeX packages", () => {
-      expect(lookupCatalog("\\sin")?.package).toBe("core");
-      expect(lookupCatalog("\\alpha")?.package).toBe("core");
-      expect(lookupCatalog("\\dd")?.package).toBe("physics");
-      expect(lookupCatalog("\\bra")?.package).toBe("physics");
-      expect(lookupCatalog("\\rank")?.package).toBe("amsmath");
-      expect(lookupCatalog("\\coloneqq")?.package).toBe("mathtools");
-      expect(lookupCatalog("\\meter")?.package).toBe("siunitx");
-      expect(lookupCatalog("\\Set")?.package).toBe("braket");
-      expect(lookupCatalog("\\diff")?.package).toBe("diffcoeff");
-      expect(lookupCatalog("\\cancel")?.package).toBe("cancel");
-      expect(lookupCatalog("\\ce")?.package).toBe("mhchem");
+      expect(getPackageOrigin(lookupCatalog("\\sin")!)).toBe("core");
+      expect(getPackageOrigin(lookupCatalog("\\alpha")!)).toBe("core");
+      expect(getPackageOrigin(lookupCatalog("\\dd")!)).toBe("physics");
+      expect(getPackageOrigin(lookupCatalog("\\bra")!)).toBe("physics");
+      expect(getPackageOrigin(lookupCatalog("\\rank")!)).toBe("amsmath");
+      expect(getPackageOrigin(lookupCatalog("\\coloneqq")!)).toBe("mathtools");
+      expect(getPackageOrigin(lookupCatalog("\\meter")!)).toBe("siunitx");
+      expect(getPackageOrigin(lookupCatalog("\\Set")!)).toBe("braket");
+      expect(getPackageOrigin(lookupCatalog("\\diff")!)).toBe("diffcoeff");
+      expect(getPackageOrigin(lookupCatalog("\\cancel")!)).toBe("cancel");
+      expect(getPackageOrigin(lookupCatalog("\\ce")!)).toBe("mhchem");
     });
   });
 
@@ -160,30 +211,30 @@ describe("Minimal Perfect Hash (MPHF) Catalog Engine", () => {
       const alphaUni = lookupCatalog("α");
       expect(alphaUni).not.toBeNull();
       expect(alphaUni?.canonical).toBe("\\alpha");
-      expect(alphaUni?.role).toBe("parameter");
+      expect(getRoleName(alphaUni!.roleId)).toBe("parameter");
 
       // Greek Plane 1 math italic lookup
       const alphaPlane1 = lookupCatalog("𝛼");
       expect(alphaPlane1).not.toBeNull();
       expect(alphaPlane1?.canonical).toBe("\\alpha");
-      expect(alphaPlane1?.role).toBe("parameter");
+      expect(getRoleName(alphaPlane1!.roleId)).toBe("parameter");
 
       // Operator reverse lookup
       const sumUni = lookupCatalog("∑");
       expect(sumUni).not.toBeNull();
       expect(sumUni?.canonical).toBe("\\sum");
-      expect(sumUni?.role).toBe("operator");
+      expect(getRoleName(sumUni!.roleId)).toBe("operator");
 
       const intUni = lookupCatalog("∫");
       expect(intUni).not.toBeNull();
       expect(intUni?.canonical).toBe("\\int");
-      expect(intUni?.role).toBe("operator");
+      expect(getRoleName(intUni!.roleId)).toBe("operator");
 
       // Relation reverse lookup
       const leqUni = lookupCatalog("≤");
       expect(leqUni).not.toBeNull();
       expect(leqUni?.canonical).toBe("\\leq");
-      expect(leqUni?.role).toBe("relation");
+      expect(getRoleName(leqUni!.roleId)).toBe("relation");
     });
   });
 
@@ -270,7 +321,7 @@ describe("Minimal Perfect Hash (MPHF) Catalog Engine", () => {
       expect(alpha).not.toBeNull();
       expect(alpha?.entry.key).toBe("alpha");
       expect(alpha?.entry.canonical).toBe("\\alpha");
-      expect(alpha?.entry.role).toBe("parameter");
+      expect(getRoleName(alpha!.entry.roleId)).toBe("parameter");
       expect(alpha?.length).toBe(5);
 
       const beta = matchBareSymbol("alpha + beta", 8);
@@ -283,7 +334,7 @@ describe("Minimal Perfect Hash (MPHF) Catalog Engine", () => {
       expect(pi).not.toBeNull();
       expect(pi?.entry.key).toBe("pi");
       expect(pi?.entry.canonical).toBe("\\pi");
-      expect(pi?.entry.role).toBe("constant");
+      expect(getRoleName(pi!.entry.roleId)).toBe("constant");
     });
 
     it("matches bare uppercase Greek letters (Gamma, Delta, Omega)", () => {
@@ -331,40 +382,40 @@ describe("Minimal Perfect Hash (MPHF) Catalog Engine", () => {
     it("resolves newly ingested mathtools relations in O(1)", () => {
       const coloneqq = lookupCatalog("\\coloneqq");
       expect(coloneqq).not.toBeNull();
-      expect(coloneqq?.role).toBe("relation");
+      expect(getRoleName(coloneqq!.roleId)).toBe("relation");
       expect(coloneqq?.unicode).toBe("≔");
-      expect(coloneqq?.package).toBe("mathtools");
+      expect(getPackageOrigin(coloneqq!)).toBe("mathtools");
 
       const eqqcolon = lookupCatalog("\\eqqcolon");
       expect(eqqcolon).not.toBeNull();
-      expect(eqqcolon?.role).toBe("relation");
+      expect(getRoleName(eqqcolon!.roleId)).toBe("relation");
       expect(eqqcolon?.unicode).toBe("≕");
 
       const xrightarrow = lookupCatalog("\\xleftrightarrow");
       expect(xrightarrow).not.toBeNull();
-      expect(xrightarrow?.role).toBe("relation");
+      expect(getRoleName(xrightarrow!.roleId)).toBe("relation");
     });
 
     it("resolves mathtools operators, environments and prescript", () => {
       const prescript = lookupCatalog("\\prescript");
       expect(prescript).not.toBeNull();
-      expect(prescript?.role).toBe("operator");
+      expect(getRoleName(prescript!.roleId)).toBe("operator");
 
       const cramped = lookupCatalog("\\cramped");
       expect(cramped).not.toBeNull();
-      expect(cramped?.role).toBe("operator");
+      expect(getRoleName(cramped!.roleId)).toBe("operator");
 
       const dcases = lookupCatalog("dcases");
       expect(dcases).not.toBeNull();
-      expect(dcases?.role).toBe("delimiter");
+      expect(getRoleName(dcases!.roleId)).toBe("delimiter");
 
       const rcases = lookupCatalog("rcases");
       expect(rcases).not.toBeNull();
-      expect(rcases?.role).toBe("delimiter");
+      expect(getRoleName(rcases!.roleId)).toBe("delimiter");
 
       const pmatrixStar = lookupCatalog("pmatrix*");
       expect(pmatrixStar).not.toBeNull();
-      expect(pmatrixStar?.role).toBe("delimiter");
+      expect(getRoleName(pmatrixStar!.roleId)).toBe("delimiter");
     });
   });
 
@@ -372,59 +423,59 @@ describe("Minimal Perfect Hash (MPHF) Catalog Engine", () => {
     it("resolves official Typst dotted symbols in O(1)", () => {
       const arrowR = lookupCatalog("arrow.r");
       expect(arrowR).not.toBeNull();
-      expect(arrowR?.role).toBe("relation");
+      expect(getRoleName(arrowR!.roleId)).toBe("relation");
       expect(arrowR?.unicode).toBe("→");
 
       const subsetEq = lookupCatalog("subset.eq");
       expect(subsetEq).not.toBeNull();
-      expect(subsetEq?.role).toBe("relation");
+      expect(getRoleName(subsetEq!.roleId)).toBe("relation");
       expect(subsetEq?.unicode).toBe("⊆");
 
       const parenLFlat = lookupCatalog("paren.l.flat");
       expect(parenLFlat).not.toBeNull();
-      expect(parenLFlat?.role).toBe("delimiter");
+      expect(getRoleName(parenLFlat!.roleId)).toBe("delimiter");
     });
 
     it("resolves AsciiMath symbols", () => {
       const xx = lookupCatalog("xx");
       expect(xx).not.toBeNull();
-      expect(xx?.role).toBe("operator");
+      expect(getRoleName(xx!.roleId)).toBe("operator");
 
       const neq = lookupCatalog("!=");
       expect(neq).not.toBeNull();
-      expect(neq?.role).toBe("relation");
+      expect(getRoleName(neq!.roleId)).toBe("relation");
     });
 
     it("resolves MATLAB matrix operators & functions", () => {
       const dotMul = lookupCatalog(".*");
       expect(dotMul).not.toBeNull();
-      expect(dotMul?.role).toBe("operator");
+      expect(getRoleName(dotMul!.roleId)).toBe("operator");
       expect(dotMul?.canonical).toBe("\\odot");
 
       const rref = lookupCatalog("rref");
       expect(rref).not.toBeNull();
-      expect(rref?.role).toBe("function");
+      expect(getRoleName(rref!.roleId)).toBe("function");
     });
 
     it("resolves SymPy / Python mathematical entities", () => {
       const symMatrix = lookupCatalog("Matrix");
       expect(symMatrix).not.toBeNull();
-      expect(symMatrix?.role).toBe("delimiter");
+      expect(getRoleName(symMatrix!.roleId)).toBe("delimiter");
 
       const diracDelta = lookupCatalog("DiracDelta");
       expect(diracDelta).not.toBeNull();
-      expect(diracDelta?.role).toBe("function");
+      expect(getRoleName(diracDelta!.roleId)).toBe("function");
     });
 
     it("resolves Wolfram Language named characters and functions", () => {
       const diffD = lookupCatalog("\\[DifferentialD]");
       expect(diffD).not.toBeNull();
-      expect(diffD?.role).toBe("differential");
+      expect(getRoleName(diffD!.roleId)).toBe("differential");
       expect(diffD?.unicode).toBe("ⅆ");
 
       const sinWolfram = lookupCatalog("Sin");
       expect(sinWolfram).not.toBeNull();
-      expect(sinWolfram?.role).toBe("function");
+      expect(getRoleName(sinWolfram!.roleId)).toBe("function");
     });
   });
 
@@ -459,6 +510,136 @@ describe("Minimal Perfect Hash (MPHF) Catalog Engine", () => {
         (DIALECT_ALL & ~DIALECT_PYTHON & ~DIALECT_WOLFRAM) >>> 0
       );
       expect(getActiveDialects({ dialectLatex: false, dialectTypst: false, dialectAsciiMath: false, dialectMatlab: false, dialectPython: false, dialectWolfram: false })).toBe((DIALECT_ALL & ~0x3F) >>> 0);
+    });
+  });
+
+  describe("Absolute Value (abs / \\abs) Multi-Dialect MPHF Ingestion", () => {
+    it("resolves bare 'abs' with O(1) direct lookup across all 10 mathematical dialects", () => {
+      const entry = lookupCatalog("abs");
+      expect(entry).not.toBeNull();
+      expect(getRoleName(entry!.roleId)).toBe("function");
+      expect(entry!.tier).toBe(1);
+      expect(entry!.arity).toBe(1);
+      expect(entry!.canonical).toBe("\\abs");
+
+      // Verify active in every single dialect bit
+      const dialects = [
+        DIALECT_LATEX,
+        DIALECT_TYPST,
+        DIALECT_ASCIIMATH,
+        DIALECT_MATLAB,
+        DIALECT_PYTHON,
+        DIALECT_WOLFRAM,
+        DIALECT_JULIA,
+        DIALECT_LEAN4,
+        DIALECT_R,
+      ];
+      for (const d of dialects) {
+        expect(lookupCatalog("abs", DOMAIN_ALL, d)).not.toBeNull();
+      }
+    });
+
+    it("matches bare 'abs' as a Tier 1 function with both delimiter and spaced arguments", () => {
+      // Delimiter arguments
+      expect(matchBareFunction("abs(x)", 0)?.length).toBe(3);
+      expect(matchBareFunction("abs[x]", 0)?.length).toBe(3);
+      expect(matchBareFunction("abs{x}", 0)?.length).toBe(3);
+
+      // Spaced arguments (Tier 1 capability)
+      expect(matchBareFunction("abs x", 0)?.length).toBe(3);
+      expect(matchBareFunction("abs \\theta", 0)?.length).toBe(3);
+      expect(matchBareFunction("abs 2", 0)?.length).toBe(3);
+    });
+
+    it("resolves '\\abs' macro with mandatory arity 1 and macro signature in O(1)", () => {
+      const entry = lookupCatalog("\\abs");
+      expect(entry).not.toBeNull();
+      expect(getRoleName(entry!.roleId)).toBe("function");
+      expect(entry!.arity).toBe(1);
+
+      const match = matchMacro("\\abs{x}", 0);
+      expect(match).not.toBeNull();
+      expect(match?.entry.key).toBe("\\abs");
+    });
+  });
+
+  describe("26-Tag CHTML Layout Architecture & 32-Bit Slot Encoding", () => {
+    it("extracts 32-bit Big-Endian layout slot codes in O(1)", () => {
+      const frac = lookupCatalog("\\frac");
+      expect(frac).not.toBeNull();
+      expect(frac?.layoutSlotCode).toBeDefined();
+      expect(getExpectedChildTag(frac!, 0)).toBe(TAG_NUM);
+      expect(getExpectedChildTag(frac!, 1)).toBe(TAG_DEN);
+      expect(getExpectedChildTag(frac!, 2)).toBe(TAG_NONE);
+      expect(getExpectedChildTag(frac!, 3)).toBe(TAG_NONE);
+
+      const sqrt = lookupCatalog("\\sqrt");
+      expect(sqrt).not.toBeNull();
+      expect(sqrt?.layoutSlotCode).toBeDefined();
+      expect(getExpectedChildTag(sqrt!, 0)).toBe(TAG_BOX);
+      expect(getExpectedChildTag(sqrt!, 1)).toBe(TAG_ROOT);
+
+      const sub = lookupCatalog("_");
+      expect(sub).not.toBeNull();
+      expect(getExpectedChildTag(sub!, 0)).toBe(TAG_SUB);
+      expect(getExpectedChildTag(sub!, 1)).toBe(TAG_UNDER);
+
+      const sup = lookupCatalog("^");
+      expect(sup).not.toBeNull();
+      expect(getExpectedChildTag(sup!, 0)).toBe(TAG_SUP);
+      expect(getExpectedChildTag(sup!, 1)).toBe(TAG_OVER);
+
+      const casesEntry = lookupCatalog("cases") || lookupCatalog("matrix") || lookupCatalog("mat");
+      if (casesEntry) {
+        expect(getExpectedChildTag(casesEntry, 0)).toBe(TAG_MTR);
+        expect(getExpectedChildTag(casesEntry, 1)).toBe(TAG_MTD);
+      }
+
+      const quad = lookupCatalog("\\quad");
+      expect(quad).not.toBeNull();
+      expect(getExpectedChildTag(quad!, 0)).toBe(TAG_MSPACE);
+    });
+
+    it("maps MathJax DOM tag names to numeric tag IDs and back", () => {
+      expect(getTagIdFromNodeName("mjx-mfrac")).toBe(TAG_MFRAC);
+      expect(getTagIdFromNodeName("mjx-frac")).toBe(TAG_FRAC);
+      expect(getTagIdFromNodeName("mjx-num")).toBe(TAG_NUM);
+      expect(getTagIdFromNodeName("mjx-den")).toBe(TAG_DEN);
+      expect(getTagIdFromNodeName("mjx-dbox")).toBe(TAG_DBOX);
+      expect(getTagIdFromNodeName("mjx-dtable")).toBe(TAG_DTABLE);
+      expect(getTagIdFromNodeName("mjx-line")).toBe(TAG_LINE);
+      expect(getTagIdFromNodeName("mjx-surd")).toBe(TAG_SURD);
+      expect(getTagIdFromNodeName("mjx-box")).toBe(TAG_BOX);
+      expect(getTagIdFromNodeName("mjx-root")).toBe(TAG_ROOT);
+      expect(getTagIdFromNodeName("mjx-sub")).toBe(TAG_SUB);
+      expect(getTagIdFromNodeName("mjx-sup")).toBe(TAG_SUP);
+      expect(getTagIdFromNodeName("mjx-spacer")).toBe(TAG_SPACER);
+      expect(getTagIdFromNodeName("mjx-ext")).toBe(TAG_EXT);
+      expect(getTagIdFromNodeName("mjx-mrow")).toBe(TAG_MROW);
+      expect(getTagIdFromNodeName("mjx-unknown")).toBe(TAG_NONE);
+
+      expect(getTagName(TAG_NUM)).toBe("mjx-num");
+      expect(getTagName(TAG_DEN)).toBe("mjx-den");
+      expect(getTagName(TAG_BOX)).toBe("mjx-box");
+      expect(getTagName(TAG_SURD)).toBe("mjx-surd");
+    });
+
+    it("evaluates ChtmlTagMask bitmask sets in O(1)", () => {
+      expect(tagMatchesMask(TAG_MROW, MASK_TRANSPARENT_INTERMEDIATE)).toBe(true);
+      expect(tagMatchesMask(TAG_TEXATOM, MASK_TRANSPARENT_INTERMEDIATE)).toBe(true);
+      expect(tagMatchesMask(TAG_BOX, MASK_TRANSPARENT_INTERMEDIATE)).toBe(true);
+      expect(tagMatchesMask(TAG_NUM, MASK_TRANSPARENT_INTERMEDIATE)).toBe(false);
+
+      expect(tagMatchesMask(TAG_EXT, MASK_STRETCHY_FRAGMENTS)).toBe(true);
+      expect(tagMatchesMask(TAG_SPACER, MASK_STRETCHY_FRAGMENTS)).toBe(true);
+      expect(tagMatchesMask(TAG_SURD, MASK_STRETCHY_FRAGMENTS)).toBe(true);
+      expect(tagMatchesMask(TAG_LINE, MASK_STRETCHY_FRAGMENTS)).toBe(true);
+      expect(tagMatchesMask(TAG_NUM, MASK_STRETCHY_FRAGMENTS)).toBe(false);
+
+      expect(tagMatchesMask(TAG_NUM, MASK_SLOT_CONTAINERS)).toBe(true);
+      expect(tagMatchesMask(TAG_DEN, MASK_SLOT_CONTAINERS)).toBe(true);
+      expect(tagMatchesMask(TAG_SUB, MASK_SLOT_CONTAINERS)).toBe(true);
+      expect(tagMatchesMask(TAG_SUP, MASK_SLOT_CONTAINERS)).toBe(true);
     });
   });
 

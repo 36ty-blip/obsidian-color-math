@@ -182,5 +182,28 @@ describe("Variable Data-Flow Hashing", () => {
     expect(spansCmd.length).toBe(1);
     expect(spansBare[0].color).toBe(spansCmd[0].color);
   });
+
+  it("supports user-customized variableHashPalette in options", () => {
+    const customPalette = [
+      "#111111", // slot 0 (x)
+      "#222222", // slot 1
+      "#333333", // slot 2 (a)
+      "#444444", // slot 3
+      "#555555", // slot 4
+      "#666666", // slot 5
+      "#777777", // slot 6
+      "#888888", // slot 7 (d)
+    ];
+    const result = colorLatexBody("x + a + d", undefined, {
+      variableDataFlow: true,
+      variableHashPalette: customPalette,
+    });
+    // x is slot 0 -> #111111
+    expect(result).toContain("\\textcolor{#111111}{x}");
+    // a is slot 2 -> #333333
+    expect(result).toContain("\\textcolor{#333333}{a}");
+    // d is slot 7 -> #888888
+    expect(result).toContain("\\textcolor{#888888}{d}");
+  });
 });
 

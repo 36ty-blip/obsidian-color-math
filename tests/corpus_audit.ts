@@ -7,20 +7,79 @@ import path from "path";
 import os from "os";
 import { Worker, isMainThread, parentPort, workerData } from "worker_threads";
 import katex from "katex";
+import { validateLatexWithMathJax } from "./validator";
 import { scanMarkdown } from "../src/parsers/markdown_scanner";
 import { convertText } from "../src/converters/block";
 import { DEFAULT_COLORS, DEFAULT_OPTIONS, ColorMathOptions, ColorPalette } from "../src/config";
 import { detectNoteField } from "../src/parsers/frontmatter";
 
-// Full-spectrum audit palette: activates all 16 semantic roles (including Group C/D optional roles)
-// so corpus audit catches any LaTeX/MathJax wrapping regression when a user enables non-default roles.
+// Full-spectrum audit palette: activates all 16 semantic roles (zero "none" colors)
+// so corpus audit catches any LaTeX/MathJax wrapping regression across every role.
 const AUDIT_COLORS: ColorPalette = {
-  ...DEFAULT_COLORS,
+  main: "#7aa2f7",
+  orange: "#e0af68",
+  parameter: "#ff9e64",
+  derivative: "#bb9af7",
+  chain: "#9ece6a",
+  upper: "#9d7cd8",
+  transform: "#e0af68",
+  energyOperator: "#2ac3de",
   relation: "#89ddff",
   arithmetic: "#c0caf5",
   dot: "#ff757f",
+  arrow: "#f7768e",
+  set: "#7dcfff",
   structural: "#ced5e3",
+  unit: "#73daca",
   spacing: "#565f89",
+};
+
+// Maximum algorithmic load options: every single parser pass, normalizer, dialect, and AST/CST stage enabled.
+const MAX_STRESS_OPTIONS: ColorMathOptions = {
+  ...DEFAULT_OPTIONS,
+  enableTaxonomy: true,
+  taxonomyFunctions: true,
+  taxonomyParameters: true,
+  taxonomyConstants: true,
+  taxonomyIndices: true,
+  rainbowDelimiters: true,
+  rainbowBareBraces: true,
+  highlightUnmatchedBraces: true,
+  strictBracketWarnings: true,
+  variableDataFlow: true,
+  colorUnits: true,
+  allowSingleLetterUnits: true,
+  colorDifferentials: true,
+  colorDerivativeFractions: true,
+  colorInfinitesimals: true,
+  colorBraKet: true,
+  colorDimensionless: true,
+  colorAlignment: true,
+  colorSingleConstants: true,
+  extendedFunctions: true,
+  colorQuantumOperators: true,
+  highlightInlineMath: true,
+  highlightDisplayMath: true,
+  previewLatexNormalization: true,
+  autoScaleDelimiters: true,
+  crashImmunityAutoSeal: true,
+  requireBracesForSlashDivision: false,
+  padMatrixPadding: true,
+  strictDelimiterGating: false,
+  dialectLatex: true,
+  dialectTypst: true,
+  dialectAsciiMath: true,
+  dialectMatlab: true,
+  dialectPython: true,
+  dialectWolfram: true,
+  mathJaxLineBreaking: true,
+  speedSyntacticSugar: true,
+  sugarAsciiOperators: true,
+  sugarQuotedStrings: true,
+  sugarAsciiEllipses: true,
+  sugarChainedRoots: true,
+  sugarBracketMatrices: true,
+  useCST: true,
 };
 
 export interface Anomaly {
@@ -145,9 +204,9 @@ if (!isMainThread) {
 
     // Detect frontmatter mode
     const detection = detectNoteField(content);
-    const activeMode = detection.field || DEFAULT_OPTIONS.activeMode;
+    const activeMode = detection.field || MAX_STRESS_OPTIONS.activeMode;
     const options: ColorMathOptions = {
-      ...DEFAULT_OPTIONS,
+      ...MAX_STRESS_OPTIONS,
       activeMode,
       field: activeMode,
     };
@@ -182,21 +241,34 @@ if (!isMainThread) {
           displayMode: cBlock.kind === "math_block",
         });
       } catch (kErr: any) {
-        // Colored equation threw! Check if original equation ALSO threw in KaTeX
+        // Obsidian primary engine is MathJax: verify if equation renders cleanly in MathJax
+        const mjxRes = validateLatexWithMathJax(coloredEq);
+        if (mjxRes.valid) {
+          // Equation is 100% valid in Obsidian's native MathJax engine!
+          continue;
+        }
+
+        // Colored equation threw in both engines! Check if original equation ALSO threw in MathJax
         let origFailed = false;
         let origMsg = "";
 
         if (i < originalBlocks.length) {
           const oBlock = originalBlocks[i];
           const origEq = content.slice(oBlock.contentStart, oBlock.contentEnd);
-          try {
-            katex.renderToString(origEq, {
-              throwOnError: true,
-              displayMode: oBlock.kind === "math_block",
-            });
-          } catch (oErr: any) {
+          const origMjx = validateLatexWithMathJax(origEq);
+          if (!origMjx.valid) {
             origFailed = true;
-            origMsg = oErr.message;
+            origMsg = origMjx.error || "MathJax parse error";
+          } else {
+            try {
+              katex.renderToString(origEq, {
+                throwOnError: true,
+                displayMode: oBlock.kind === "math_block",
+              });
+            } catch (oErr: any) {
+              origFailed = true;
+              origMsg = oErr.message;
+            }
           }
         }
 

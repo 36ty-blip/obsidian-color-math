@@ -22,9 +22,16 @@ export function matchOptimizationRules(node: CSTNode, options?: CSTCollectorOpti
 
   // 3.2 Fenchel Conjugate Dual: f^*(y) -> palette.orange (amber)
   if (node.kind === "script" && node.isFenchelDual) {
+    const start = options?.forLatexWrap
+      ? node.base
+        ? node.base.start
+        : node.arg.length > 0
+        ? node.arg[0].start
+        : node.start + 1
+      : node.start;
     return [
       {
-        start: node.start,
+        start,
         end: node.end,
         color: palette?.orange || "#e0af68",
         priority: 26,
@@ -34,9 +41,16 @@ export function matchOptimizationRules(node: CSTNode, options?: CSTCollectorOpti
 
   // 3.2 Optimal Minimizer: x^*, p^* -> palette.parameter
   if (node.kind === "script" && node.isOptimalMinimizer) {
+    const start = options?.forLatexWrap
+      ? node.base
+        ? node.base.start
+        : node.arg.length > 0
+        ? node.arg[0].start
+        : node.start + 1
+      : node.start;
     return [
       {
-        start: node.start,
+        start,
         end: node.end,
         color: palette?.parameter || "#ff9e64",
         priority: 26,
@@ -88,12 +102,14 @@ export function matchOptimizationRules(node: CSTNode, options?: CSTCollectorOpti
     }
     if (node.normLimits) {
       for (const limit of node.normLimits) {
-        spans.push({
-          start: limit.start,
-          end: limit.end,
-          color: normColor,
-          priority: 26,
-        });
+        if (limit.kind === "script" && limit.arg.length > 0) {
+          spans.push({
+            start: limit.arg[0].start,
+            end: limit.arg[limit.arg.length - 1].end,
+            color: normColor,
+            priority: 26,
+          });
+        }
       }
     }
     return spans;

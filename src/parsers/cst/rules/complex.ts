@@ -38,9 +38,17 @@ export function matchComplexRules(node: CSTNode, options?: CSTCollectorOptions):
 
   // 1.2 Singularity Poles: z_0 in \operatorname{Res}(f, z_0)
   if ((node.kind === "identifier" || node.kind === "script") && node.isSingularityPole) {
+    const start =
+      node.kind === "script" && options?.forLatexWrap
+        ? node.base
+          ? node.base.start
+          : node.arg.length > 0
+          ? node.arg[0].start
+          : node.start + 1
+        : node.start;
     return [
       {
-        start: node.start,
+        start,
         end: node.end,
         color: palette?.parameter || palette?.orange || "#ff9e64",
         priority: 26,
@@ -50,9 +58,17 @@ export function matchComplexRules(node: CSTNode, options?: CSTCollectorOptions):
 
   // 1.2 Complex Conjugates: \bar{z}, \overline{z}, z^* -> Tokyo Sky Cyan
   if ((node.kind === "identifier" || node.kind === "script") && node.isConjugate) {
+    const start =
+      node.kind === "script" && options?.forLatexWrap
+        ? node.base
+          ? node.base.start
+          : node.arg.length > 0
+          ? node.arg[0].start
+          : node.start + 1
+        : node.start;
     return [
       {
-        start: node.start,
+        start,
         end: node.end,
         color: palette?.set || "#7dcfff",
         priority: 25,

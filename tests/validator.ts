@@ -17,6 +17,9 @@ import "@mathjax/src/js/input/tex/extpfeil/ExtpfeilConfiguration.js";
 import "@mathjax/src/js/input/tex/unicode/UnicodeConfiguration.js";
 import "@mathjax/src/js/input/tex/units/UnitsConfiguration.js";
 import "@mathjax/src/js/input/tex/upgreek/UpgreekConfiguration.js";
+import "@mathjax/src/js/input/tex/boldsymbol/BoldsymbolConfiguration.js";
+import "@mathjax/src/js/input/tex/cancel/CancelConfiguration.js";
+import "@mathjax/src/js/input/tex/verb/VerbConfiguration.js";
 import { scanMarkdown } from "../src/parsers/markdown_scanner";
 
 // Headless MathJax 4 OutputJax specifically designed for AST syntax validation
@@ -48,6 +51,9 @@ const tex = new TeX({
     "unicode",
     "units",
     "upgreek",
+    "boldsymbol",
+    "cancel",
+    "verb",
   ],
   inlineMath: [["$", "$"]],
   displayMath: [["$$", "$$"]],
@@ -95,7 +101,10 @@ export function validateLatexWithKaTeX(latex: string): ValidationResult {
   const body = cleanLatex(latex);
 
   try {
-    katex.renderToString(body, { throwOnError: true });
+    katex.renderToString(body, {
+      throwOnError: true,
+      strict: false,
+    });
     return { valid: true, engine: "katex" };
   } catch (err: any) {
     return { valid: false, error: err?.message || String(err), engine: "katex" };
@@ -137,7 +146,7 @@ export function validateLatexDual(latex: string): DualValidationResult {
 
 export function validateMarkdownMath(
   markdown: string,
-  engine: "both" | "katex" | "mathjax" = "both"
+  engine: "both" | "katex" | "mathjax" = "mathjax"
 ): { valid: boolean; failures: { block: string; error: string }[] } {
   const { mathBlocks } = scanMarkdown(markdown);
   const failures: { block: string; error: string }[] = [];

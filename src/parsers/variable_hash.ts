@@ -8,6 +8,7 @@ import {
   FONT_STYLE_MACROS,
   BARE_FUNCTIONS,
   MATH_PARAMETERS,
+  ColorMathOptions,
 } from "../config";
 import { readOperand } from "./latex_spans";
 import { readBraced, readColorCommand, skipEnvironmentHead, matchCommand } from "../utils/latex_helpers";
@@ -15,8 +16,19 @@ import { ColorSpan } from "../utils/spans";
 import { findDifferentialSpans, DifferentialSpan, findBoundarySpans, BoundarySpan } from "./differentials";
 import { findDimensionlessSpans, DimensionlessSpan } from "./dimensionless";
 import { findUnitSpans, UnitSpan } from "./units";
+import { SUGAR_CONSTRUCTOR_WORD_RE } from "../config/constructors.generated";
 import { isEulerConstant, isImaginaryUnit } from "./constants";
-import { matchBareSymbol, matchBareFunction, lookupCatalog } from "./catalog";
+import {
+  matchBareSymbol,
+  matchBareFunction,
+  lookupCatalog,
+  ROLE_PARAMETER,
+  ROLE_VARIABLE,
+  ROLE_CONSTANT,
+  ROLE_DERIVATIVE,
+  ROLE_OPERATOR,
+  ROLE_RELATION,
+} from "./catalog";
 
 const VARIABLE_OPAQUE_MACROS = new Set([
   "text",
@@ -70,11 +82,12 @@ export function collectVariableSpans(
   diffSpans?: DifferentialSpan[],
   dimSpans?: DimensionlessSpan[],
   bareFunctions: Set<string> = BARE_FUNCTIONS,
-  boundarySpans?: BoundarySpan[]
+  boundarySpans?: BoundarySpan[],
+  options?: ColorMathOptions
 ): ColorSpan[] {
-  const hashPalette = Array.isArray(palette)
+  const hashPalette = options?.variableHashPalette || (Array.isArray(palette)
     ? palette
-    : (palette && typeof palette === "object" ? Object.values(palette) : VARIABLE_HASH_PALETTE);
+    : (palette && typeof palette === "object" ? Object.values(palette) : VARIABLE_HASH_PALETTE));
   const units = unitSpans || findUnitSpans(body);
   const diffs = diffSpans || findDifferentialSpans(body);
   const dims = dimSpans || findDimensionlessSpans(body);
@@ -114,8 +127,12 @@ export function collectVariableSpans(
 
     const inDiff = diffs.find((d) => d.start <= index && index < d.end);
     if (inDiff) {
-      index = inDiff.end;
-      continue;
+      if (inDiff.kind === "differential" && options?.colorInfinitesimals === false) {
+        // Do not skip! Allow variable data-flow to hash 'd' and coordinate variable separately
+      } else {
+        index = inDiff.end;
+        continue;
+      }
     }
 
     const inDim = dims.find((d) => d.start <= index && index < d.end);
@@ -312,7 +329,7 @@ export function collectVariableSpans(
         const catalogEntry = lookupCatalog(cmdName);
         if (
           MATH_PARAMETERS.has(cmdName) ||
-          (catalogEntry && (catalogEntry.role === "parameter" || catalogEntry.role === "variable"))
+          (catalogEntry && (catalogEntry.roleId === ROLE_PARAMETER || catalogEntry.roleId === ROLE_VARIABLE))
         ) {
           const color = hashStringToColor(cmdName, hashPalette);
           spans.push({
@@ -330,12 +347,12 @@ export function collectVariableSpans(
       }
     }
 
-    // Max Speed syntactic sugar constructors: mat, pmat, bmat, sqrt followed strictly by '[' or '{' (never '(')
+    // Max Speed syntactic sugar constructors via single source of truth: mat, pmat, bmat, sqrt, cases, align, etc. followed strictly by '[' or '{' (never '(')
     const sugarConstructorMatch = body
       .slice(index)
-      .match(/^(mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat|sqrt)(?![A-Za-z])/);
+      .match(SUGAR_CONSTRUCTOR_WORD_RE);
     if (sugarConstructorMatch) {
-      const name = sugarConstructorMatch[1];
+      const name = sugarConstructorMatch[0];
       let lookahead = index + name.length;
       while (lookahead < body.length && /\s/.test(body[lookahead])) lookahead++;
       if (lookahead < body.length && (body[lookahead] === "[" || body[lookahead] === "{")) {
@@ -361,7 +378,7 @@ export function collectVariableSpans(
         // Fall through to 2-3 letter variable multiplication (e.g. ax(y+z), sp(v))
       } else {
         const entry = bareSymbol.entry;
-        if (entry.role === "constant") {
+        if (entry.roleId === ROLE_CONSTANT) {
           const constColor =
             typeof palette === "object" && !Array.isArray(palette) && palette.orange
               ? palette.orange
@@ -372,7 +389,7 @@ export function collectVariableSpans(
             color: constColor,
             priority: 22,
           });
-        } else if (entry.role === "differential") {
+        } else if (entry.roleId === ROLE_DERIVATIVE) {
           const diffColor =
             typeof palette === "object" && !Array.isArray(palette) && palette.derivative
               ? palette.derivative
@@ -383,7 +400,7 @@ export function collectVariableSpans(
             color: diffColor,
             priority: 24,
           });
-        } else if (entry.role === "operator" || entry.role === "relation") {
+        } else if (entry.roleId === ROLE_OPERATOR || entry.roleId === ROLE_RELATION) {
           const opColor =
             typeof palette === "object" && !Array.isArray(palette) && (palette.chain || palette.derivative)
               ? (palette.chain || palette.derivative)

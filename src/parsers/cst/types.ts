@@ -7,11 +7,21 @@ import { ColorPalette } from "../../config";
 export interface BaseNode {
   start: number;
   end: number;
+  /** Immediate syntactic leaf predecessor in the same slot (non-enumerable) */
+  prevLeaf?: CSTNode;
+  /** Immediate syntactic leaf successor in the same slot (non-enumerable) */
+  nextLeaf?: CSTNode;
+  /** Paired atomic partner token (e.g. 'd' <-> 'x' in differential dx, non-enumerable) */
+  compoundPartner?: CSTNode;
+  /** Role within a multi-token atomic compound (non-enumerable) */
+  compoundRole?: "diff_op" | "diff_var";
 }
 
 export interface CommandNode extends BaseNode {
   kind: "command";
   name: string; // e.g. "\int", "\partial", "\alpha", "\sin"
+  rawText?: string;
+  isShorthand?: boolean;
   isSubdifferential?: boolean; // \partial f(x)
   isChainBoundary?: boolean;   // \partial_n : C_n \to C_{n-1}
   isProximal?: boolean;        // \operatorname{prox}
@@ -20,6 +30,7 @@ export interface CommandNode extends BaseNode {
   isModulus?: boolean;         // \pmod{m}, \mod{m}
   isProbabilityOperator?: boolean; // \mathbb{P}, \mathbb{E}, \operatorname{Var}, \operatorname{Cov}
 }
+
 
 export interface BoundaryNode extends BaseNode {
   kind: "boundary";
@@ -36,7 +47,7 @@ export interface EvaluationBarNode extends BaseNode {
 
 export interface GroupNode extends BaseNode {
   kind: "group";
-  delimType: "paren" | "bracket" | "brace" | "bare_brace" | "angle" | "pipe" | "sized";
+  delimType: "paren" | "bracket" | "brace" | "bare_brace" | "angle" | "pipe" | "sized" | "matrix";
   openStart: number;
   openEnd: number;
   openText: string;
@@ -75,12 +86,14 @@ export interface FractionNode extends BaseNode {
   command: string; // "\frac", "\dfrac", "\tfrac", "\cfrac"
   numerator: CSTNode[];
   denominator: CSTNode[];
+  isInfixSlash?: boolean;
   hasUnclosedBrace?: boolean;
   isWirtinger?: boolean;
   isHolomorphic?: boolean; // true for \partial z, false for \partial \bar{z}
   isLegendreSymbol?: boolean; // \left(\frac{a}{p}\right)
   isLegendreCandidate?: boolean;
 }
+
 
 export interface ScriptNode extends BaseNode {
   kind: "script";
@@ -108,6 +121,9 @@ export interface ScriptNode extends BaseNode {
 export interface IdentifierNode extends BaseNode {
   kind: "identifier";
   text: string;
+  rawText?: string;
+  isShorthand?: boolean;
+  isConstant?: boolean;
   isGreek?: boolean;
   isDomainSurface?: boolean;
   isDimensionless?: boolean;  // Re, Ma, Pr, Kn, Pe, etc.
@@ -123,7 +139,10 @@ export interface IdentifierNode extends BaseNode {
 export interface OperatorNode extends BaseNode {
   kind: "operator";
   text: string;
+  rawText?: string;
+  isShorthand?: boolean;
   operatorType:
+
     | "relation"
     | "binary"
     | "boundary"
@@ -167,6 +186,35 @@ export interface CommentNode extends BaseNode {
   text: string;
 }
 
+export interface TextNode extends BaseNode {
+  kind: "text";
+  text: string;
+  command?: string; // e.g. "\text", "\mathrm", "\textbf", "\textit", "\texttt"
+}
+
+export interface UnderOverNode extends BaseNode {
+  kind: "underover";
+  operator: "\\underbrace" | "\\overbrace" | "\\underbracket" | "\\overbracket" | "\\underset" | "\\overset";
+  base: CSTNode[];
+  script: CSTNode[] | null;
+  targetRole: "underscript" | "overscript";
+  baseStart: number;
+  baseEnd: number;
+  scriptStart?: number;
+  scriptEnd?: number;
+  isAccent?: boolean;
+}
+
+export interface QuaternionCoord {
+  w?: number; // Scalar real part Re(q): multi-scale rank (0=glyph, 1=atom, 2=slot, 3=molecule, 4=enclosure)
+  x: number;  // i-axis: local horizontal sequence index within (z, y) slot / matrix column offset
+  y: number;  // j-axis: orthogonal elevation (+1=superscript/numerator, 0=baseline, -1=subscript/denominator, -row=matrix)
+  z: number;  // k-axis: molecule isolation plane (0=dominant baseline, >=1=unique molecule plane)
+}
+
+export type SpatialCoordinate3D = Pick<QuaternionCoord, "z" | "y" | "x">;
+export type SpatialCoordinate4D = QuaternionCoord;
+
 export type CSTNode =
   | CommandNode
   | GroupNode
@@ -178,7 +226,9 @@ export type CSTNode =
   | PunctuationNode
   | CommentNode
   | BoundaryNode
-  | EvaluationBarNode;
+  | EvaluationBarNode
+  | TextNode
+  | UnderOverNode;
 
 export interface CSTCollectorOptions {
   palette?: ColorPalette;

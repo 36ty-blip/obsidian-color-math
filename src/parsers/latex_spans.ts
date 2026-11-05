@@ -2,7 +2,14 @@
 
 import { BARE_FUNCTIONS } from "../config";
 import { skipMacroDefinition } from "../utils/latex_helpers";
-import { lookupCatalog } from "./catalog";
+import {
+  lookupCatalog,
+  ROLE_FUNCTION,
+  ROLE_OPERATOR,
+  ROLE_RELATION,
+  ROLE_CONSTANT,
+  ROLE_PARAMETER,
+} from "./catalog";
 
 export const STYLE_MACROS = new Set([
   "mathbf",
@@ -25,6 +32,7 @@ export const STYLE_MACROS = new Set([
 
 export const FUNCTION_MACROS = new Set([
   "Tr",
+  "abs",
   "arccos",
   "arcsin",
   "arctan",
@@ -204,24 +212,15 @@ export const SYMBOL_MACROS = new Set([
 
 export function isFunctionMacro(name: string): boolean {
   if (FUNCTION_MACROS.has(name)) return true;
-  if (UNARY_MACROS.has(name) || STYLE_MACROS.has(name) || SYMBOL_MACROS.has(name) || OPERATOR_COMMANDS.has(name)) {
-    return false;
-  }
-  return lookupCatalog("\\" + name)?.role === "function";
+  const fullName = name.charCodeAt(0) === 92 ? name : "\\" + name;
+  return lookupCatalog(fullName)?.roleId === ROLE_FUNCTION;
 }
 
 export function isOperatorCommand(name: string): boolean {
-  if (
-    UNARY_MACROS.has(name) ||
-    STYLE_MACROS.has(name) ||
-    SYMBOL_MACROS.has(name) ||
-    NON_OPERAND_COMMANDS.has(name)
-  ) {
-    return false;
-  }
   if (OPERATOR_COMMANDS.has(name)) return true;
-  const entry = lookupCatalog("\\" + name);
-  if (entry && (entry.role === "operator" || entry.role === "bigop")) {
+  const fullName = name.charCodeAt(0) === 92 ? name : "\\" + name;
+  const entry = lookupCatalog(fullName);
+  if (entry && entry.roleId === ROLE_OPERATOR) {
     if (name === "nabla" || name === "partial" || name.startsWith("triangle")) return false;
     return /^(?:big|int|iint|iiint|iiiint|idotsint|oint|smallint|coprod|prod|sum)/.test(name);
   }
@@ -229,23 +228,16 @@ export function isOperatorCommand(name: string): boolean {
 }
 
 export function isSymbolMacro(name: string): boolean {
-  if (UNARY_MACROS.has(name) || STYLE_MACROS.has(name) || OPERATOR_COMMANDS.has(name)) return false;
   if (SYMBOL_MACROS.has(name)) return true;
-  const role = lookupCatalog("\\" + name)?.role;
-  return role === "parameter" || role === "constant";
+  const fullName = name.charCodeAt(0) === 92 ? name : "\\" + name;
+  const roleId = lookupCatalog(fullName)?.roleId;
+  return roleId === ROLE_PARAMETER || roleId === ROLE_CONSTANT;
 }
 
 export function isNonOperandCommand(name: string): boolean {
-  if (
-    UNARY_MACROS.has(name) ||
-    STYLE_MACROS.has(name) ||
-    SYMBOL_MACROS.has(name) ||
-    OPERATOR_COMMANDS.has(name)
-  ) {
-    return false;
-  }
   if (NON_OPERAND_COMMANDS.has(name)) return true;
-  return lookupCatalog("\\" + name)?.role === "relation";
+  const fullName = name.charCodeAt(0) === 92 ? name : "\\" + name;
+  return lookupCatalog(fullName)?.roleId === ROLE_RELATION;
 }
 
 export const DELIMITER_SIZE_COMMANDS = new Set([
@@ -363,10 +355,24 @@ export function skipIgnorable(source: string, index: number, end: number): numbe
 }
 
 export function readCommand(source: string, start: number, end: number): [string, number] | null {
-  if (start >= end || source[start] !== "\\") return null;
-  const match = source.slice(start, end).match(/^(\\[A-Za-z]+|\\.)/);
-  if (!match) return null;
-  return [match[0].slice(1), start + match[0].length];
+  if (start >= end || source.charCodeAt(start) !== 92) return null;
+  let next = start + 1;
+  if (next >= end) return null;
+  const c1 = source.charCodeAt(next);
+  if ((c1 >= 65 && c1 <= 90) || (c1 >= 97 && c1 <= 122)) {
+    next++;
+    while (next < end) {
+      const c = source.charCodeAt(next);
+      if ((c >= 65 && c <= 90) || (c >= 97 && c <= 122)) {
+        next++;
+      } else {
+        break;
+      }
+    }
+  } else {
+    next++;
+  }
+  return [source.slice(start + 1, next), next];
 }
 
 export function readGroupEnd(

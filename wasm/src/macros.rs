@@ -1,7 +1,5 @@
 // wasm/src/macros.rs
 
-use wasm_bindgen::prelude::*;
-
 use crate::common::{
     compute_utf16_offsets, skip_braced_content, skip_braced_group, skip_comment, starts_with, Span,
 };
@@ -45,7 +43,6 @@ pub fn classify_macro(cmd: &str) -> Option<(u32, u32)> {
 }
 
 /// Full-equation AST parse prototype exported to WebAssembly.
-#[wasm_bindgen]
 pub fn parse_math_spans(input: &str) -> Vec<u32> {
     let chars: Vec<char> = input.chars().collect();
     let n = chars.len();

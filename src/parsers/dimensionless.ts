@@ -52,6 +52,9 @@ const BARE_REGEX = new RegExp(
  * - '\Re' is preserved as the standard LaTeX real-part operator.
  */
 export function findDimensionlessSpans(body: string): DimensionlessSpan[] {
+  if (!/[A-Z]/.test(body)) {
+    return [];
+  }
   const scanBody = body.includes("%") ? maskComments(body) : body;
   const spans: DimensionlessSpan[] = [];
 

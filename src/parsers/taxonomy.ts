@@ -4,19 +4,41 @@ import {
   COLORS,
   ColorPalette,
   ColorMathOptions,
-  BARE_FUNCTIONS,
+  getPaletteVersion,
+  CUSTOM_BARE_FUNCTIONS,
   MATH_ACCENTS,
   FONT_STYLE_MACROS,
   NON_SLASH_MATH_CONSTANTS,
   NON_SLASH_MATH_PARAMETERS,
 } from "../config";
-import { lookupCatalog, matchBareFunction, matchBareSymbol } from "./catalog";
+import {
+  lookupCatalog,
+  matchBareFunction,
+  matchBareSymbol,
+  ROLE_FUNCTION,
+  ROLE_OPERATOR,
+  ROLE_RELATION,
+  ROLE_CONSTANT,
+  ROLE_PARAMETER,
+  ROLE_DERIVATIVE,
+  ROLE_DELIMITER,
+  ROLE_STRUCTURAL,
+  ROLE_UNIT,
+  ROLE_VARIABLE,
+  ROLE_ARROW,
+  ROLE_SET,
+  ROLE_DOT,
+  ROLE_TRANSFORM,
+  ROLE_SPACING,
+  ROLE_ARITHMETIC,
+} from "./catalog";
 import { readOperand, OPAQUE_MACROS } from "./latex_spans";
 import { readBraced, readColorCommand, skipEnvironmentHead, matchCommand } from "../utils/latex_helpers";
 import { ColorSpan } from "../utils/spans";
 import { findDifferentialSpans, DifferentialSpan } from "./differentials";
 import { findDimensionlessSpans, DimensionlessSpan } from "./dimensionless";
 import { findUnitSpans, UnitSpan } from "./units";
+import { SUGAR_CONSTRUCTOR_STICKY_RE } from "../config/constructors.generated";
 
 function skipComment(text: string, start: number): number {
   let index = start + 1;
@@ -48,7 +70,52 @@ const STRUCTURAL_LAYOUT_MACROS = new Set([
   "\\tfrac",
   "\\sqrt",
   "\\cases",
+  "\\dcases",
+  "\\rcases",
+  "\\align",
+  "\\aligned",
+  "\\gather",
+  "\\gathered",
+  "\\split",
 ]);
+
+const LIMIT_MODIFIER_STICKY_RE = /\s*\\(?:limits|nolimits|displaylimits)(?![a-zA-Z])/y;
+const BARE_WORD_STICKY_RE = /[A-Za-z]+/y;
+
+let lastPaletteRef: ColorPalette | null = null;
+let lastVersion = -1;
+let lastPaletteArray: string[] | null = null;
+
+export function buildPaletteArray(palette: ColorPalette): string[] {
+  const currentVersion = getPaletteVersion();
+  if (palette === COLORS && lastPaletteRef === COLORS && lastVersion === currentVersion && lastPaletteArray !== null) {
+    return lastPaletteArray;
+  }
+  if (palette !== COLORS && palette === lastPaletteRef && lastPaletteArray !== null) {
+    return lastPaletteArray;
+  }
+  const arr = new Array<string>(16);
+  arr[ROLE_FUNCTION]   = palette.main;
+  arr[ROLE_OPERATOR]   = palette.arithmetic !== "none" ? palette.arithmetic : "none";
+  arr[ROLE_RELATION]   = palette.relation || "none";
+  arr[ROLE_CONSTANT]   = palette.orange;
+  arr[ROLE_PARAMETER]  = palette.parameter || palette.derivative;
+  arr[ROLE_DERIVATIVE] = palette.derivative;
+  arr[ROLE_DELIMITER]  = "none";
+  arr[ROLE_STRUCTURAL] = palette.structural || "none";
+  arr[ROLE_UNIT]       = palette.unit;
+  arr[ROLE_VARIABLE]   = palette.parameter || palette.main;
+  arr[ROLE_ARROW]      = palette.arrow;
+  arr[ROLE_SET]        = palette.set || "#7dcfff";
+  arr[ROLE_DOT]        = palette.dot || "none";
+  arr[ROLE_TRANSFORM]  = palette.transform;
+  arr[ROLE_SPACING]    = palette.spacing || "none";
+  arr[ROLE_ARITHMETIC] = palette.arithmetic || "none";
+  lastPaletteRef = palette;
+  lastVersion = currentVersion;
+  lastPaletteArray = arr;
+  return arr;
+}
 
 /**
  * Collects semantic spans for mathematical symbols:
@@ -66,6 +133,7 @@ export function collectTaxonomySpans(
   options?: ColorMathOptions,
   forLatexWrap: boolean = false
 ): ColorSpan[] {
+  const paletteArray = buildPaletteArray(palette);
   const units = unitSpans || findUnitSpans(body);
   const diffs = diffSpans || findDifferentialSpans(body);
   const dims = dimSpans || findDimensionlessSpans(body);
@@ -130,11 +198,24 @@ export function collectTaxonomySpans(
     }
 
     // Door 1: Native LaTeX Macro Fast-Path (Sovereign TeX path, 0.3 ns check)
-    if (body[index] === "\\") {
-      const match = body.slice(index).match(/^(\\[A-Za-z]+|\\.)/);
-      if (match) {
-        const name = match[0];
-        const cmdEnd = index + name.length;
+    if (body.charCodeAt(index) === 92) { // '\\'
+      if (index + 1 < body.length) {
+        let cmdEnd = index + 1;
+        const c1 = body.charCodeAt(cmdEnd);
+        if ((c1 >= 65 && c1 <= 90) || (c1 >= 97 && c1 <= 122)) { // [A-Za-z]
+          cmdEnd++;
+          while (cmdEnd < body.length) {
+            const c = body.charCodeAt(cmdEnd);
+            if ((c >= 65 && c <= 90) || (c >= 97 && c <= 122)) {
+              cmdEnd++;
+            } else {
+              break;
+            }
+          }
+        } else {
+          cmdEnd++;
+        }
+        const name = body.slice(index, cmdEnd);
 
         // Skip environment arguments: \begin{bmatrix}, \end{cases}, \begin{array}{cc|c}
         const envEnd = skipEnvironmentHead(body, name, cmdEnd);
@@ -288,12 +369,17 @@ export function collectTaxonomySpans(
 
         // Query O(1) MPHF catalog first
         const catalogEntry = lookupCatalog(name);
+        if (catalogEntry?.uncolored) {
+          index = cmdEnd;
+          continue;
+        }
+
         if (
           name === "\\Bbb" ||
           name === "\\mod" ||
           name === "\\pmod" ||
           name === "\\pod" ||
-          (catalogEntry && catalogEntry.arity === 1 && !catalogEntry.extensible)
+          (catalogEntry && catalogEntry.roleId === ROLE_FUNCTION && catalogEntry.arity === 1 && !catalogEntry.extensible)
         ) {
           let targetStart = cmdEnd;
           while (targetStart < body.length && /\s/.test(body[targetStart])) {
@@ -322,36 +408,31 @@ export function collectTaxonomySpans(
           }
         }
         if (catalogEntry) {
-          if (catalogEntry.role === "constant") {
+          if (catalogEntry.roleId === ROLE_CONSTANT) {
             if (options?.taxonomyConstants !== false) {
               spans.push({
                 start: index,
                 end: cmdEnd,
-                color: palette.orange,
+                color: paletteArray[ROLE_CONSTANT],
                 priority: catalogEntry.priority || 22,
               });
             }
             index = cmdEnd;
             continue;
           }
-          if (catalogEntry.role === "function") {
+          if (catalogEntry.roleId === ROLE_FUNCTION) {
+            LIMIT_MODIFIER_STICKY_RE.lastIndex = cmdEnd;
+            const limitModifierMatch = LIMIT_MODIFIER_STICKY_RE.exec(body);
             if (catalogEntry.uncolored) {
-              const remaining = body.slice(cmdEnd);
-              const limitModifierMatch = remaining.match(/^(\s*\\(?:limits|nolimits|displaylimits))(?![a-zA-Z])/);
               index = limitModifierMatch ? cmdEnd + limitModifierMatch[0].length : cmdEnd;
               continue;
             }
             if (options?.taxonomyFunctions !== false) {
-              let spanEnd = cmdEnd;
-              const remaining = body.slice(cmdEnd);
-              const limitModifierMatch = remaining.match(/^(\s*\\(?:limits|nolimits|displaylimits))(?![a-zA-Z])/);
-              if (limitModifierMatch) {
-                spanEnd = cmdEnd + limitModifierMatch[0].length;
-              }
+              const spanEnd = limitModifierMatch ? cmdEnd + limitModifierMatch[0].length : cmdEnd;
               spans.push({
                 start: index,
                 end: spanEnd,
-                color: palette.main,
+                color: paletteArray[ROLE_FUNCTION],
                 priority: catalogEntry.priority || 22,
               });
               index = spanEnd;
@@ -360,12 +441,12 @@ export function collectTaxonomySpans(
             }
             continue;
           }
-          if (catalogEntry.role === "parameter") {
+          if (catalogEntry.roleId === ROLE_PARAMETER) {
             if (options?.taxonomyParameters !== false) {
               spans.push({
                 start: index,
                 end: cmdEnd,
-                color: palette.parameter || palette.derivative,
+                color: paletteArray[ROLE_PARAMETER],
                 priority: catalogEntry.priority || 20,
               });
             }
@@ -412,24 +493,25 @@ export function collectTaxonomySpans(
 
     // Max Speed syntactic sugar constructors: mat, pmat, bmat, sqrt, cases followed strictly by '[' or '{' (never '(')
     if (options?.speedSyntacticSugar !== false) {
-      const sugarConstructorMatch = body
-        .slice(index)
-        .match(/^(mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat|sqrt|cases)(?![A-Za-z])/);
-      if (sugarConstructorMatch) {
-        const name = sugarConstructorMatch[1];
-        let lookahead = index + name.length;
-        while (lookahead < body.length && /\s/.test(body[lookahead])) lookahead++;
-        if (lookahead < body.length && (body[lookahead] === "[" || body[lookahead] === "{")) {
-          if (!forLatexWrap) {
-            spans.push({
-              start: index,
-              end: index + name.length,
-              color: palette.structural || "none",
-              priority: 25,
-            });
+      if (index === 0 || !/[A-Za-z0-9_\\]/.test(body[index - 1])) {
+        SUGAR_CONSTRUCTOR_STICKY_RE.lastIndex = index;
+        const sugarConstructorMatch = SUGAR_CONSTRUCTOR_STICKY_RE.exec(body);
+        if (sugarConstructorMatch) {
+          const name = sugarConstructorMatch[0];
+          let lookahead = index + name.length;
+          while (lookahead < body.length && /\s/.test(body[lookahead])) lookahead++;
+          if (lookahead < body.length && (body[lookahead] === "[" || body[lookahead] === "{")) {
+            if (!forLatexWrap) {
+              spans.push({
+                start: index,
+                end: index + name.length,
+                color: palette.structural || "none",
+                priority: 25,
+              });
+            }
+            index += name.length;
+            continue;
           }
-          index += name.length;
-          continue;
         }
       }
     }
@@ -481,24 +563,27 @@ export function collectTaxonomySpans(
         spans.push({
           start: index,
           end: index + bareMatch.length,
-          color: palette.main,
+          color: paletteArray[ROLE_FUNCTION],
           priority: 22,
         });
         index += bareMatch.length;
         continue;
       }
-      // Fallback for user custom bare functions
-      const legacyBare = body.slice(index).match(/^([A-Za-z]+)(?![A-Za-z])/);
-      if (legacyBare && BARE_FUNCTIONS.has(legacyBare[1].toLowerCase())) {
-        const fnName = legacyBare[1];
-        spans.push({
-          start: index,
-          end: index + fnName.length,
-          color: palette.main,
-          priority: 22,
-        });
-        index += fnName.length;
-        continue;
+      // Fallback for user custom bare functions (0 cycles when no custom functions defined)
+      if (CUSTOM_BARE_FUNCTIONS.size > 0) {
+        BARE_WORD_STICKY_RE.lastIndex = index;
+        const legacyBare = BARE_WORD_STICKY_RE.exec(body);
+        if (legacyBare && CUSTOM_BARE_FUNCTIONS.has(legacyBare[0].toLowerCase())) {
+          const fnName = legacyBare[0];
+          spans.push({
+            start: index,
+            end: index + fnName.length,
+            color: paletteArray[ROLE_FUNCTION],
+            priority: 22,
+          });
+          index += fnName.length;
+          continue;
+        }
       }
     }
 
@@ -507,34 +592,61 @@ export function collectTaxonomySpans(
       const bareSymbol = matchBareSymbol(body, index);
       if (bareSymbol) {
         const entry = bareSymbol.entry;
-        if (entry.role === "constant" && options?.taxonomyConstants !== false) {
+        if (entry.roleId === ROLE_CONSTANT && options?.taxonomyConstants !== false) {
           spans.push({
             start: index,
             end: index + bareSymbol.length,
-            color: palette.orange,
+            color: paletteArray[ROLE_CONSTANT],
             priority: entry.priority || 22,
           });
           index += bareSymbol.length;
           continue;
-        } else if (entry.role === "parameter" && options?.taxonomyParameters !== false) {
+        } else if (entry.roleId === ROLE_PARAMETER && options?.taxonomyParameters !== false) {
           spans.push({
             start: index,
             end: index + bareSymbol.length,
-            color: palette.parameter || palette.derivative,
+            color: paletteArray[ROLE_PARAMETER],
             priority: entry.priority || 20,
           });
           index += bareSymbol.length;
           continue;
-        } else if (entry.role === "differential") {
+        } else if (entry.roleId === ROLE_DERIVATIVE) {
           spans.push({
             start: index,
             end: index + bareSymbol.length,
-            color: palette.derivative || palette.main,
+            color: paletteArray[ROLE_DERIVATIVE],
             priority: entry.priority || 24,
           });
           index += bareSymbol.length;
           continue;
-        } else if (entry.role === "operator") {
+        } else if (entry.roleId === ROLE_ARITHMETIC) {
+          spans.push({
+            start: index,
+            end: index + bareSymbol.length,
+            color: paletteArray[ROLE_ARITHMETIC],
+            priority: 30,
+          });
+          index += bareSymbol.length;
+          continue;
+        } else if (entry.roleId === ROLE_DOT) {
+          spans.push({
+            start: index,
+            end: index + bareSymbol.length,
+            color: paletteArray[ROLE_DOT],
+            priority: 30,
+          });
+          index += bareSymbol.length;
+          continue;
+        } else if (entry.roleId === ROLE_SET) {
+          spans.push({
+            start: index,
+            end: index + bareSymbol.length,
+            color: paletteArray[ROLE_SET],
+            priority: 30,
+          });
+          index += bareSymbol.length;
+          continue;
+        } else if (entry.roleId === ROLE_OPERATOR) {
           let targetColor = palette.chain || palette.derivative;
           if (
             entry.canonical === "\\bigtimes" ||
@@ -555,7 +667,7 @@ export function collectTaxonomySpans(
             entry.key === "ox" ||
             entry.key === "o."
           ) {
-            targetColor = palette.dot || "none";
+            targetColor = paletteArray[ROLE_DOT];
           } else if (
             entry.canonical === "\\cup" ||
             entry.canonical === "\\cap" ||
@@ -566,7 +678,7 @@ export function collectTaxonomySpans(
             entry.key === "vv" ||
             entry.key === "^^"
           ) {
-            targetColor = palette.set || "#7dcfff";
+            targetColor = paletteArray[ROLE_SET];
           } else if (
             entry.canonical === "\\pm" ||
             entry.canonical === "\\mp" ||
@@ -574,7 +686,7 @@ export function collectTaxonomySpans(
             entry.canonical === "\\ominus" ||
             entry.key === "o+"
           ) {
-            targetColor = palette.arithmetic || "none";
+            targetColor = paletteArray[ROLE_ARITHMETIC];
           }
           spans.push({
             start: index,
@@ -584,12 +696,12 @@ export function collectTaxonomySpans(
           });
           index += bareSymbol.length;
           continue;
-        } else if (entry.role === "relation") {
+        } else if (entry.roleId === ROLE_RELATION) {
           if (entry.uncolored) {
             index += bareSymbol.length;
             continue;
           }
-          let targetColor = palette.relation || "none";
+          let targetColor = paletteArray[ROLE_RELATION];
           if (
             entry.canonical === "\\subset" ||
             entry.canonical === "\\supset" ||
@@ -600,7 +712,7 @@ export function collectTaxonomySpans(
             entry.key === "sub" ||
             entry.key === "in"
           ) {
-            targetColor = palette.set || "#7dcfff";
+            targetColor = paletteArray[ROLE_SET];
           }
           spans.push({
             start: index,
@@ -610,11 +722,11 @@ export function collectTaxonomySpans(
           });
           index += bareSymbol.length;
           continue;
-        } else if (entry.role === "variable" && options?.taxonomyParameters !== false) {
+        } else if (entry.roleId === ROLE_VARIABLE && options?.taxonomyParameters !== false) {
           spans.push({
             start: index,
             end: index + bareSymbol.length,
-            color: palette.parameter || palette.main,
+            color: paletteArray[ROLE_VARIABLE],
             priority: entry.priority || 20,
           });
           index += bareSymbol.length;

@@ -32,17 +32,7 @@ export interface DelimiterCollectorOptions {
   strictBracketWarnings?: boolean;
 }
 
-const OPTIONAL_BRACKET_COMMANDS = new Set([
-  "\\sqrt",
-  "\\\\",
-  "\\tag",
-  "\\xleftarrow",
-  "\\xrightarrow",
-  "\\rule",
-  "\\makebox",
-  "\\framebox",
-  "\\parbox",
-]);
+import { isOptionalBracketCommand } from "./cst/tokenizer";
 
 function skipWhitespace(text: string, start: number): number {
   while (start < text.length && /\s/.test(text[start])) {
@@ -809,7 +799,7 @@ export function findDelimiterScan(
       if (cmdMatch) {
         const cmd = cmdMatch[0];
         index += cmd.length;
-        if (OPTIONAL_BRACKET_COMMANDS.has(cmd)) {
+        if (isOptionalBracketCommand(cmd)) {
           let cur = skipWhitespace(text, index);
           if (cur < text.length && text[cur] === "[") {
             let depth = 1;

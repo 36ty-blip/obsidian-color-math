@@ -3,7 +3,7 @@ import { colorLatexBody } from "../src/converters/generic";
 import { convertText } from "../src/converters/block";
 import { DEFAULT_COLORS } from "../src/config";
 import { collectAlignmentSpans } from "../src/parsers/alignment";
-import { validateLatexWithKaTeX } from "./validator";
+import { validateLatexWithMathJax } from "./validator";
 
 describe("User Formula Test", () => {
   it("colors user formula with arrow, parameter lambda, mu, and relation", () => {
@@ -146,7 +146,7 @@ describe("User Formula Test", () => {
     expect(ravOut).not.toContain("\\mathcal{RAV}");
   });
 
-  it("validates all converted formulas using KaTeX math engine", () => {
+  it("validates all converted formulas using MathJax math engine", () => {
     const opts = {
       enableTaxonomy: true,
       variableDataFlow: true,
@@ -172,11 +172,11 @@ describe("User Formula Test", () => {
 
     for (const f of formulas) {
       const converted = convertText(f, DEFAULT_COLORS, opts);
-      const validation = validateLatexWithKaTeX(converted);
+      const validation = validateLatexWithMathJax(converted);
       if (!validation.valid) {
-        console.error(`KaTeX Validation Failed for: ${f}\nConverted: ${converted}\nError: ${validation.error}`);
+        console.error(`MathJax Validation Failed for: ${f}\nConverted: ${converted}\nError: ${validation.error}`);
       }
-      expect(validation.valid, `KaTeX error for "${converted}": ${validation.error}`).toBe(true);
+      expect(validation.valid, `MathJax error for "${converted}": ${validation.error}`).toBe(true);
     }
   });
 
@@ -214,7 +214,7 @@ describe("User Formula Test", () => {
     expect(coloredSinSquared).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{\\sin}`);
     expect(coloredSinSquared).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{\\cos}`);
 
-    // 5. KaTeX validation on bare functions
+    // 5. MathJax validation on bare functions
     const testFormulas = [
       "$$y = sin x$$",
       "$$y = sin(x)$$",
@@ -225,8 +225,8 @@ describe("User Formula Test", () => {
     ];
     for (const tf of testFormulas) {
       const out = convertText(tf, DEFAULT_COLORS, opts);
-      const val = validateLatexWithKaTeX(out);
-      expect(val.valid, `KaTeX error for "${out}": ${val.error}`).toBe(true);
+      const val = validateLatexWithMathJax(out);
+      expect(val.valid, `MathJax error for "${out}": ${val.error}`).toBe(true);
     }
   });
 
@@ -263,7 +263,7 @@ describe("User Formula Test", () => {
     expect(coloredIndex).not.toContain(`\\textcolor{${DEFAULT_COLORS.orange}}{e}_{1}`);
     expect(coloredIndex).not.toContain(`\\textcolor{${DEFAULT_COLORS.orange}}{e}_{2}`);
 
-    // 5. KaTeX validation on all expressions
+    // 5. MathJax validation on all expressions
     const formulas = [
       "$$y = e^x + e^{-t}$$",
       "$$e^{i\\pi} + 1 = 0$$",
@@ -273,8 +273,8 @@ describe("User Formula Test", () => {
     ];
     for (const f of formulas) {
       const out = convertText(f, DEFAULT_COLORS, opts);
-      const val = validateLatexWithKaTeX(out);
-      expect(val.valid, `KaTeX error for "${out}": ${val.error}`).toBe(true);
+      const val = validateLatexWithMathJax(out);
+      expect(val.valid, `MathJax error for "${out}": ${val.error}`).toBe(true);
     }
   });
 

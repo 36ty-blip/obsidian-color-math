@@ -2,7 +2,7 @@
 
 import { ColorPalette, COLORS } from "../config";
 import { ColorSpan } from "../utils/spans";
-import { lookupCatalog, matchBareSymbol } from "./catalog";
+import { lookupCatalog, matchBareSymbol, ROLE_CONSTANT, ROLE_PARAMETER } from "./catalog";
 
 function isPartOfCommand(body: string, index: number): boolean {
   let b = index;
@@ -72,11 +72,11 @@ export function isImaginaryUnit(body: string, index: number): boolean {
       const cmdMatch = body.slice(next).match(/^(\\[A-Za-z]+)/);
       if (cmdMatch) {
         const entry = lookupCatalog(cmdMatch[1]);
-        if (entry && (entry.role === "constant" || entry.role === "parameter")) return true;
+        if (entry && (entry.roleId === ROLE_CONSTANT || entry.roleId === ROLE_PARAMETER)) return true;
       }
     } else {
       const bare = matchBareSymbol(body, next);
-      if (bare && (bare.entry.role === "constant" || bare.entry.role === "parameter")) return true;
+      if (bare && (bare.entry.roleId === ROLE_CONSTANT || bare.entry.roleId === ROLE_PARAMETER)) return true;
 
       const charCode = body.charCodeAt(next);
       if (charCode > 127) {
@@ -84,7 +84,7 @@ export function isImaginaryUnit(body: string, index: number): boolean {
         const charLen = isSurrogate && next + 1 < body.length ? 2 : 1;
         const glyph = body.slice(next, next + charLen);
         const entry = lookupCatalog(glyph);
-        if (entry && (entry.role === "constant" || entry.role === "parameter")) return true;
+        if (entry && (entry.roleId === ROLE_CONSTANT || entry.roleId === ROLE_PARAMETER)) return true;
       }
     }
   }

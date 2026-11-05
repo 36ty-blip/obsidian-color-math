@@ -7,7 +7,14 @@ import path from "path";
 import os from "os";
 import { Worker, isMainThread, parentPort, workerData } from "worker_threads";
 import { scanMarkdown } from "../src/parsers/markdown_scanner";
-import { lookupCatalog } from "../src/parsers/catalog";
+import {
+  lookupCatalog,
+  ROLE_FUNCTION,
+  ROLE_PARAMETER,
+  ROLE_CONSTANT,
+  ROLE_OPERATOR,
+  ROLE_RELATION,
+} from "../src/parsers/catalog";
 
 export interface FeatureCounters {
   total: number;
@@ -213,10 +220,10 @@ if (!isMainThread) {
 
         let cat: CategoryKey = "variable";
         if (entry) {
-          if (entry.role === "function") cat = "function";
-          else if (entry.role === "parameter") cat = "parameter";
-          else if (entry.role === "constant") cat = "constant";
-          else if (entry.role === "operator" || entry.role === "relation") cat = "operator";
+          if (entry.roleId === ROLE_FUNCTION) cat = "function";
+          else if (entry.roleId === ROLE_PARAMETER) cat = "parameter";
+          else if (entry.roleId === ROLE_CONSTANT) cat = "constant";
+          else if (entry.roleId === ROLE_OPERATOR || entry.roleId === ROLE_RELATION) cat = "operator";
         }
 
         totalTokens++;

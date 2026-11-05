@@ -1,0 +1,50 @@
+{
+  "timestamp": 1793012958335,
+  "date": "2026-10-26T11:09:18.335Z",
+  "hardware": {
+    "cpuModel": "13th Gen Intel(R) Core(TM) i5-13420H",
+    "threadsAllocated": 6,
+    "totalCpus": 12
+  },
+  "metrics": {
+    "durationSec": 66.07,
+    "throughputEquationsPerSec": 3455,
+    "documentsAudited": 10511,
+    "equationsScanned": 228264,
+    "equationsValidated": 228047,
+    "mathematicalTokensTested": 1409529,
+    "triParityConsensusCount": 1354851,
+    "consensusRate": 96.12,
+    "disagreementCount": 64035,
+    "disagreementRate": 4.54,
+    "semanticOraclePassCount": 1345494,
+    "oraclePassRate": 95.46,
+    "compliance144Hz": true
+  },
+  "latencies": {
+    "m2_weakmap_ns": {
+      "avg": 539.7103355822147,
+      "min": 0,
+      "max": 14528800.000000047,
+      "p50": 200.00000222353265,
+      "p90": 1099.9999994965037,
+      "p99": 2799.999998387648
+    },
+    "m1_dom_class_us": {
+      "avg": 4.119529155286566,
+      "min": 0.5000000019208528,
+      "max": 57931.000000000495,
+      "p50": 2.4000000003070454,
+      "p90": 6.399999998393469,
+      "p99": 23.299999999835563
+    },
+    "m3_ondemand_us": {
+      "avg": 83.63114155384281,
+      "min": 2.099999997881241,
+      "max": 93739.59999999897,
+      "p50": 24.79999999923166,
+      "p90": 122.69999999989523,
+      "p99": 835.5000000001382
+    }
+  }
+}

@@ -19,13 +19,13 @@ export default [
     rules: {
       // Keep Obsidian-specific rules enabled (memory management, manifest, API safety)
       "obsidianmd/ui/sentence-case": "off",
-      "obsidianmd/settings-tab/prefer-setting-definitions": "off", // Handled in settings redesign
+      "obsidianmd/settings-tab/prefer-setting-definitions": "warn", // Handled in settings redesign
       
       // Allow pragmatic TypeScript types where Obsidian's internal DOM/CM6 lacks public typings
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unsafe-assignment": "off",
-      "@typescript-eslint/no-unsafe-member-access": "off",
-      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unsafe-assignment": "warn",
+      "@typescript-eslint/no-unsafe-member-access": "warn",
+      "@typescript-eslint/no-unsafe-call": "warn",
       "@typescript-eslint/no-deprecated": "warn",
     },
   },

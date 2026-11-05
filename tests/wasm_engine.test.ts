@@ -9,6 +9,7 @@ import {
   sanitizeToWellFormed,
 } from "../src/parsers/engine_bridge";
 import { DEFAULT_COLORS } from "../src/config";
+import { disableWasmCatalog } from "../src/parsers/wasm_catalog";
 import fs from "fs";
 import path from "path";
 
@@ -64,9 +65,8 @@ describe("Engine Bridge Pure TypeScript & Caching", () => {
     clearMathSpanCache();
   });
 
-  it("confirms WASM is retired in favor of pure TypeScript", async () => {
-    const success = await initWasmEngine();
-    expect(success).toBe(false);
+  it("confirms pure TypeScript default when WASM is disabled", async () => {
+    disableWasmCatalog();
     expect(isWasmReady()).toBe(false);
     expect(parseWithWasm("\\int x dx", DEFAULT_COLORS)).toBeNull();
   });

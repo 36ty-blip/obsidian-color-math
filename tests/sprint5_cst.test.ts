@@ -7,7 +7,7 @@ import { DEFAULT_COLORS } from "../src/config";
 import { MathJaxInterceptor } from "../src/editor/mathjax_interceptor";
 import { parseMathWithCST } from "../src/parsers/cst/index";
 import { getCachedOrComputedSpans } from "../src/parsers/engine_bridge";
-import { validateLatexWithKaTeX } from "./validator";
+import { validateLatexWithMathJax } from "./validator";
 import { collectVariableSpans } from "../src/parsers/variable_hash";
 import { collectTaxonomySpans } from "../src/parsers/taxonomy";
 import { selectColorSpans } from "../src/utils/spans";
@@ -105,9 +105,9 @@ describe("Sprint 5: Live Editor & MathJax Integration with Modular CST", () => {
 
       expect(capturedTexCalls).toHaveLength(1);
       const transformed = capturedTexCalls[0];
-      // Must contain \textcolor with quantum / delimiter colors
+      // Must contain \textcolor with quantum / delimiter colors or dynamic CSS variables
       expect(transformed).toContain("\\textcolor{");
-      expect(transformed).toContain(DEFAULT_COLORS.energyOperator);
+      expect(transformed).toMatch(/var\(--color-math-role-energyOperator\)|#2ac3de/);
 
       interceptor.uninstall();
     });
@@ -128,8 +128,8 @@ describe("Sprint 5: Live Editor & MathJax Integration with Modular CST", () => {
 
       expect(capturedTexCalls).toHaveLength(1);
       const transformed = capturedTexCalls[0];
-      // Legacy bra-kets were colored with orange
-      expect(transformed).toContain(DEFAULT_COLORS.orange);
+      // Legacy bra-kets were colored with orange or dynamic CSS variables
+      expect(transformed).toMatch(/var\(--color-math-role-orange\)|#e0af68/);
 
       interceptor.uninstall();
     });
@@ -201,7 +201,7 @@ describe("Sprint 5: Live Editor & MathJax Integration with Modular CST", () => {
   });
 
   describe("Sized Delimiters & Variable Hash Ranking", () => {
-    it("handles \\left( ... \\right) without breaking KaTeX/MathJax grouping in LaTeX mode", () => {
+    it("handles \\left( ... \\right) without breaking MathJax grouping in LaTeX mode", () => {
       const math = "\\left( \\frac{\\partial u}{\\partial x} - i \\frac{\\partial u}{\\partial y} \\right)";
 
       // In LaTeX baking mode (forLatexWrap: true), sized delimiters wrap the full expression
@@ -210,9 +210,9 @@ describe("Sprint 5: Live Editor & MathJax Integration with Modular CST", () => {
         rainbowDelimiters: true,
       });
 
-      // Validated by KaTeX - zero delimiter mismatch errors!
-      const val = validateLatexWithKaTeX(`$$${coloredLatex}$$`);
-      expect(val.valid, `KaTeX error: ${val.error}`).toBe(true);
+      // Validated by MathJax - zero delimiter mismatch errors!
+      const val = validateLatexWithMathJax(`$$${coloredLatex}$$`);
+      expect(val.valid, `MathJax error: ${val.error}`).toBe(true);
 
       // Sized delimiters in Live Preview emit discrete marks
       const cstSpansLive = parseMathWithCST(math, {

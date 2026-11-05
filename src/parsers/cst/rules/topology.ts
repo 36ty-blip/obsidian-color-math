@@ -9,10 +9,18 @@ export function matchTopologyRules(node: CSTNode, options?: CSTCollectorOptions)
   const palette = options?.palette;
 
   // 4.2 Nilpotent Chain Boundary Operator: \partial_n : C_n \to C_{n-1} -> palette.chain (green)
-  if (node.kind === "command" && node.isChainBoundary) {
+  if ((node.kind === "command" || node.kind === "script") && node.isChainBoundary) {
+    const start =
+      node.kind === "script" && options?.forLatexWrap
+        ? node.base
+          ? node.base.start
+          : node.arg.length > 0
+          ? node.arg[0].start
+          : node.start + 1
+        : node.start;
     return [
       {
-        start: node.start,
+        start,
         end: node.end,
         color: palette?.chain || "#9ece6a",
         priority: 26,

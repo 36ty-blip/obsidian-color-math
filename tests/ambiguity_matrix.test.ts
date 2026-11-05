@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { parseMathWithCST } from "../src/parsers/cst/index";
 import { DEFAULT_COLORS, ColorMathOptions } from "../src/config";
 import { colorLatexBody } from "../src/converters/generic";
-import { validateLatexWithKaTeX } from "./validator";
+import { validateLatexWithMathJax } from "./validator";
 
 describe("Item 6: Cross-Discipline Ambiguity Suite (Collision Matrix)", () => {
   describe("1. Vertical Bar (|) Collisions across Disciplines", () => {
@@ -160,7 +160,7 @@ describe("Item 6: Cross-Discipline Ambiguity Suite (Collision Matrix)", () => {
       expect(dSpans.some((s) => (s.priority ?? 0) >= 25)).toBe(true);
     });
 
-    it("produces 100% valid KaTeX across all collision matrix equations", () => {
+    it("produces 100% valid MathJax across all collision matrix equations", () => {
       const collisionSuite = [
         "|A| \\cdot |B| = |AB|",
         "|x + y| \\le |x| + |y|",
@@ -177,8 +177,8 @@ describe("Item 6: Cross-Discipline Ambiguity Suite (Collision Matrix)", () => {
 
       for (const eq of collisionSuite) {
         const colored = colorLatexBody(eq, DEFAULT_COLORS, { useCST: true, rainbowDelimiters: true });
-        const val = validateLatexWithKaTeX(`$$${colored}$$`);
-        expect(val.valid, `Collision test KaTeX failed for "${eq}": ${val.error}`).toBe(true);
+        const val = validateLatexWithMathJax(`$$${colored}$$`);
+        expect(val.valid, `Collision test MathJax failed for "${eq}": ${val.error}`).toBe(true);
       }
     });
   });

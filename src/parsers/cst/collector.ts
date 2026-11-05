@@ -56,6 +56,12 @@ export function collectSpansFromCST(
       }
 
       case "group": {
+        if (node.delimType === "matrix") {
+          for (const child of node.children) {
+            walk(child);
+          }
+          break;
+        }
         const isBare = node.delimType === "bare_brace";
         const color = rainbowColors[node.depth % rainbowColors.length];
 
@@ -65,28 +71,13 @@ export function collectSpansFromCST(
           if (!ruleSpans || !forLatexWrap || !node.isLeftRight || node.closeEnd === undefined) {
             return ruleSpans;
           }
-          const hasOpen = ruleSpans.some((s) => s.start === node.openStart && s.end === node.openEnd);
-          const hasClose = ruleSpans.some((s) => s.start === node.closeStart && s.end === node.closeEnd);
-          if (hasOpen || hasClose) {
-            const delimSpan = ruleSpans.find(
-              (s) => (s.start === node.openStart && s.end === node.openEnd) ||
-                     (s.start === node.closeStart && s.end === node.closeEnd)
-            )!;
-            const nonDelimSpans = ruleSpans.filter(
-              (s) => !(s.start === node.openStart && s.end === node.openEnd) &&
-                     !(s.start === node.closeStart && s.end === node.closeEnd)
-            );
-            return [
-              {
-                start: node.openStart,
-                end: node.closeEnd,
-                color: delimSpan.color,
-                priority: delimSpan.priority,
-              },
-              ...nonDelimSpans,
-            ];
-          }
-          return ruleSpans;
+          // SCOPE DECOUPLING: Never wrap \left...\right expressions in an outer \textcolor AST block.
+          // Wrapping the outer scope causes uncolored inner operators (+, -, =) and relations
+          // to erroneously flood with the delimiter color. Exclude outer delimiter spans during LaTeX wrap.
+          return ruleSpans.filter(
+            (s) => !(s.start === node.openStart && s.end === node.openEnd) &&
+                   !(s.start === node.closeStart && s.end === node.closeEnd)
+          );
         };
 
         const handleGroupRule = (ruleResult: ColorSpan[] | null): boolean => {
@@ -171,23 +162,19 @@ export function collectSpansFromCST(
             });
             if (node.evaluationLimits) {
               for (const limit of node.evaluationLimits) {
-                spans.push({
-                  start: limit.start,
-                  end: limit.end,
-                  color: evalColor,
-                  priority: 26,
-                });
+                if (limit.kind === "script" && limit.arg.length > 0) {
+                  spans.push({
+                    start: limit.arg[0].start,
+                    end: limit.arg[limit.arg.length - 1].end,
+                    color: evalColor,
+                    priority: 26,
+                  });
+                }
               }
             }
-          } else {
-            spans.push({
-              start: node.openStart,
-              end: node.closeEnd,
-              color,
-              priority: 24,
-            });
           }
-          // Walk interior children (their higher priority spans nest inside)
+          // SCOPE DECOUPLING: Do not wrap standard \left...\right expressions in an outer \textcolor span.
+          // Walk interior children so their semantic colors apply directly without container-wide color bleed.
           for (const child of node.children) {
             walk(child);
           }
@@ -220,12 +207,14 @@ export function collectSpansFromCST(
             });
             if (node.evaluationLimits) {
               for (const limit of node.evaluationLimits) {
-                spans.push({
-                  start: limit.start,
-                  end: limit.end,
-                  color: evalColor,
-                  priority: 26,
-                });
+                if (limit.kind === "script" && limit.arg.length > 0) {
+                  spans.push({
+                    start: limit.arg[0].start,
+                    end: limit.arg[limit.arg.length - 1].end,
+                    color: evalColor,
+                    priority: 26,
+                  });
+                }
               }
             }
           } else if (!forLatexWrap || !isBare) {
@@ -286,6 +275,10 @@ export function collectSpansFromCST(
           matchNumberTheoryRules(node, options) ||
           matchStochasticRules(node, options);
         if (idSpans) spans.push(...idSpans);
+        break;
+      }
+
+      case "number": {
         break;
       }
 

@@ -3,7 +3,7 @@
 // Measures isolated unconditional metrics (Phase 1) and sequential cascade tournament (Phase 2)
 // Captures asymmetric branch latencies (C_yes vs C_no) and computes the Huffman Probability-to-Cost ratio (R_i = P_yes / E[C])
 
-import { lookupCatalog } from "../../src/parsers/catalog";
+import { lookupCatalog, ROLE_FUNCTION, ROLE_OPERATOR } from "../../src/parsers/catalog";
 
 export interface TwoSidedGateMetrics {
   gateId: string;
@@ -182,7 +182,7 @@ export class KeystrokeGatewayTelemetry {
    */
   public evalGate6(word: string): boolean {
     const entry = lookupCatalog(word.toLowerCase());
-    return entry !== null && (entry.role === "function" || entry.role === "operator");
+    return entry !== null && (entry.roleId === ROLE_FUNCTION || entry.roleId === ROLE_OPERATOR);
   }
 
   /**

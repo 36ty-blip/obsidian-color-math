@@ -55,10 +55,20 @@ export function matchStochasticRules(node: CSTNode, options?: CSTCollectorOption
 
   // 6.3 Trailing Time Index in Quadratic Variation: [X]_t
   if (node.kind === "script" && node.isStochasticVariation) {
+    const start = options?.forLatexWrap
+      ? node.arg.length > 0
+        ? node.arg[0].start
+        : node.start + 1
+      : node.start;
+    const end = options?.forLatexWrap
+      ? node.arg.length > 0
+        ? node.arg[node.arg.length - 1].end
+        : node.end
+      : node.end;
     return [
       {
-        start: node.start,
-        end: node.end,
+        start,
+        end,
         color: palette?.energyOperator || "#2ac3de",
         priority: 26,
       },

@@ -16,7 +16,7 @@ export const CHAR_COLON = 58;     // ':'
 export const CHAR_HASH = 35;      // '#'
 export const CHAR_PIPE = 124;     // '|'
 
-import { lookupCatalog } from "../catalog";
+import { lookupCatalog, ROLE_PARAMETER, ROLE_RELATION } from "../catalog";
 
 export const GREEK_COMMANDS = new Set([
   "\\alpha", "\\beta", "\\gamma", "\\delta", "\\epsilon", "\\varepsilon",
@@ -28,23 +28,86 @@ export const GREEK_COMMANDS = new Set([
   "\\Sigma", "\\Upsilon", "\\Phi", "\\Psi", "\\Omega",
 ]);
 
+export const BARE_FUNCTION_WORDS = new Set([
+  "sin", "cos", "tan", "cot", "sec", "csc",
+  "sinh", "cosh", "tanh", "coth",
+  "arcsin", "arccos", "arctan",
+  "log", "ln", "lg", "exp",
+  "lim", "liminf", "limsup",
+  "max", "min", "sup", "inf",
+  "det", "dim", "gcd", "hom", "ker", "deg", "arg", "adj",
+]);
+
+export const UNICODE_GREEK_TO_LATEX: Record<string, string> = {
+  "α": "\\alpha", "β": "\\beta", "γ": "\\gamma", "δ": "\\delta",
+  "ε": "\\epsilon", "ζ": "\\zeta", "η": "\\eta", "θ": "\\theta",
+  "ι": "\\iota", "κ": "\\kappa", "λ": "\\lambda", "μ": "\\mu",
+  "ν": "\\nu", "ξ": "\\xi", "π": "\\pi", "ρ": "\\rho",
+  "σ": "\\sigma", "τ": "\\tau", "υ": "\\upsilon", "φ": "\\phi",
+  "ϕ": "\\phi", "χ": "\\chi", "ψ": "\\psi", "ω": "\\omega",
+  "Γ": "\\Gamma", "Δ": "\\Delta", "Θ": "\\Theta", "Λ": "\\Lambda",
+  "Ξ": "\\Xi", "Π": "\\Pi", "Σ": "\\Sigma", "Υ": "\\Upsilon",
+  "Φ": "\\Phi", "Ψ": "\\Psi", "Ω": "\\Omega",
+};
+
+
 export function isGreekCommand(cmd: string): boolean {
-  return lookupCatalog(cmd)?.role === "parameter" || GREEK_COMMANDS.has(cmd);
+  const entry = lookupCatalog(cmd);
+  if (entry) return entry.roleId === ROLE_PARAMETER;
+  return GREEK_COMMANDS.has(cmd);
 }
 
 export function isQuantifier(cmd: string): boolean {
-  return lookupCatalog(cmd)?.role === "relation" || QUANTIFIER_COMMANDS.has(cmd);
+  const entry = lookupCatalog(cmd);
+  if (entry) return entry.roleId === ROLE_RELATION;
+  return QUANTIFIER_COMMANDS.has(cmd);
 }
 
 export function isSubgroupOrMorphism(cmd: string): boolean {
-  const role = lookupCatalog(cmd)?.role;
-  return role === "relation" || SUBGROUP_COMMANDS.has(cmd) || MORPHISM_COMMANDS.has(cmd);
+  const entry = lookupCatalog(cmd);
+  if (entry) return entry.roleId === ROLE_RELATION;
+  return SUBGROUP_COMMANDS.has(cmd) || MORPHISM_COMMANDS.has(cmd);
 }
 
 export const OPTIONAL_BRACKET_COMMANDS = new Set([
-  "\\sqrt", "\\\\", "\\tag", "\\xleftarrow", "\\xrightarrow",
-  "\\rule", "\\makebox", "\\framebox", "\\parbox",
+  "\\sqrt",
+  "\\\\",
+  "\\tag",
+  "\\xleftarrow",
+  "\\xrightarrow",
+  "\\xleftrightarrow",
+  "\\xRightarrow",
+  "\\xLeftarrow",
+  "\\xLeftrightarrow",
+  "\\xmapsto",
+  "\\xtwoheadrightarrow",
+  "\\xtwoheadleftarrow",
+  "\\xhookleftarrow",
+  "\\xhookrightarrow",
+  "\\xrightleftharpoons",
+  "\\xleftrightharpoons",
+  "\\xrightharpoonup",
+  "\\xrightharpoondown",
+  "\\xleftharpoonup",
+  "\\xleftharpoondown",
+  "\\xlongequal",
+  "\\xtofrom",
+  "\\xequal",
+  "\\rule",
+  "\\makebox",
+  "\\framebox",
+  "\\parbox",
+  "\\raisebox",
+  "\\scalebox",
+  "\\resizebox",
+  "\\rotatebox",
+  "\\item",
+  "\\substack",
 ]);
+
+export function isOptionalBracketCommand(cmd: string): boolean {
+  return OPTIONAL_BRACKET_COMMANDS.has(cmd) || /^\\[xX][a-zA-Z]+$/.test(cmd);
+}
 
 export const COMMON_DIMENSIONLESS_SET = new Set([
   "Re", "Ma", "Pr", "Nu", "Kn", "Sc", "Pe", "Gr", "Ra", "We", "Fr", "St", "Bi", "Fo", "Ek", "Ro", "Eu",

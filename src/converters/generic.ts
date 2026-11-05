@@ -1,6 +1,6 @@
 // src/converters/generic.ts
 
-import { COLORS, ColorPalette, ColorMathOptions, getBareFunctions } from "../config";
+import { COLORS, ColorPalette, ColorMathOptions, getBareFunctions, VARIABLE_HASH_PALETTE } from "../config";
 import { collectSingleConstantSpans } from "../parsers/constants";
 import { collectBraKetDelimiterSpans } from "../parsers/braket";
 import { collectDelimiterSpans } from "../parsers/delimiters";
@@ -61,15 +61,29 @@ export function collectFunctionSpans(
   return spans;
 }
 
+let cachedOptionsRef: ColorMathOptions | undefined = undefined;
+let cachedPaletteRef: ColorPalette | undefined = undefined;
+let cachedHash = "";
+
 function getOptionsHash(palette: ColorPalette, options?: ColorMathOptions): string {
+  if (options === cachedOptionsRef && palette === cachedPaletteRef) {
+    return cachedHash;
+  }
   const pId = Object.values(palette).join(",");
-  if (!options) return pId;
-  return [
+  if (!options) {
+    cachedOptionsRef = options;
+    cachedPaletteRef = palette;
+    cachedHash = pId;
+    return pId;
+  }
+  const hash = [
     pId,
     options.activeMode || "",
     options.previewLatexNormalization !== false ? "1" : "0",
     options.colorUnits !== false ? "1" : "0",
     options.colorDifferentials !== false ? "1" : "0",
+    options.colorInfinitesimals !== false ? "1" : "0",
+    options.colorDerivativeFractions !== false ? "1" : "0",
     options.colorDimensionless !== false ? "1" : "0",
     options.colorBraKet !== false ? "1" : "0",
     options.colorSingleConstants !== false ? "1" : "0",
@@ -81,6 +95,7 @@ function getOptionsHash(palette: ColorPalette, options?: ColorMathOptions): stri
     options.taxonomyConstants !== false ? "1" : "0",
     options.taxonomyIndices !== false ? "1" : "0",
     options.variableDataFlow ? "1" : "0",
+    options.variableHashPalette ? options.variableHashPalette.join(",") : "",
     options.colorQuantumOperators ? "1" : "0",
     options.extendedFunctions !== false ? "1" : "0",
     options.field || "",
@@ -88,6 +103,10 @@ function getOptionsHash(palette: ColorPalette, options?: ColorMathOptions): stri
     options.speedSyntacticSugar !== false ? "1" : "0",
     options.sugarAsciiOperators !== false ? "1" : "0",
   ].join(";");
+  cachedOptionsRef = options;
+  cachedPaletteRef = palette;
+  cachedHash = hash;
+  return hash;
 }
 
 export function computeSemanticMathSpans(
@@ -116,10 +135,11 @@ export function computeSemanticMathSpans(
 
   const bareFunctions = getBareFunctions(options);
 
-  const spans: ColorSpan[] = [
-    ...collectFunctionSpans(scanBody, palette, bareFunctions, options),
-    ...collectScannerSpans(scanBody, palette, forLatexWrap),
-  ];
+  const spans: ColorSpan[] = [];
+  if (!options?.enableTaxonomy) {
+    spans.push(...collectFunctionSpans(scanBody, palette, bareFunctions, options));
+  }
+  spans.push(...collectScannerSpans(scanBody, palette, forLatexWrap));
 
   // Domain boundary surfaces (\partial\Omega, \partial V, ∂D, etc.) -> operator in palette.chain (#9ece6a)
   for (const b of boundarySpans) {
@@ -141,7 +161,15 @@ export function computeSemanticMathSpans(
         ...generateModeAwareDerivativeSpans(scanBody, palette, diffSpans, options.activeMode, options)
       );
     } else {
-      spans.push(...collectDifferentialSpans(scanBody, palette, diffSpans, options));
+      spans.push(
+        ...collectDifferentialSpans(
+          scanBody,
+          palette,
+          diffSpans,
+          options,
+          options?.variableHashPalette || VARIABLE_HASH_PALETTE
+        )
+      );
     }
   }
 
@@ -194,7 +222,8 @@ export function computeSemanticMathSpans(
         diffSpans,
         dimSpans,
         bareFunctions,
-        boundarySpans
+        boundarySpans,
+        options
       )
     );
   }

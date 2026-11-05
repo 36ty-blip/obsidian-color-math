@@ -2,7 +2,7 @@
 // Unit tests for Fast-Fail Lookahead Delimiter Gating, Font Constructor Harmonization, and Dangling Caret Auto-Sealing (v1.0.77)
 
 import { describe, it, expect } from "vitest";
-import { matchBareFunction, matchBareSymbol, lookupCatalog } from "../src/parsers/catalog";
+import { matchBareFunction, matchBareSymbol, lookupCatalog, ROLE_FUNCTION } from "../src/parsers/catalog";
 import { autoSealUnclosedDelimiters } from "../src/utils/latex_helpers";
 import { collectTaxonomySpans } from "../src/parsers/taxonomy";
 import { DEFAULT_COLORS, DEFAULT_OPTIONS } from "../src/config";
@@ -11,13 +11,13 @@ describe("v1.0.77: Fast-Fail Delimiter Lookahead & Catalog Harmonization", () =>
   it("harmonizes bold and scr as function constructors of arity 1", () => {
     const boldEntry = lookupCatalog("bold");
     expect(boldEntry).not.toBeNull();
-    expect(boldEntry?.role).toBe("function");
+    expect(boldEntry?.roleId).toBe(ROLE_FUNCTION);
     expect(boldEntry?.tier).toBe(2);
     expect(boldEntry?.arity).toBe(1);
 
     const scrEntry = lookupCatalog("scr");
     expect(scrEntry).not.toBeNull();
-    expect(scrEntry?.role).toBe("function");
+    expect(scrEntry?.roleId).toBe(ROLE_FUNCTION);
     expect(scrEntry?.tier).toBe(2);
     expect(scrEntry?.arity).toBe(1);
     expect(scrEntry?.canonical).toBe("\\mathscr");
@@ -107,6 +107,12 @@ describe("v1.0.77: Dangling Operator & Caret Auto-Sealing (Unicode ▢)", () => 
 
   it("auto-seals lone trailing backslash at end of expression", () => {
     expect(autoSealUnclosedDelimiters("x + \\")).toBe("x + \\ ");
+  });
+
+  it("exempts delimiter sizing modifiers from progressive macro auto-sealing", () => {
+    expect(autoSealUnclosedDelimiters("\\Bigl( x \\Bigr)")).toBe("\\Bigl( x \\Bigr)");
+    expect(autoSealUnclosedDelimiters("\\big( x \\big)")).toBe("\\big( x \\big)");
+    expect(autoSealUnclosedDelimiters("\\Biggl[ x \\Biggr]")).toBe("\\Biggl[ x \\Biggr]");
   });
 });
 

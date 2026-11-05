@@ -1,4 +1,4 @@
-import { COLORS, ColorPalette, ColorMathOptions } from "../config";
+import { COLORS, ColorPalette, ColorMathOptions, VARIABLE_HASH_PALETTE, hashStringToColor } from "../config";
 import { ColorSpan } from "../utils/spans";
 import { maskComments } from "../utils/latex_helpers";
 
@@ -34,7 +34,7 @@ const DERIV_FRAC_REGEX = new RegExp(
 );
 
 const DIFF_REGEX = new RegExp(
-  "(?:^|[\\s+\\-=*({]|\\[|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)(\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|\\\\delta|∂)\\s*" +
+  "(?:^|[\\s+\\-=*(){}\\]]|\\[|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)(\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|\\\\delta|∂)\\s*" +
     DIFF_VAR_PATTERN +
     "(?![a-zA-Z0-9_])(?:\\^\\{?\\d+\\}?)?)",
   "g"
@@ -55,11 +55,15 @@ export const SUBDIFFERENTIAL_PATTERN =
   /^(?:\\partial|∂)\s*(?:[fgh]|\\ell|\\phi|\\psi)(?![a-zA-Z])/;
 
 const BOUNDARY_DOMAIN_SCANNER = new RegExp(
-  "(?:^|[\\s+\\-=*({]|[\\[,;]|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)(\\s*(?:\\\\partial|∂)\\s*(?:\\{[^{}]+\\}|\\\\Omega|\\\\mathcal\\{[A-Za-z]+\\}|\\\\Sigma|\\\\Gamma|[VDMBUKS]|Ω|Σ|Γ)(?:_[a-zA-Z0-9]+|_\\{[^{}]+\\})?(?![a-z]))",
+  "(?:^|[\\s+\\-=*(){}\\]]|[\\[,;]|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)(\\s*(?:\\\\partial|∂)\\s*(?:\\{[^{}]+\\}|\\\\Omega|\\\\mathcal\\{[A-Za-z]+\\}|\\\\Sigma|\\\\Gamma|[VDMBUKS]|Ω|Σ|Γ)(?:_[a-zA-Z0-9]+|_\\{[^{}]+\\})?(?![a-z]))",
   "g"
 );
 
+
 export function findBoundarySpans(rawBody: string): BoundarySpan[] {
+  if (!rawBody.includes("\\partial") && !rawBody.includes("∂")) {
+    return [];
+  }
   const body = rawBody.includes("%") ? maskComments(rawBody) : rawBody;
   const spans: BoundarySpan[] = [];
   BOUNDARY_DOMAIN_SCANNER.lastIndex = 0;
@@ -89,6 +93,15 @@ export function findBoundarySpans(rawBody: string): BoundarySpan[] {
  * Protects boundary surface manifolds (\partial\Omega, \partial V, \partial D, \partial M) from being treated as differentials.
  */
 export function findDifferentialSpans(rawBody: string): DifferentialSpan[] {
+  if (
+    !rawBody.includes("d") &&
+    !rawBody.includes("\\partial") &&
+    !rawBody.includes("∂") &&
+    !rawBody.includes("\\delta") &&
+    !rawBody.includes("δ")
+  ) {
+    return [];
+  }
   const body = rawBody.includes("%") ? maskComments(rawBody) : rawBody;
   const spans: DifferentialSpan[] = [];
 
@@ -137,7 +150,8 @@ export function collectDifferentialSpans(
   body: string,
   palette: ColorPalette = COLORS,
   diffSpans?: DifferentialSpan[],
-  options?: ColorMathOptions
+  options?: ColorMathOptions,
+  hashPalette: string[] = VARIABLE_HASH_PALETTE
 ): ColorSpan[] {
   const diffs = diffSpans || findDifferentialSpans(body);
   const filtered = diffs.filter((d) => {
@@ -149,10 +163,31 @@ export function collectDifferentialSpans(
     }
     return true;
   });
-  return filtered.map((d) => ({
-    start: d.start,
-    end: d.end,
-    color: palette.derivative || "#bb9af7",
-    priority: 24,
-  }));
+  return filtered.map((d) => {
+    if (d.kind === "differential") {
+      if (options?.variableDataFlow) {
+        // Option B: Extract coordinate variable (e.g. 'da' -> 'a', 'd\theta' -> '\theta', 'dx' -> 'x')
+        const targetVar = d.text.replace(/^(?:d|\\partial|\\mathrm\{d\}|\\delta|∂)\s*/, "");
+        const varColor = hashStringToColor(targetVar, hashPalette);
+        return {
+          start: d.start,
+          end: d.end,
+          color: varColor,
+          priority: 26,
+        };
+      }
+      return {
+        start: d.start,
+        end: d.end,
+        color: palette.derivative || "#bb9af7",
+        priority: 24,
+      };
+    }
+    return {
+      start: d.start,
+      end: d.end,
+      color: palette.derivative || "#bb9af7",
+      priority: 24,
+    };
+  });
 }

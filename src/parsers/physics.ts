@@ -50,7 +50,7 @@ const KINETIC_OPERATOR_REGEX = new RegExp(
  * \hat{a}^\dagger, \hat{a}^{\dagger}, a^\dagger
  */
 const LADDER_OPERATOR_REGEX =
-  /(?:\\hat\{a\}|a)\s*\^\s*\{?\\dagger\}?/g;
+  /(?:\\hat\s*(?:\{a\}|a(?![a-zA-Z]))|(?<![\\a-zA-Z])a)\s*\^\s*(?:\{\\dagger\}|\\dagger(?![a-zA-Z]))/g;
 
 export function collectQuantumOperatorSpans(
   body: string,

@@ -1,7 +1,7 @@
 // src/editor/reference_modal.ts
 // Interactive Modal and Vault Note Export Manager for Color Math Syntax & Operator Reference
 
-import { App, Modal, MarkdownRenderer, Notice, TFile } from "obsidian";
+import { App, Modal, Component, MarkdownRenderer, Notice, TFile } from "obsidian";
 import { SYNTAX_GUIDE_MD, COLOR_MATH_REFERENCE_FILENAME } from "../docs/syntax_guide";
 
 /**
@@ -24,9 +24,11 @@ export async function exportReferenceNote(app: App): Promise<TFile> {
 }
 
 /**
- * Interactive Cheatsheet Modal rendering the full mathematical syntax catalog with KaTeX support.
+ * Interactive Cheatsheet Modal rendering the full mathematical syntax catalog with native Obsidian MathJax support.
  */
 export class ColorMathReferenceModal extends Modal {
+  private component = new Component();
+
   constructor(app: App) {
     super(app);
   }
@@ -79,11 +81,12 @@ export class ColorMathReferenceModal extends Modal {
       SYNTAX_GUIDE_MD,
       bodyEl,
       "",
-      this
+      this.component
     );
   }
 
   onClose() {
+    this.component.unload();
     const { contentEl } = this;
     contentEl.empty();
   }

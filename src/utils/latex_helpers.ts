@@ -1,6 +1,21 @@
 import type { ColorMathOptions } from "../config";
 import { findUnitSpans } from "../parsers/units";
-import { matchBareSymbol, matchBareFunction, lookupCatalog, DIALECT_LATEX, DOMAIN_ALL } from "../parsers/catalog";
+import {
+  matchBareSymbol,
+  matchBareFunction,
+  lookupCatalog,
+  lookupMacroSignature,
+  ROLE_FUNCTION,
+} from "../parsers/catalog";
+import {
+  MATRIX_SUGAR_PREFIXES,
+  CONSTRUCTOR_GATING_RE,
+  PRECEDING_MATRIX_RE,
+  MATRIX_PREFIX_UNWRAPPED_RE,
+  MATRIX_PREFIX_WRAPPED_RE,
+  MATRIX_PREFIX_BACKSLASHED_RE,
+} from "../config/constructors.generated";
+export { MATRIX_SUGAR_PREFIXES };
 
 const COMMAND_STICKY_RE = /\\(?:[A-Za-z]+|.)/y;
 
@@ -277,9 +292,18 @@ const LEGACY_TEX_FONT_MACROS: Record<string, string> = {
   "\\frak": "\\mathfrak",
   "\\cal": "\\mathcal",
   "\\bold": "\\mathbf",
+  "\\bm": "\\boldsymbol",
 };
 
 const BRACE_NORMALIZED_ONE_ARG_COMMANDS = new Set([
+  "\\bar",
+  "\\dot",
+  "\\ddot",
+  "\\dddot",
+  "\\ddddot",
+  "\\hat",
+  "\\mathring",
+  "\\vec",
   "\\overline",
   "\\underline",
   "\\pmod",
@@ -372,6 +396,15 @@ const OPAQUE_TEXT_COMMANDS = new Set([
   "\\ref",
   "\\eqref",
   "\\cite",
+  "\\class",
+  "\\cssId",
+  "\\style",
+  "\\data",
+  "\\href",
+  "\\htmlClass",
+  "\\htmlId",
+  "\\htmlStyle",
+  "\\htmlData",
 ]);
 
 export function readOpaqueCommand(text: string, start: number): [string, number] | null {
@@ -389,6 +422,8 @@ export function readOpaqueCommand(text: string, start: number): [string, number]
     if (braced) {
       return [text.slice(start, braced[1]), braced[1]];
     }
+    // Mid-typing unclosed opaque text command (e.g. \text{ratio): protect inner prose
+    return [text.slice(start), text.length];
   }
   return null;
 }
@@ -549,8 +584,8 @@ function readSingleMacroArg(
         const cmdName = cmd.startsWith("\\") ? cmd.slice(1) : cmd;
         if (
           KNOWN_FUNCTIONS.has(cmdName) ||
-          lookupCatalog(cmd)?.role === "function" ||
-          lookupCatalog(cmdName)?.role === "function" ||
+          lookupCatalog(cmd)?.roleId === ROLE_FUNCTION ||
+          lookupCatalog(cmdName)?.roleId === ROLE_FUNCTION ||
           cmd === "\\operatorname"
         ) {
           let lookahead = afterCmd;
@@ -631,10 +666,10 @@ function readSingleMacroArg(
     const word = text.slice(index, j);
     if (
       KNOWN_FUNCTIONS.has(word.toLowerCase()) ||
-      lookupCatalog(word)?.role === "function" ||
-      lookupCatalog(word.toLowerCase())?.role === "function" ||
-      lookupCatalog("\\" + word)?.role === "function" ||
-      lookupCatalog("\\" + word.toLowerCase())?.role === "function"
+      lookupCatalog(word)?.roleId === ROLE_FUNCTION ||
+      lookupCatalog(word.toLowerCase())?.roleId === ROLE_FUNCTION ||
+      lookupCatalog("\\" + word)?.roleId === ROLE_FUNCTION ||
+      lookupCatalog("\\" + word.toLowerCase())?.roleId === ROLE_FUNCTION
     ) {
       // Check for power: e.g. sin^2(x)
       let lookahead = j;
@@ -904,6 +939,12 @@ export function normalizeLatexBraces(source: string): string {
             if (depth === 0) {
               optional = source.slice(cur, j);
               cur = j;
+            } else {
+              // Unclosed optional bracket (e.g. \sqrt[ or \sqrt[n):
+              // Do not treat '[' as a macro argument; preserve macro for autoSealUnclosedDelimiters
+              result += source.slice(index, cur);
+              index = cur;
+              continue;
             }
           }
           const arg = readSingleMacroArg(source, cur, true);
@@ -930,6 +971,16 @@ export function normalizeLatexBraces(source: string): string {
           let afterCmd = index + cmd.length;
           const arg = readSingleMacroArg(source, afterCmd, false);
           if (arg) {
+            if (
+              cmd === "\\dot" &&
+              !arg.braced &&
+              arg.raw === "N" &&
+              source[afterCmd] === " "
+            ) {
+              result += `${cmd} ${arg.raw}`;
+              index = arg.end;
+              continue;
+            }
             const norm = arg.braced
               ? normalizeLatexBraces(arg.inner)
               : normalizeLatexBraces(arg.raw);
@@ -1153,8 +1204,6 @@ export const UNIVERSAL_FONT_MODIFIER_MAP: Record<string, string> = {
   mathsf: "\\mathsf",
   mathtt: "\\mathtt",
 };
-
-const TYPST_FONT_MAP = UNIVERSAL_FONT_MODIFIER_MAP;
 
 
 /**
@@ -1392,26 +1441,49 @@ export function normalizeInfixDivision(source: string, requireBraces: boolean = 
         continue;
       }
 
-      if (result[index] === "{") {
-        // Must NOT be a macro argument like \text{W} or \mathrm{X}
+      if (result[index] === "{" || result[index] === "[") {
+        const isBracket = result[index] === "[";
+        // Must NOT be a macro argument like \text{W} or \mathrm{X} or \sqrt[n]
         const isMacroArg = /\\[A-Za-z]+$/.test(result.slice(0, index));
         if (isMacroArg) {
-          const braced = readBraced(result, index);
-          index = braced ? braced[1] : index + 1;
+          if (isBracket) {
+            const bracketPair = readDelimitedPair(result, index, "[", "]");
+            index = bracketPair ? bracketPair.end : index + 1;
+          } else {
+            const braced = readBraced(result, index);
+            index = braced ? braced[1] : index + 1;
+          }
           continue;
         }
 
-        const numBraced = readBraced(result, index);
-        if (numBraced) {
-          let afterNum = skipIgnorableWhitespace(result, numBraced[1]);
+        const numDelim = isBracket
+          ? readDelimitedPair(result, index, "[", "]")
+          : (() => {
+              const b = readBraced(result, index);
+              return b ? { inner: b[0].slice(1, -1), end: b[1] } : null;
+            })();
+
+        if (numDelim) {
+          let afterNum = skipIgnorableWhitespace(result, numDelim.end);
           if (afterNum < result.length && result[afterNum] === "/") {
             let afterSlash = skipIgnorableWhitespace(result, afterNum + 1);
             if (afterSlash < result.length) {
+              if (result[afterSlash] === "[") {
+                const denBracket = readDelimitedPair(result, afterSlash, "[", "]");
+                if (denBracket) {
+                  const replacement = `\\frac{${numDelim.inner}}{${denBracket.inner}}`;
+                  result =
+                    result.slice(0, index) +
+                    replacement +
+                    result.slice(denBracket.end);
+                  changed = true;
+                  break;
+                }
+              }
               const denArg = readSingleMacroArg(result, afterSlash, false);
               if (denArg) {
-                const numInner = numBraced[0].slice(1, -1);
                 const denInner = denArg.braced ? denArg.inner : denArg.raw;
-                const replacement = `\\frac{${numInner}}{${denInner}}`;
+                const replacement = `\\frac{${numDelim.inner}}{${denInner}}`;
                 result =
                   result.slice(0, index) +
                   replacement +
@@ -1491,18 +1563,25 @@ export function normalizeBareGreekInMath(source: string): string {
       const bare = matchBareSymbol(source, index);
       if (bare) {
         let canonical = bare.entry.canonical;
-        if (!canonical && bare.entry.unicode) {
+        if (!canonical && bare.entry.unicode && (bare.entry.domains & 1 /* Greek */ || bare.length <= 2)) {
           canonical = lookupCatalog(bare.entry.unicode)?.canonical;
         }
-        // Exclude obsolete \Bbb macros (e.g. \BbbB, \BbbD) and non-LaTeX macros (\greater, \equal, \mupNu)
-        if (
-          canonical &&
-          !/^\\Bbb[A-Za-z]/.test(canonical) &&
-          canonical !== "\\greater" &&
-          canonical !== "\\equal" &&
-          canonical !== "\\mupNu" &&
-          canonical !== "\\bigtimes"
-        ) {
+        // Exclude non-LaTeX / invalid MathJax macros
+        const isInvalidMacro =
+          !canonical ||
+          !canonical.startsWith("\\") ||
+          /^\\Bbb[A-Za-z]/.test(canonical) ||
+          canonical === "\\greater" ||
+          canonical === "\\equal" ||
+          canonical === "\\mupNu" ||
+          canonical === "\\bigtimes" ||
+          canonical === "\\lat" ||
+          canonical === "\\diameter" ||
+          canonical === "\\limit" ||
+          canonical === "\\smwhtdiamond" ||
+          canonical === "\\mathdollar";
+
+        if (!isInvalidMacro) {
           result += canonical;
           index += bare.length;
           continue;
@@ -1530,8 +1609,8 @@ export const STANDARD_LATEX_OPERATORS = new Set([
 /**
  * Normalizes bare mathematical operators/functions into their canonical LaTeX macros:
  * e.g. sin x -> \sin x, cos(x) -> \cos(x), ln 2 -> \ln 2, det(M) -> \det(M).
- * Ensures KaTeX renders them in upright Roman operator font rather than italic math variables.
- * Restricts backslash insertion to STANDARD_LATEX_OPERATORS to avoid KaTeX undefined control sequence errors.
+ * Ensures MathJax renders them in upright Roman operator font rather than italic math variables.
+ * Restricts backslash insertion to STANDARD_LATEX_OPERATORS to avoid MathJax / LaTeX undefined control sequence errors.
  */
 export function normalizeBareFunctions(source: string): string {
   let result = "";
@@ -1580,6 +1659,16 @@ export function normalizeBareFunctions(source: string): string {
       if (fnMatch) {
         const rawWord = source.slice(index, index + fnMatch.length).toLowerCase();
         if (STANDARD_LATEX_OPERATORS.has(rawWord)) {
+          let nextPos = index + fnMatch.length;
+          while (nextPos < source.length && /\s/.test(source[nextPos])) nextPos++;
+          if (nextPos < source.length && source[nextPos] === "[") {
+            const bracket = readDelimitedPair(source, nextPos, "[", "]");
+            if (bracket) {
+              result += `\\${rawWord}(${bracket.inner})`;
+              index = bracket.end;
+              continue;
+            }
+          }
           result += "\\" + rawWord;
           index += fnMatch.length;
           continue;
@@ -1980,7 +2069,7 @@ export function normalizeAutoScaledDelimiters(source: string): string {
         let look = index + 1;
         while (look < source.length && /\s/.test(source[look])) look++;
         const isPrecedingMatrix = source.startsWith("\\begin", look) ||
-          /^\\?(mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat)\s*[{[]/.test(source.slice(look));
+          PRECEDING_MATRIX_RE.test(source.slice(look));
         stack.push({
           type: "|",
           start: index,
@@ -2133,13 +2222,223 @@ export function normalizeAutoScaledDelimiters(source: string): string {
 const EXTENSIBLE_DELIM_RE =
   /^(\\(?:\{|\}|langle|rangle|vert|Vert|lvert|rvert|lVert|rVert|lceil|rceil|lfloor|rfloor|backslash)|\(|\)|\[|\]|\||\\\||\/|\.|⟦|⟧|⟨|⟩|‖|⟪|⟫|⎰|⎱|⦃|⦄|⌈|⌉|⌊|⌋)/u;
 
+const DELIMITER_SIZING_COMMANDS = new Set([
+  "\\big", "\\Big", "\\bigg", "\\Bigg",
+  "\\bigl", "\\Bigl", "\\biggl", "\\Biggl",
+  "\\bigr", "\\Bigr", "\\biggr", "\\Biggr",
+  "\\bigm", "\\Bigm", "\\biggm", "\\Biggm",
+  "\\middle",
+]);
+
+/**
+ * Two-Tier Progressive Macro Auto-Sealer:
+ * - Tier 1 (Hardcoded 3): strictly \sqrt, \frac, \binom
+ * - Tier 2 (O(1) MPHF HashMap Fallback): all other macros queried via lookupMacroSignature(cmd)
+ * Automatically seals missing brackets ([▢]) and braces ({▢}) during mid-typing.
+ */
+function progressiveMacroAutoSeal(input: string): string {
+  let result = "";
+  let i = 0;
+  const len = input.length;
+
+  while (i < len) {
+    if (input[i] === "%") {
+      const end = readCommentEnd(input, i);
+      result += input.slice(i, end);
+      i = end;
+      continue;
+    }
+
+    if (input[i] === "\\") {
+      const verb = readVerbEnd(input, i);
+      if (verb !== null) {
+        result += input.slice(i, verb[0]);
+        i = verb[0];
+        continue;
+      }
+
+      let cmd = matchCommand(input, i);
+      if (
+        !cmd ||
+        cmd === "\\\\" ||
+        cmd === "\\{" ||
+        cmd === "\\}" ||
+        cmd === "\\left" ||
+        cmd === "\\right" ||
+        cmd === "\\begin" ||
+        cmd === "\\end" ||
+        DELIMITER_SIZING_COMMANDS.has(cmd)
+      ) {
+        result += input.slice(i, i + (cmd ? cmd.length : 1));
+        i += cmd ? cmd.length : 1;
+        continue;
+      }
+
+      let mandatoryArgs = 0;
+      let hasOptionalBracket = false;
+      let isMacro = false;
+
+      // Canonicalize TeX shorthand \bm -> \boldsymbol
+      if (cmd === "\\bm") {
+        cmd = "\\boldsymbol";
+      }
+
+      // Tier 1: Strictly 3 Hardcoded Commands
+      if (cmd === "\\sqrt") {
+        isMacro = true;
+        mandatoryArgs = 1;
+        hasOptionalBracket = true;
+      } else if (cmd === "\\frac") {
+        isMacro = true;
+        mandatoryArgs = 2;
+        hasOptionalBracket = false;
+      } else if (cmd === "\\binom") {
+        isMacro = true;
+        mandatoryArgs = 2;
+        hasOptionalBracket = false;
+      } else {
+        // Tier 2: O(1) MPHF HashMap Fallback
+        const sig = lookupMacroSignature(cmd);
+        if (sig && (sig.mandatoryArgs > 0 || sig.hasOptionalBracket)) {
+          isMacro = true;
+          mandatoryArgs = sig.mandatoryArgs;
+          hasOptionalBracket = sig.hasOptionalBracket;
+        }
+      }
+
+      if (!isMacro) {
+        result += cmd;
+        i += cmd.length;
+        continue;
+      }
+
+      let cursor = i + cmd.length;
+      let sealedCmd = cmd;
+
+      // 1. Optional bracket handling
+      if (hasOptionalBracket) {
+        let after = cursor;
+        while (after < len && /\s/.test(input[after])) after++;
+        if (after < len && input[after] === "[") {
+          let depth = 1;
+          let j = after + 1;
+          while (j < len && depth > 0) {
+            if (input[j] === "[") depth++;
+            else if (input[j] === "]") depth--;
+            j++;
+          }
+          if (depth === 0) {
+            sealedCmd += input.slice(cursor, j);
+            cursor = j;
+          } else {
+            // Unclosed bracket (e.g. \sqrt[ or \sqrt[n)
+            const inner = input.slice(after + 1).trim();
+            if (inner.length === 0) {
+              sealedCmd += "[▢]";
+            } else {
+              sealedCmd += input.slice(cursor) + "]";
+            }
+            if (mandatoryArgs > 0) {
+              sealedCmd += "{▢}".repeat(mandatoryArgs);
+            }
+            result += sealedCmd;
+            i = len;
+            break;
+          }
+        }
+      }
+
+      // 2. Mandatory arguments handling
+      let argsFound = 0;
+      let argEnd = cursor;
+      let trailingArgsStr = "";
+
+      while (argsFound < mandatoryArgs) {
+        let wsStart = argEnd;
+        while (wsStart < len && /\s/.test(input[wsStart])) wsStart++;
+        if (wsStart >= len) break;
+
+        const nextChar = input[wsStart];
+        if (
+          nextChar === "+" || nextChar === "=" || nextChar === "<" || nextChar === ">" ||
+          nextChar === "-" || nextChar === "*" || nextChar === "/" || nextChar === "," ||
+          nextChar === ";" || nextChar === ")" || nextChar === "]" || nextChar === "&" ||
+          nextChar === "$" || input.startsWith("\\\\", wsStart) || input.startsWith("\\right", wsStart) ||
+          input.startsWith("\\end", wsStart)
+        ) {
+          break;
+        }
+
+        if (nextChar === "{") {
+          const braced = readBraced(input, wsStart);
+          if (braced) {
+            const inner = braced[0].slice(1, -1);
+            const sealedInner = progressiveMacroAutoSeal(inner);
+            if (sealedInner !== inner) {
+              trailingArgsStr += input.slice(argEnd, wsStart) + "{" + sealedInner + "}";
+            } else if (inner.trim().length === 0 && wsStart + braced[0].length >= len) {
+              trailingArgsStr += input.slice(argEnd, wsStart) + "{▢}";
+            } else {
+              trailingArgsStr += input.slice(argEnd, braced[1]);
+            }
+            argsFound++;
+            argEnd = braced[1];
+            continue;
+          } else {
+            break;
+          }
+        } else {
+          // TeX allows single token arguments without braces (e.g. \frac 1 2 or \mathbf x)
+          if (/[A-Za-z0-9]/.test(nextChar)) {
+            trailingArgsStr += input.slice(argEnd, wsStart + 1);
+            argsFound++;
+            argEnd = wsStart + 1;
+            continue;
+          }
+          break;
+        }
+      }
+
+      const missing = mandatoryArgs - argsFound;
+      if (missing > 0) {
+        let peek = argEnd;
+        while (peek < len && /\s/.test(input[peek])) peek++;
+        const isAtBoundary = (
+          peek >= len ||
+          input[peek] === "+" || input[peek] === "=" || input[peek] === "<" || input[peek] === ">" ||
+          input[peek] === "-" || input[peek] === "*" || input[peek] === "/" || input[peek] === "," ||
+          input[peek] === ";" || input[peek] === ")" || input[peek] === "]" || input[peek] === "}" || input[peek] === "&" ||
+          input[peek] === "$" || input.startsWith("\\\\", peek) || input.startsWith("\\right", peek) ||
+          input.startsWith("\\end", peek)
+        );
+
+        if (isAtBoundary) {
+          result += sealedCmd + trailingArgsStr + "{▢}".repeat(missing);
+          i = argEnd;
+          continue;
+        }
+      }
+
+      result += sealedCmd + trailingArgsStr;
+      i = argEnd;
+      continue;
+    }
+
+    result += input[i];
+    i++;
+  }
+
+  return result;
+}
+
 export function autoSealUnclosedDelimiters(
   source: string,
   sealEndOfExpression: boolean = true
 ): string {
-  let frames = [{ leftCount: 0, startPos: 0 }];
+  let frames: Array<{ leftCount: number; parenCount?: number; startPos: number }> = [{ leftCount: 0, parenCount: 0, startPos: 0 }];
   let envStack: number[] = []; // records totalLeftCount when entering an environment
   let envBraceStack: number[] = []; // records frames.length when entering an environment
+  let openEnvs: string[] = []; // tracks unclosed \begin{...} environment names
   let totalLeftCount = 0;
   let substackDepth = 0;
   let cellBraceDepth = 0;
@@ -2240,6 +2539,7 @@ export function autoSealUnclosedDelimiters(
       const beginMatch = source.slice(index).match(/^\\begin\s*\{([A-Za-z*]+)\}/);
       if (beginMatch) {
         output += beginMatch[0];
+        openEnvs.push(beginMatch[1]);
         envStack.push(totalLeftCount);
         envBraceStack.push(frames.length);
         cellBraceDepth = frames.length;
@@ -2259,6 +2559,11 @@ export function autoSealUnclosedDelimiters(
       // Check \end{...}
       const endMatch = source.slice(index).match(/^\\end\s*\{([A-Za-z*]+)\}/);
       if (endMatch) {
+        const endEnv = endMatch[1];
+        const lastIdx = openEnvs.lastIndexOf(endEnv);
+        if (lastIdx !== -1) {
+          openEnvs.splice(lastIdx, 1);
+        }
         if (envStack.length > 0) {
           const startLeft = envStack.pop()!;
           const unclosedInEnv = totalLeftCount - startLeft;
@@ -2419,9 +2724,27 @@ export function autoSealUnclosedDelimiters(
       continue;
     }
 
+    if (source[index] === "(") {
+      const cur = frames[frames.length - 1];
+      cur.parenCount = (cur.parenCount || 0) + 1;
+      output += "(";
+      index++;
+      continue;
+    }
+
+    if (source[index] === ")") {
+      const cur = frames[frames.length - 1];
+      if (cur.parenCount && cur.parenCount > 0) {
+        cur.parenCount--;
+      }
+      output += ")";
+      index++;
+      continue;
+    }
+
     if (source[index] === "{") {
       output += "{";
-      frames.push({ leftCount: 0, startPos: output.length });
+      frames.push({ leftCount: 0, parenCount: 0, startPos: output.length });
       index++;
       continue;
     }
@@ -2438,6 +2761,9 @@ export function autoSealUnclosedDelimiters(
       }
       if (frames.length > 1) {
         const frame = frames.pop()!;
+        if (frame.parenCount && frame.parenCount > 0) {
+          output += ")".repeat(frame.parenCount);
+        }
         if (frame.leftCount > 0) {
           output += " \\right.".repeat(frame.leftCount);
           totalLeftCount = Math.max(0, totalLeftCount - frame.leftCount);
@@ -2461,34 +2787,40 @@ export function autoSealUnclosedDelimiters(
     // Close unclosed brace frames
     while (frames.length > 1) {
       const frame = frames.pop()!;
+      if (frame.parenCount && frame.parenCount > 0) {
+        output += ")".repeat(frame.parenCount);
+      }
       if (frame.leftCount > 0) {
         output += " \\right.".repeat(frame.leftCount);
         totalLeftCount = Math.max(0, totalLeftCount - frame.leftCount);
       }
+      if (output.endsWith("\\") && !output.endsWith("\\\\")) {
+        output += " ";
+      }
       output += "}";
     }
 
-    // Close root frame unclosed \left
+    // Close root frame unclosed \left and unclosed parens
     const root = frames[0];
+    if (root.parenCount && root.parenCount > 0) {
+      output += ")".repeat(root.parenCount);
+    }
     if (root.leftCount > 0) {
       output += " \\right.".repeat(root.leftCount);
       totalLeftCount = Math.max(0, totalLeftCount - root.leftCount);
     }
 
+    // Close any unclosed \begin{...} environments
+    while (openEnvs.length > 0) {
+      const unclosedEnv = openEnvs.pop()!;
+      output += ` \\end{${unclosedEnv}}`;
+    }
+
     // 1. Auto-seal dangling caret (^) and underscore (_) with Unicode placeholder ▢
-    output = output.replace(/(\^|_)([\s]*)([+\-=<>/*,)\]};$]|$)/g, "$1{▢}$2$3");
+    output = output.replace(/(\^|_)([\s]*)([+\-=<>/*,)\]};$]|\\right|$)/g, "$1{▢}$2$3");
 
-    // 2. Auto-seal incomplete dangling radicals or accents at the end of expression / before operator
-    output = output.replace(
-      /\\(sqrt|vec|hat|bar|dot|ddot|tilde|check|breve|acute|grave|mathring)([\s]*)([+\-=<>/*,)\]};$]|$)/g,
-      "\\$1{▢}$2$3"
-    );
-
-    // 3. Auto-seal dangling single-argument fraction \frac{a} without denominator
-    output = output.replace(
-      /\\frac\s*\{([^{}]+)\}([\s]*)([+\-=<>/*,)\]};$]|$)/g,
-      "\\frac{$1}{▢}$2$3"
-    );
+    // 2. Progressive Two-Tier Macro Auto-Sealing (Tier 1: strictly \sqrt, \frac, \binom; Tier 2: O(1) HashMap)
+    output = progressiveMacroAutoSeal(output);
 
     // 4. Auto-seal lone trailing backslash at the end of input
     output = output.replace(/\\$/g, "\\ ");
@@ -2704,6 +3036,16 @@ export function normalizeAsciiOperators(source: string): string {
 
       // Exact match in dictionary
       if (ASCII_OPERATOR_EXACT_MAP[cluster]) {
+        // Guard: Do not treat trailing blockquote arrows (e.g. \n>>$$) as binary \gg / \ll
+        if (
+          (cluster === ">>" || cluster === "<<") &&
+          (opEnd >= len || source.slice(opEnd).trim().length === 0)
+        ) {
+          result += cluster;
+          index = opEnd;
+          continue;
+        }
+
         let rep = ASCII_OPERATOR_EXACT_MAP[cluster];
         // Do not inject trailing space at the end of expression to protect inline math closing $
         if (opEnd >= len || source.slice(opEnd).trim().length === 0) {
@@ -2912,6 +3254,159 @@ export function normalizeAsciiEllipses(source: string): string {
   return result;
 }
 
+export const NUMBER_BOUND_UNITS_MAP: Record<string, string> = {
+  // Degrees / Temperature (Atomic tokens to prevent variable collision)
+  degC: "^\\circ\\text{C}",
+  deg_C: "^\\circ\\text{C}",
+  degF: "^\\circ\\text{F}",
+  deg_F: "^\\circ\\text{F}",
+  deg: "^\\circ",
+  // Resistance
+  kohm: "\\; \\text{k}\\Omega",
+  Mohm: "\\; \\text{M}\\Omega",
+  ohm: "\\; \\Omega",
+  // Capacitance
+  uF: "\\; \\mu\\text{F}",
+  nF: "\\; \\text{nF}",
+  pF: "\\; \\text{pF}",
+  // Inductance
+  mH: "\\; \\text{mH}",
+  uH: "\\; \\mu\\text{H}",
+  // Frequency
+  kHz: "\\; \\text{kHz}",
+  MHz: "\\; \\text{MHz}",
+  GHz: "\\; \\text{GHz}",
+  THz: "\\; \\text{THz}",
+  // Current / Voltage
+  mA: "\\; \\text{mA}",
+  uA: "\\; \\mu\\text{A}",
+  mV: "\\; \\text{mV}",
+  kV: "\\; \\text{kV}",
+  // Time
+  ns: "\\; \\text{ns}",
+  ms: "\\; \\text{ms}",
+  us: "\\; \\mu\\text{s}",
+};
+
+export const SORTED_NUMBER_BOUND_UNIT_KEYS: string[] = Object.keys(
+  NUMBER_BOUND_UNITS_MAP
+).sort((a, b) => b.length - a.length);
+
+/**
+ * Normalizes number-bound physical units and neutralizes comment line-cuts:
+ * - 90 deg -> 90^\circ
+ * - 25 degC -> 25^\circ\text{C}
+ * - 98 degF -> 98^\circ\text{F}
+ * - 10 ohm -> 10 \; \Omega
+ * - 10 uF -> 10 \; \mu\text{F}
+ * - 50 % -> 50\% (neutralizing LaTeX comment truncation)
+ */
+export function normalizeNumberBoundUnits(source: string): string {
+  if (!/\d/.test(source)) return source;
+
+  let result = "";
+  let index = 0;
+  const len = source.length;
+
+  while (index < len) {
+    if (source[index] === "%") {
+      const end = readCommentEnd(source, index);
+      result += source.slice(index, end);
+      index = end;
+      continue;
+    }
+
+    if (source[index] === "\\") {
+      const verb = readVerbEnd(source, index);
+      if (verb !== null) {
+        result += source.slice(index, verb[0]);
+        index = verb[0];
+        continue;
+      }
+      const opaque = readOpaqueCommand(source, index);
+      if (opaque) {
+        result += opaque[0];
+        index = opaque[1];
+        continue;
+      }
+      const cmd = matchCommand(source, index);
+      if (cmd) {
+        result += cmd;
+        index += cmd.length;
+        continue;
+      }
+    }
+
+    // Check for number literal
+    const prevChar = index > 0 ? source[index - 1] : "";
+    if (index === 0 || !/[A-Za-z0-9_\\]/.test(prevChar)) {
+      const numMatch = source.slice(index).match(/^(\d+(?:\.\d+)?|\.\d+)/);
+      if (numMatch) {
+        const numStr = numMatch[0];
+        const afterNumIndex = index + numStr.length;
+        const afterNum = source.slice(afterNumIndex);
+
+        // Check whitespace: <= 1 space allowed. 2+ spaces treats as algebra.
+        if (!afterNum.startsWith("  ")) {
+          let spaceLen = 0;
+          if (afterNum.startsWith(" ")) spaceLen = 1;
+          const candidateSlice = afterNum.slice(spaceLen);
+
+          // 1. Percent sign check:
+          if (candidateSlice.startsWith("%")) {
+            let isPercent = false;
+            if (spaceLen === 0) {
+              // Directly attached to number: 50%, 33.3%
+              isPercent = true;
+            } else {
+              // Spaced: 50 %
+              const afterPct = candidateSlice.slice(1);
+              const trimmed = afterPct.trimStart();
+              if (
+                trimmed.length === 0 ||
+                /^(?:[\n\r+\-*/=<>,;)\]}\\]|\\(?:times|cdot|pm|mp|le|ge|neq|approx|sim|equiv|quad|qquad|\\))/.test(
+                  trimmed
+                )
+              ) {
+                isPercent = true;
+              }
+            }
+
+            if (isPercent) {
+              result += `${numStr}\\%`;
+              index = afterNumIndex + spaceLen + 1;
+              continue;
+            }
+          }
+
+          // 2. Unit token check:
+          let matchedUnit = false;
+          for (const unitKey of SORTED_NUMBER_BOUND_UNIT_KEYS) {
+            if (candidateSlice.startsWith(unitKey)) {
+              const boundaryChar = candidateSlice[unitKey.length];
+              if (!boundaryChar || !/[A-Za-z0-9_]/.test(boundaryChar)) {
+                const replacement = NUMBER_BOUND_UNITS_MAP[unitKey];
+                result += `${numStr}${replacement}`;
+                index = afterNumIndex + spaceLen + unitKey.length;
+                matchedUnit = true;
+                break;
+              }
+            }
+          }
+          if (matchedUnit) {
+            continue;
+          }
+        }
+      }
+    }
+
+    result += source[index];
+    index++;
+  }
+
+  return result;
+}
+
 const readBracketPair = readDelimitedPair;
 
 /**
@@ -2921,7 +3416,10 @@ const readBracketPair = readDelimitedPair;
  * - sqrt[3][aj][kd] -> \sqrt[3]{aj}[kd] (3rd bracket preserved via arity gating)
  * - Leaves standard LaTeX \sqrt[n]{x} and \sqrt{x} intact.
  */
-export function normalizeChainedRoots(source: string): string {
+export function normalizeChainedRoots(
+  source: string,
+  autoSealCrashImmunity: boolean = true
+): string {
   let result = "";
   let index = 0;
   const len = source.length;
@@ -2956,11 +3454,24 @@ export function normalizeChainedRoots(source: string): string {
           if (afterFirst < len && source[afterFirst] === "[") {
             const secondBracket = readBracketPair(source, afterFirst);
             if (secondBracket) {
-              result += `\\sqrt[${firstBracket.inner}]{${secondBracket.inner}}`;
+              const inner1 = firstBracket.inner.includes("sqrt[") ? normalizeChainedRoots(firstBracket.inner, autoSealCrashImmunity) : firstBracket.inner;
+              const inner2 = secondBracket.inner.includes("sqrt[") ? normalizeChainedRoots(secondBracket.inner, autoSealCrashImmunity) : secondBracket.inner;
+              result += `\\sqrt[${inner1}]{${inner2}}`;
               index = secondBracket.end;
+              continue;
+            } else if (autoSealCrashImmunity) {
+              const inner1 = firstBracket.inner;
+              const unclosed2 = source.slice(afterFirst + 1);
+              result += `\\sqrt[${inner1}]{${unclosed2}}`;
+              index = len;
               continue;
             }
           }
+        } else if (autoSealCrashImmunity) {
+          const unclosed = source.slice(index + 6);
+          result += `\\sqrt{${unclosed}}`;
+          index = len;
+          continue;
         }
       }
       const cmd = matchCommand(source, index);
@@ -2985,14 +3496,28 @@ export function normalizeChainedRoots(source: string): string {
           const secondBracket = readBracketPair(source, afterFirst);
           if (secondBracket) {
             // Arity = 2 saturated! [index][radicand]
-            result += `\\sqrt[${firstBracket.inner}]{${secondBracket.inner}}`;
+            const inner1 = firstBracket.inner.includes("sqrt[") ? normalizeChainedRoots(firstBracket.inner, autoSealCrashImmunity) : firstBracket.inner;
+            const inner2 = secondBracket.inner.includes("sqrt[") ? normalizeChainedRoots(secondBracket.inner, autoSealCrashImmunity) : secondBracket.inner;
+            result += `\\sqrt[${inner1}]{${inner2}}`;
             index = secondBracket.end;
+            continue;
+          } else if (autoSealCrashImmunity) {
+            const inner1 = firstBracket.inner;
+            const unclosed2 = source.slice(afterFirst + 1);
+            result += `\\sqrt[${inner1}]{${unclosed2}}`;
+            index = len;
             continue;
           }
         }
         // Single argument root [radicand]
-        result += `\\sqrt{${firstBracket.inner}}`;
+        const inner1 = firstBracket.inner.includes("sqrt[") ? normalizeChainedRoots(firstBracket.inner, autoSealCrashImmunity) : firstBracket.inner;
+        result += `\\sqrt{${inner1}}`;
         index = firstBracket.end;
+        continue;
+      } else if (autoSealCrashImmunity) {
+        const unclosed = source.slice(index + 5);
+        result += `\\sqrt{${unclosed}}`;
+        index = len;
         continue;
       }
     }
@@ -3003,28 +3528,47 @@ export function normalizeChainedRoots(source: string): string {
   return result;
 }
 
-export const MATRIX_SUGAR_PREFIXES: Record<string, string> = {
-  mat: "matrix",
-  pmat: "pmatrix",
-  bmat: "bmatrix",
-  Bmat: "Bmatrix",
-  cmat: "Bmatrix",
-  vmat: "vmatrix",
-  dmat: "vmatrix",
-  Vmat: "Vmatrix",
-  nmat: "Vmatrix",
-};
+export interface FormattedMatrixResult {
+  renderedRows: string;
+  hasPartitions: boolean;
+  colSpec: string;
+}
 
 /**
- * Parses and formats matrix row/cell content with depth shielding.
+ * Parses and formats matrix row/cell content with depth shielding and vertical partition (|) awareness.
  */
-function formatMatrixCells(inner: string): string {
-  const rows: string[] = [];
-  let currentRow: string[] = [];
+function formatMatrixCells(
+  inner: string,
+  autoDetectNewlines: boolean = true,
+  prefix?: string,
+  padRaggedRows: boolean = true
+): FormattedMatrixResult {
+  const allRows: string[][][] = [];
+  let currentRowSegments: string[][] = [];
+  let currentSegment: string[] = [];
   let currentCell = "";
   let parenDepth = 0;
   let braceDepth = 0;
   let bracketDepth = 0;
+
+  function flushCell() {
+    currentSegment.push(currentCell.trim());
+    currentCell = "";
+  }
+
+  function flushSegment() {
+    flushCell();
+    currentRowSegments.push(currentSegment);
+    currentSegment = [];
+  }
+
+  function flushRow() {
+    flushSegment();
+    if (currentRowSegments.some((seg) => seg.some((c) => c.length > 0))) {
+      allRows.push(currentRowSegments);
+    }
+    currentRowSegments = [];
+  }
 
   let k = 0;
   while (k < inner.length) {
@@ -3033,12 +3577,7 @@ function formatMatrixCells(inner: string): string {
     if (ch === "\\") {
       if (inner.startsWith("\\\\", k)) {
         if (parenDepth === 0 && braceDepth === 0 && bracketDepth === 0) {
-          currentRow.push(currentCell.trim());
-          currentCell = "";
-          if (currentRow.some((c) => c.length > 0)) {
-            rows.push(currentRow.join(" & "));
-          }
-          currentRow = [];
+          flushRow();
           k += 2;
           continue;
         }
@@ -3058,20 +3597,20 @@ function formatMatrixCells(inner: string): string {
     else if (ch === "]" && bracketDepth > 0) bracketDepth--;
 
     if (parenDepth === 0 && braceDepth === 0 && bracketDepth === 0) {
-      if (ch === ";" || ch === "\n" || (ch === "\r" && inner[k + 1] === "\n")) {
-        currentRow.push(currentCell.trim());
-        currentCell = "";
-        if (currentRow.some((c) => c.length > 0)) {
-          rows.push(currentRow.join(" & "));
-        }
-        currentRow = [];
+      const isNewline = ch === "\n" || (ch === "\r" && inner[k + 1] === "\n");
+      if (ch === ";" || (autoDetectNewlines && isNewline)) {
+        flushRow();
         if (ch === "\r" && inner[k + 1] === "\n") k++;
         k++;
         continue;
       }
+      if (ch === "|") {
+        flushSegment();
+        k++;
+        continue;
+      }
       if (ch === "," || ch === "&") {
-        currentRow.push(currentCell.trim());
-        currentCell = "";
+        flushCell();
         k++;
         continue;
       }
@@ -3081,14 +3620,144 @@ function formatMatrixCells(inner: string): string {
     k++;
   }
 
-  if (currentCell.trim().length > 0 || currentRow.length > 0) {
-    currentRow.push(currentCell.trim());
-    if (currentRow.some((c) => c.length > 0)) {
-      rows.push(currentRow.join(" & "));
+  if (currentCell.trim().length > 0 || currentSegment.length > 0 || currentRowSegments.length > 0) {
+    flushRow();
+  }
+
+  const isAlignmentFamily =
+    prefix === "align" ||
+    prefix === "aligned" ||
+    prefix === "split" ||
+    prefix === "gather" ||
+    prefix === "gathered" ||
+    prefix === "multline" ||
+    prefix === "equation" ||
+    prefix === "cases" ||
+    prefix === "dcases" ||
+    prefix === "rcases";
+
+  // Trim trailing empty cells in each segment of each row (from trailing commas/semicolons)
+  for (const row of allRows) {
+    for (let s = 0; s < row.length; s++) {
+      let end = row[s].length;
+      while (end > 0 && row[s][end - 1].length === 0) end--;
+      row[s] = row[s].slice(0, end);
     }
   }
 
-  return rows.filter((r) => r.length > 0).join(" \\\\ ");
+  // Ragged row padding: pad short rows up to maximum column count across all rows
+  if (padRaggedRows && !isAlignmentFamily && allRows.length > 1) {
+    const numSegments = Math.max(1, ...allRows.map((r) => r.length));
+    for (let s = 0; s < numSegments; s++) {
+      const maxCols = Math.max(
+        1,
+        ...allRows.map((r) => (r[s] ? r[s].length : 0))
+      );
+      for (const row of allRows) {
+        if (!row[s]) {
+          row[s] = [];
+        }
+        while (row[s].length < maxCols) {
+          row[s].push("");
+        }
+      }
+    }
+  }
+
+  const hasPartitions = allRows.some((row) => row.length > 1);
+
+  // Compute column specification across partition segments
+  const numSegments = Math.max(1, ...allRows.map((r) => r.length));
+  const specParts: string[] = [];
+  for (let s = 0; s < numSegments; s++) {
+    const maxCols = Math.max(
+      1,
+      ...allRows.map((r) => (r[s] ? r[s].length : 0))
+    );
+    specParts.push("c".repeat(maxCols));
+  }
+  const colSpec = specParts.join("|");
+
+  const renderedRows = allRows
+    .map((row) => {
+      const rowCells = row.flatMap((seg) => seg);
+      let rowStr = rowCells.join(" & ").trim();
+      // Preserve tight relation binding for aligned derivations (e.g. &= -> &= rather than & =)
+      rowStr = rowStr.replace(/(?:^|\s)& (?=[=<>:~])/g, (m) => m.startsWith(" ") ? " &" : "&");
+      return rowStr;
+    })
+    .filter((r) => r.length > 0)
+    .join(" \\\\ ");
+
+  return {
+    renderedRows,
+    hasPartitions,
+    colSpec,
+  };
+}
+
+function renderBracketMatrix(
+  prefix: string,
+  defaultEnv: string,
+  formatted: FormattedMatrixResult
+): string {
+  if (!formatted.hasPartitions) {
+    if (prefix === "cases") {
+      return `\\begin{cases} ${formatted.renderedRows} \\end{cases}`;
+    }
+    if (prefix === "matrix") {
+      return `\\begin{matrix} ${formatted.renderedRows} \\end{matrix}`;
+    }
+    const envName =
+      prefix === "mat" ? defaultEnv : MATRIX_SUGAR_PREFIXES[prefix] || "matrix";
+    return `\\begin{${envName}} ${formatted.renderedRows} \\end{${envName}}`;
+  }
+
+  // Augmented partitioned matrix with \begin{array}{<colSpec>}
+  const envName =
+    prefix === "mat" ? defaultEnv : MATRIX_SUGAR_PREFIXES[prefix] || "matrix";
+  const { colSpec, renderedRows } = formatted;
+
+  switch (envName) {
+    case "pmatrix":
+      return `\\left( \\begin{array}{${colSpec}} ${renderedRows} \\end{array} \\right)`;
+    case "vmatrix":
+      return `\\left| \\begin{array}{${colSpec}} ${renderedRows} \\end{array} \\right|`;
+    case "Vmatrix":
+      return `\\left\\| \\begin{array}{${colSpec}} ${renderedRows} \\end{array} \\right\\|`;
+    case "Bmatrix":
+      return `\\left\\{ \\begin{array}{${colSpec}} ${renderedRows} \\end{array} \\right\\}`;
+    case "matrix":
+      return `\\begin{array}{${colSpec}} ${renderedRows} \\end{array}`;
+    case "bmatrix":
+    default:
+      return `\\left[ \\begin{array}{${colSpec}} ${renderedRows} \\end{array} \\right]`;
+  }
+}
+
+function renderWrapperMatrix(
+  wrapEnv: string,
+  formatted: FormattedMatrixResult
+): string {
+  if (!formatted.hasPartitions) {
+    return `\\begin{${wrapEnv}} ${formatted.renderedRows} \\end{${wrapEnv}}`;
+  }
+  const { colSpec, renderedRows } = formatted;
+  switch (wrapEnv) {
+    case "pmatrix":
+      return `\\left( \\begin{array}{${colSpec}} ${renderedRows} \\end{array} \\right)`;
+    case "vmatrix":
+      return `\\left| \\begin{array}{${colSpec}} ${renderedRows} \\end{array} \\right|`;
+    case "Vmatrix":
+      return `\\left\\| \\begin{array}{${colSpec}} ${renderedRows} \\end{array} \\right\\|`;
+    case "Bmatrix":
+      return `\\left\\{ \\begin{array}{${colSpec}} ${renderedRows} \\end{array} \\right\\}`;
+    case "matrix":
+      return `\\begin{array}{${colSpec}} ${renderedRows} \\end{array}`;
+    case "bmatrix":
+    default:
+      return `\\left[ \\begin{array}{${colSpec}} ${renderedRows} \\end{array} \\right]`;
+  }
 }
 
 /**
@@ -3107,7 +3776,10 @@ function formatMatrixCells(inner: string): string {
  */
 export function normalizeBracketMatrices(
   source: string,
-  defaultEnv: string = "matrix"
+  defaultEnv: string = "matrix",
+  autoDetectNewlines: boolean = true,
+  autoSealCrashImmunity: boolean = true,
+  padRaggedRows: boolean = true
 ): string {
   let result = "";
   let index = 0;
@@ -3136,7 +3808,7 @@ export function normalizeBracketMatrices(
       }
       // Check if this backslash starts an escaped wrapper like \| or \{
       if (!source.startsWith("\\|", index) && !source.startsWith("\\{", index)) {
-        const isBackslashedMat = /^\\(mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat)\s*([{[])/.test(source.slice(index));
+        const isBackslashedMat = MATRIX_PREFIX_BACKSLASHED_RE.test(source.slice(index));
         if (!isBackslashedMat) {
           const cmd = matchCommand(source, index);
           if (cmd) {
@@ -3186,11 +3858,9 @@ export function normalizeBracketMatrices(
 
     if (wrapOpen !== null && wrapClose !== null && wrapEnv !== null) {
       const afterOpen = source.slice(index + wrapOpen.length);
-      const wrapMatMatch = afterOpen.match(
-        /^\s*\\?(mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat)\s*([{[])/
-      );
+      const wrapMatMatch = afterOpen.match(MATRIX_PREFIX_WRAPPED_RE);
       if (wrapMatMatch) {
-        const openChar = wrapMatMatch[2];
+        const openChar = wrapMatMatch[2] || wrapMatMatch[1];
         const closeChar = openChar === "{" ? "}" : "]";
         const matStart = index + wrapOpen.length + wrapMatMatch[0].length - 1;
         const bracket = readDelimitedPair(source, matStart, openChar, closeChar);
@@ -3199,11 +3869,22 @@ export function normalizeBracketMatrices(
           const closeLeadWhitespace = afterBracket.match(/^\s*/)?.[0].length || 0;
           const targetSlice = afterBracket.slice(closeLeadWhitespace);
           if (targetSlice.startsWith(wrapClose)) {
-            const renderedRows = formatMatrixCells(bracket.inner);
-            result += `\\begin{${wrapEnv}} ${renderedRows} \\end{${wrapEnv}}`;
+            const formatted = formatMatrixCells(bracket.inner, autoDetectNewlines, wrapEnv, padRaggedRows);
+            result += renderWrapperMatrix(wrapEnv, formatted);
             index = bracket.end + closeLeadWhitespace + wrapClose.length;
             continue;
+          } else if (autoSealCrashImmunity) {
+            const formatted = formatMatrixCells(bracket.inner, autoDetectNewlines, wrapEnv, padRaggedRows);
+            result += renderWrapperMatrix(wrapEnv, formatted);
+            index = bracket.end;
+            continue;
           }
+        } else if (autoSealCrashImmunity) {
+          const unclosedInner = source.slice(matStart + 1);
+          const formatted = formatMatrixCells(unclosedInner, autoDetectNewlines, wrapEnv, padRaggedRows);
+          result += renderWrapperMatrix(wrapEnv, formatted);
+          index = len;
+          continue;
         }
       }
     }
@@ -3213,23 +3894,43 @@ export function normalizeBracketMatrices(
     const matSliceStart = isBackslashedMat ? index + 1 : index;
     const prevChar = index > 0 ? source[index - 1] : "";
     if (isBackslashedMat || index === 0 || !/[A-Za-z0-9_\\]/.test(prevChar)) {
-      const match = source
-        .slice(matSliceStart)
-        .match(/^(mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat)\s*([{[])/);
+      const match = source.slice(matSliceStart).match(MATRIX_PREFIX_UNWRAPPED_RE);
       if (match) {
         const prefix = match[1];
         const openChar = match[2];
         const closeChar = openChar === "{" ? "}" : "]";
-        const envName =
-          prefix === "mat"
-            ? defaultEnv
-            : MATRIX_SUGAR_PREFIXES[prefix] || "matrix";
         const bracketStart = matSliceStart + match[0].length - 1;
         const bracket = readDelimitedPair(source, bracketStart, openChar, closeChar);
         if (bracket) {
-          const renderedRows = formatMatrixCells(bracket.inner);
-          result += `\\begin{${envName}} ${renderedRows} \\end{${envName}}`;
+          if (prefix === "abs") {
+            const hasRows = bracket.inner.includes(";") || bracket.inner.includes("\\\\");
+            if (hasRows) {
+              const formatted = formatMatrixCells(bracket.inner, autoDetectNewlines, "dmat", padRaggedRows);
+              result += renderBracketMatrix("dmat", defaultEnv, formatted);
+            } else {
+              result += `\\left| ${bracket.inner} \\right|`;
+            }
+          } else {
+            const formatted = formatMatrixCells(bracket.inner, autoDetectNewlines, prefix, padRaggedRows);
+            result += renderBracketMatrix(prefix, defaultEnv, formatted);
+          }
           index = bracket.end;
+          continue;
+        } else if (autoSealCrashImmunity) {
+          const unclosedInner = source.slice(bracketStart + 1);
+          if (prefix === "abs") {
+            const hasRows = unclosedInner.includes(";") || unclosedInner.includes("\\\\");
+            if (hasRows) {
+              const formatted = formatMatrixCells(unclosedInner, autoDetectNewlines, "dmat", padRaggedRows);
+              result += renderBracketMatrix("dmat", defaultEnv, formatted);
+            } else {
+              result += `\\left| ${unclosedInner} \\right.`;
+            }
+          } else {
+            const formatted = formatMatrixCells(unclosedInner, autoDetectNewlines, prefix, padRaggedRows);
+            result += renderBracketMatrix(prefix, defaultEnv, formatted);
+          }
+          index = len;
           continue;
         }
       }
@@ -3278,13 +3979,61 @@ export function validateMatrixDelimiters(
 }
 
 /**
+ * Rectilinear matrix padding: pads short rows in LaTeX matrix environments with trailing '&'
+ * up to the maximum column count across all rows.
+ * Alignment chains (aligned, cases, split, etc.) are strictly exempted.
+ */
+export function padRaggedMatrixRows(latex: string): string {
+  return latex.replace(
+    /\\begin\s*\{((?:p|b|B|v|V|small)?matrix)\}([\s\S]*?)\\end\s*\{\1\}/g,
+    (match: string, envName: string, inner: string) => {
+      const rows = inner.split(/\\\\/);
+      if (rows.length <= 1) return match;
+
+      const rowAmpCounts = rows.map((row) => {
+        let count = 0;
+        let depth = 0;
+        for (let i = 0; i < row.length; i++) {
+          const ch = row[i];
+          if (ch === "{" || ch === "[" || ch === "(") depth++;
+          else if ((ch === "}" || ch === "]" || ch === ")") && depth > 0) depth--;
+          else if (depth === 0 && ch === "&") count++;
+        }
+        return count;
+      });
+
+      const maxAmps = Math.max(...rowAmpCounts);
+      if (maxAmps === 0 || rowAmpCounts.every((c) => c === maxAmps)) {
+        return match;
+      }
+
+      const paddedRows = rows.map((row, idx) => {
+        const diff = maxAmps - rowAmpCounts[idx];
+        if (diff <= 0) return row;
+        const trailingSpaces = row.match(/\s*$/)?.[0] || "";
+        const trimmed = row.slice(0, row.length - trailingSpaces.length);
+        return trimmed + " &".repeat(diff) + trailingSpaces;
+      });
+
+      return `\\begin{${envName}}${paddedRows.join("\\\\")}\\end{${envName}}`;
+    }
+  );
+}
+
+/**
  * Ergonomic matrix padding: adds extra '&' before the first column and at the end of the last row
  * to provide comfortable delimiter clearance so matrix parentheses do not cling to numbers.
  */
-export function padMatrixEnvironment(source: string): string {
+export function padMatrixEnvironment(source: string, padVectors: boolean = true): string {
   return source.replace(
     /\\begin\s*\{((?:p|b|B|v|V|small)?matrix)\}([\s\S]*?)\\end\s*\{\1\}/g,
     (match: string, envName: string, inner: string) => {
+      if (!padVectors) {
+        // If single-column vector (no & present), keep compact and bypass extra padding
+        if (!inner.includes("&")) {
+          return match;
+        }
+      }
       const rowRegex = /\\\\(?:\[[^\]]*\])?/g;
       let m: RegExpExecArray | null;
       let lastIndex = 0;
@@ -3328,6 +4077,198 @@ export function padMatrixEnvironment(source: string): string {
   );
 }
 
+export const SHIFT_FREE_ACCENTS_MAP: Record<string, string> = {
+  hat: "\\hat",
+  bar: "\\bar",
+  dot: "\\dot",
+  ddot: "\\ddot",
+  tilde: "\\tilde",
+  vec: "\\vec",
+  check: "\\check",
+};
+
+/**
+ * Normalizes shift-free single-bracket accents:
+ * hat[x] -> \hat{x}, bar[x] -> \bar{x}, dot[x] -> \dot{x}, ddot[x] -> \ddot{x},
+ * tilde[x] -> \tilde{x}, vec[x] -> \vec{x}, check[x] -> \check{x}
+ * Also supports backslashed forms: \hat[x] -> \hat{x}
+ */
+export function normalizeShiftFreeAccents(source: string): string {
+  let result = "";
+  let index = 0;
+  const len = source.length;
+
+  while (index < len) {
+    if (source[index] === "%") {
+      const end = readCommentEnd(source, index);
+      result += source.slice(index, end);
+      index = end;
+      continue;
+    }
+
+    if (source[index] === "\\") {
+      const verb = readVerbEnd(source, index);
+      if (verb !== null) {
+        result += source.slice(index, verb[0]);
+        index = verb[0];
+        continue;
+      }
+      const opaque = readOpaqueCommand(source, index);
+      if (opaque) {
+        result += opaque[0];
+        index = opaque[1];
+        continue;
+      }
+      const cmdMatch = source.slice(index + 1).match(/^(hat|bar|dot|ddot|tilde|vec|check)\s*\[/);
+      if (cmdMatch) {
+        const prefix = cmdMatch[1];
+        const argStart = index + 1 + cmdMatch[0].length - 1;
+        const bracket = readDelimitedPair(source, argStart, "[", "]");
+        if (bracket) {
+          const normInner = normalizeShiftFreeAccents(bracket.inner);
+          result += `\\${prefix}{${normInner}}`;
+          index = bracket.end;
+          continue;
+        }
+      }
+      const cmd = matchCommand(source, index);
+      if (cmd) {
+        result += cmd;
+        index += cmd.length;
+        continue;
+      }
+    }
+
+    const prevChar = index > 0 ? source[index - 1] : "";
+    if (index === 0 || !/[A-Za-z0-9_\\]/.test(prevChar)) {
+      const match = source.slice(index).match(/^(hat|bar|dot|ddot|tilde|vec|check)\s*\[/);
+      if (match) {
+        const prefix = match[1];
+        const argStart = index + match[0].length - 1;
+        const bracket = readDelimitedPair(source, argStart, "[", "]");
+        if (bracket) {
+          const macro = SHIFT_FREE_ACCENTS_MAP[prefix];
+          const normInner = normalizeShiftFreeAccents(bracket.inner);
+          result += `${macro}{${normInner}}`;
+          index = bracket.end;
+          continue;
+        }
+      }
+    }
+
+    result += source[index];
+    index++;
+  }
+  return result;
+}
+
+/**
+ * Normalizes shift-free bracketed fraction arguments:
+ * \frac[a][b] -> \frac{a}{b}, frac[a][b] -> \frac{a}{b}, dfrac[a][b] -> \dfrac{a}{b}
+ */
+export function normalizeBracketFractions(
+  source: string,
+  autoSealCrashImmunity: boolean = true
+): string {
+  let result = "";
+  let index = 0;
+  const len = source.length;
+
+  while (index < len) {
+    if (source[index] === "%") {
+      const end = readCommentEnd(source, index);
+      result += source.slice(index, end);
+      index = end;
+      continue;
+    }
+
+    if (source[index] === "\\") {
+      const verb = readVerbEnd(source, index);
+      if (verb !== null) {
+        result += source.slice(index, verb[0]);
+        index = verb[0];
+        continue;
+      }
+      const opaque = readOpaqueCommand(source, index);
+      if (opaque) {
+        result += opaque[0];
+        index = opaque[1];
+        continue;
+      }
+      const fracMatch = source.slice(index).match(/^\\(d?frac)\s*\[/);
+      if (fracMatch) {
+        const macro = fracMatch[1];
+        const firstStart = index + fracMatch[0].length - 1;
+        const firstBracket = readDelimitedPair(source, firstStart, "[", "]");
+        if (firstBracket) {
+          let afterFirst = firstBracket.end;
+          while (afterFirst < len && /\s/.test(source[afterFirst])) afterFirst++;
+          if (afterFirst < len && source[afterFirst] === "[") {
+            const secondBracket = readDelimitedPair(source, afterFirst, "[", "]");
+            if (secondBracket) {
+              result += `\\${macro}{${firstBracket.inner}}{${secondBracket.inner}}`;
+              index = secondBracket.end;
+              continue;
+            } else if (autoSealCrashImmunity) {
+              const unclosedSecond = source.slice(afterFirst + 1);
+              result += `\\${macro}{${firstBracket.inner}}{${unclosedSecond}}`;
+              index = len;
+              continue;
+            }
+          }
+        } else if (autoSealCrashImmunity) {
+          const unclosedFirst = source.slice(firstStart + 1);
+          result += `\\${macro}{${unclosedFirst}}{}`;
+          index = len;
+          continue;
+        }
+      }
+      const cmd = matchCommand(source, index);
+      if (cmd) {
+        result += cmd;
+        index += cmd.length;
+        continue;
+      }
+    }
+
+    const prevChar = index > 0 ? source[index - 1] : "";
+    if (index === 0 || !/[A-Za-z0-9_\\]/.test(prevChar)) {
+      const fracMatch = source.slice(index).match(/^(d?frac)\s*\[/);
+      if (fracMatch) {
+        const macro = fracMatch[1];
+        const firstStart = index + fracMatch[0].length - 1;
+        const firstBracket = readDelimitedPair(source, firstStart, "[", "]");
+        if (firstBracket) {
+          let afterFirst = firstBracket.end;
+          while (afterFirst < len && /\s/.test(source[afterFirst])) afterFirst++;
+          if (afterFirst < len && source[afterFirst] === "[") {
+            const secondBracket = readDelimitedPair(source, afterFirst, "[", "]");
+            if (secondBracket) {
+              result += `\\${macro}{${firstBracket.inner}}{${secondBracket.inner}}`;
+              index = secondBracket.end;
+              continue;
+            } else if (autoSealCrashImmunity) {
+              const unclosedSecond = source.slice(afterFirst + 1);
+              result += `\\${macro}{${firstBracket.inner}}{${unclosedSecond}}`;
+              index = len;
+              continue;
+            }
+          }
+        } else if (autoSealCrashImmunity) {
+          const unclosedFirst = source.slice(firstStart + 1);
+          result += `\\${macro}{${unclosedFirst}}{}`;
+          index = len;
+          continue;
+        }
+      }
+    }
+
+    result += source[index];
+    index++;
+  }
+  return result;
+}
+
 /**
  * Master mathematical syntax normalizer executing in strict pipeline dependency order:
  * 1. Zero-width character sanitization (\u200B, \uFEFF, etc.)
@@ -3361,6 +4302,13 @@ export function normalizeMathSyntax(
   }
   if (
     options?.speedSyntacticSugar !== false &&
+    options?.sugarNumberBoundUnits !== false &&
+    /\d/.test(text)
+  ) {
+    text = normalizeNumberBoundUnits(text);
+  }
+  if (
+    options?.speedSyntacticSugar !== false &&
     options?.sugarQuotedStrings !== false &&
     text.includes('"')
   ) {
@@ -3372,16 +4320,34 @@ export function normalizeMathSyntax(
   if (
     options?.speedSyntacticSugar !== false &&
     options?.sugarBracketMatrices !== false &&
-    /(?:^|[^A-Za-z0-9_])\\?(?:mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat)\s*[{[]/.test(text)
+    CONSTRUCTOR_GATING_RE.test(text)
   ) {
-    text = normalizeBracketMatrices(text);
+    const defaultEnv = options?.defaultMatrixEnvironment || "matrix";
+    const autoNewlines = options?.autoDetectNewlinesAsMatrixRows !== false;
+    const autoSeal = options?.crashImmunityAutoSeal !== false;
+    const padRagged = options?.raggedRowDiagnostics !== false;
+    text = normalizeBracketMatrices(text, defaultEnv, autoNewlines, autoSeal, padRagged);
+  }
+  if (
+    options?.speedSyntacticSugar !== false &&
+    /(?:^|[^A-Za-z0-9_\\])\\?(?:hat|bar|dot|ddot|tilde|vec|check)\s*\[/.test(text)
+  ) {
+    text = normalizeShiftFreeAccents(text);
+  }
+  if (
+    options?.speedSyntacticSugar !== false &&
+    /(?:^|[^A-Za-z0-9_\\])\\?(?:d?frac)\s*\[/.test(text)
+  ) {
+    const autoSeal = options?.crashImmunityAutoSeal !== false;
+    text = normalizeBracketFractions(text, autoSeal);
   }
   if (
     options?.speedSyntacticSugar !== false &&
     options?.sugarChainedRoots !== false &&
     (text.includes("sqrt[") || text.includes("\\sqrt["))
   ) {
-    text = normalizeChainedRoots(text);
+    const autoSeal = options?.crashImmunityAutoSeal !== false;
+    text = normalizeChainedRoots(text, autoSeal);
   }
   if (
     options?.speedSyntacticSugar !== false &&
@@ -3418,15 +4384,20 @@ export function normalizeMathSyntax(
     text = normalizeInfixDivision(text, options?.requireBracesForSlashDivision);
   }
   if (/[a-zA-Z]/.test(text)) {
-    text = normalizeBareGreekInMath(text);
+    if (options?.bareGreekRequiresBackslash !== true) {
+      text = normalizeBareGreekInMath(text);
+    }
     text = normalizeBareFunctions(text);
   }
   if (options?.autoScaleDelimiters !== false && (text.includes("(") || text.includes("[") || text.includes("|"))) {
     text = normalizeAutoScaledDelimiters(text);
   }
   text = normalizeLatexBraces(text);
+  if (options?.raggedRowDiagnostics !== false && text.includes("\\begin") && text.includes("matrix")) {
+    text = padRaggedMatrixRows(text);
+  }
   if (options?.padMatrixPadding === true && text.includes("\\begin") && text.includes("matrix")) {
-    text = padMatrixEnvironment(text);
+    text = padMatrixEnvironment(text, options?.padMatrixVectors !== false);
   }
   if (options?.colorUnits === true && /\d/.test(text)) {
     text = normalizePhysicalUnitSpacing(text, options);
@@ -3444,8 +4415,61 @@ export function normalizeMathSyntax(
  * Preserves exact character offsets and string length while completely shielding downstream
  * tokenizers, parsers, and regex engines from executing inside comments.
  */
+const HTML_ATTR_WRAPPER_COMMANDS = new Set([
+  "\\class",
+  "\\cssId",
+  "\\style",
+  "\\data",
+  "\\href",
+  "\\htmlClass",
+  "\\htmlId",
+  "\\htmlStyle",
+  "\\htmlData",
+]);
+
+function maskHtmlAttributeMacros(text: string): string {
+  let result = "";
+  let index = 0;
+  const len = text.length;
+  while (index < len) {
+    if (text[index] === "\\") {
+      const cmd = matchCommand(text, index);
+      if (cmd && HTML_ATTR_WRAPPER_COMMANDS.has(cmd)) {
+        let cur = index + cmd.length;
+        while (cur < len && /\s/.test(text[cur])) cur++;
+        if (cur < len && text[cur] === "{") {
+          const braced = readBraced(text, cur);
+          if (braced) {
+            const innerLen = braced[0].length - 2;
+            result += text.slice(index, cur + 1) + (innerLen > 0 ? " ".repeat(innerLen) : "") + "}";
+            index = braced[1];
+            continue;
+          }
+        }
+      }
+      if (cmd) {
+        result += cmd;
+        index += cmd.length;
+        continue;
+      }
+    }
+    result += text[index];
+    index++;
+  }
+  return result;
+}
+
 export function maskComments(text: string): string {
-  if (!text.includes("%")) return text;
+  const hasAttrMacro =
+    text.includes("\\class") ||
+    text.includes("\\cssId") ||
+    text.includes("\\style") ||
+    text.includes("\\data") ||
+    text.includes("\\href") ||
+    text.includes("\\html");
+  if (!text.includes("%")) {
+    return hasAttrMacro ? maskHtmlAttributeMacros(text) : text;
+  }
   let result = "";
   let cursor = 0;
   const len = text.length;
@@ -3496,7 +4520,7 @@ export function maskComments(text: string): string {
       cursor = commentBodyEnd;
     }
   }
-  return result;
+  return hasAttrMacro ? maskHtmlAttributeMacros(result) : result;
 }
 
 

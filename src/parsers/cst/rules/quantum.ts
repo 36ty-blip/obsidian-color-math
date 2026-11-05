@@ -73,9 +73,16 @@ export function matchQuantumRules(node: CSTNode, options?: CSTCollectorOptions):
 
   // 6.1 Ladder Operator: \hat{a}^\dagger, \hat{c}_k^\dagger -> palette.orange
   if (node.kind === "script" && node.isLadderOperator) {
+    const start = options?.forLatexWrap
+      ? node.base
+        ? node.base.start
+        : node.arg.length > 0
+        ? node.arg[0].start
+        : node.start + 1
+      : node.start;
     return [
       {
-        start: node.start,
+        start,
         end: node.end,
         color: palette?.orange || "#e0af68",
         priority: 26,
@@ -85,9 +92,16 @@ export function matchQuantumRules(node: CSTNode, options?: CSTCollectorOptions):
 
   // 6.1 Pauli Spin Matrix: \sigma_x -> palette.energyOperator
   if (node.kind === "script" && node.isPauliMatrix) {
+    const start = options?.forLatexWrap
+      ? node.base
+        ? node.base.start
+        : node.arg.length > 0
+        ? node.arg[0].start
+        : node.start + 1
+      : node.start;
     return [
       {
-        start: node.start,
+        start,
         end: node.end,
         color: palette?.energyOperator || "#2ac3de",
         priority: 26,

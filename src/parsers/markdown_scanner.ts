@@ -11,6 +11,7 @@ export interface MarkdownSpan {
   contentStart: number;
   contentEnd: number;
   end: number;
+  info?: string;
 }
 
 export interface MarkdownScan {
@@ -301,6 +302,8 @@ function findFencedCode(text: string): MarkdownSpan[] {
     }
 
     const [marker, minimum] = opening;
+    const rawFenceRemainder = line.slice(containerEnd + minimum).trim();
+    const info = rawFenceRemainder ? rawFenceRemainder.split(/\s+/)[0] : undefined;
     let closingIndex = lineIndex + 1;
     let closed = false;
 
@@ -315,6 +318,7 @@ function findFencedCode(text: string): MarkdownSpan[] {
           contentStart: lineEnd,
           contentEnd: closeStart,
           end: closeStart,
+          info,
         });
         lineIndex = closingIndex;
         closed = true;
@@ -327,6 +331,7 @@ function findFencedCode(text: string): MarkdownSpan[] {
           contentStart: lineEnd,
           contentEnd: closeStart,
           end: closeLineEnd,
+          info,
         });
         lineIndex = closingIndex + 1;
         closed = true;
@@ -342,6 +347,7 @@ function findFencedCode(text: string): MarkdownSpan[] {
         contentStart: lineEnd,
         contentEnd: text.length,
         end: text.length,
+        info,
       });
       lineIndex = lines.length;
     }

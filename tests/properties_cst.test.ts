@@ -5,7 +5,7 @@ import { parseMathWithCST } from "../src/parsers/cst/index";
 import { DEFAULT_COLORS } from "../src/config";
 import { colorLatexBody } from "../src/converters/generic";
 import { uncolorFragment } from "../src/undo";
-import { validateLatexWithKaTeX } from "./validator";
+import { validateLatexWithMathJax } from "./validator";
 
 // --- Fast-Check Generators for LaTeX AST Construction ---
 
@@ -147,20 +147,20 @@ describe("Item 7: Property-Based Fuzzing with fast-check", () => {
     );
   });
 
-  it("Property 4: KaTeX/MathJax Grouping Preservation on valid formulas", () => {
+  it("Property 4: MathJax Grouping Preservation on valid formulas", () => {
     fc.assert(
       fc.property(fcLatexExpr(2), (expr) => {
-        // If the expression was valid in KaTeX initially
-        const initial = validateLatexWithKaTeX(`$$${expr}$$`);
+        // If the expression was valid in MathJax initially
+        const initial = validateLatexWithMathJax(`$$${expr}$$`);
         if (initial.valid) {
           const colored = colorLatexBody(expr, DEFAULT_COLORS, {
             useCST: true,
             rainbowDelimiters: true,
           });
-          const validated = validateLatexWithKaTeX(`$$${colored}$$`);
+          const validated = validateLatexWithMathJax(`$$${colored}$$`);
           expect(
             validated.valid,
-            `Coloring broke valid KaTeX! Original: "${expr}", Colored: "${colored}", Error: ${validated.error}`
+            `Coloring broke valid MathJax! Original: "${expr}", Colored: "${colored}", Error: ${validated.error}`
           ).toBe(true);
         }
       }),

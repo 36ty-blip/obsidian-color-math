@@ -1,0 +1,33 @@
+{
+  "environments": {
+    "aligned": "aligned",
+    "align": "aligned",
+    "gathered": "gathered",
+    "gather": "gathered",
+    "split": "split",
+    "multline": "gathered",
+    "equation": "aligned",
+    "dcases": "dcases",
+    "rcases": "rcases",
+    "cases": "cases",
+    "pmatrix": "pmatrix",
+    "pmat": "pmatrix",
+    "bmatrix": "bmatrix",
+    "bmat": "bmatrix",
+    "Bmatrix": "Bmatrix",
+    "Bmat": "Bmatrix",
+    "cmat": "Bmatrix",
+    "vmatrix": "vmatrix",
+    "vmat": "vmatrix",
+    "dmat": "vmatrix",
+    "Vmatrix": "Vmatrix",
+    "Vmat": "Vmatrix",
+    "nmat": "Vmatrix",
+    "matrix": "matrix",
+    "mat": "matrix"
+  },
+  "otherConstructors": [
+    "sqrt",
+    "abs"
+  ]
+}

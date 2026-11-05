@@ -10,10 +10,20 @@ export function matchGeometryRules(node: CSTNode, options?: CSTCollectorOptions)
 
   // 4.1 Contravariant Upper Tensor Index: T^{\mu\nu}, V^\mu -> palette.arrow (coral)
   if (node.kind === "script" && node.scriptType === "superscript" && node.isContravariantTensorIndex) {
+    const start = options?.forLatexWrap
+      ? node.arg.length > 0
+        ? node.arg[0].start
+        : node.start + 1
+      : node.start;
+    const end = options?.forLatexWrap
+      ? node.arg.length > 0
+        ? node.arg[node.arg.length - 1].end
+        : node.end
+      : node.end;
     return [
       {
-        start: node.start,
-        end: node.end,
+        start,
+        end,
         color: palette?.arrow || "#f7768e",
         priority: 26,
       },
@@ -22,10 +32,20 @@ export function matchGeometryRules(node: CSTNode, options?: CSTCollectorOptions)
 
   // 4.1 Covariant Index Differentiation: A_{\mu;\nu} -> palette.orange
   if (node.kind === "script" && node.isIndexCovariantDerivative) {
+    const start = options?.forLatexWrap
+      ? node.arg.length > 0
+        ? node.arg[0].start
+        : node.start + 1
+      : node.start;
+    const end = options?.forLatexWrap
+      ? node.arg.length > 0
+        ? node.arg[node.arg.length - 1].end
+        : node.end
+      : node.end;
     return [
       {
-        start: node.start,
-        end: node.end,
+        start,
+        end,
         color: palette?.orange || "#e0af68",
         priority: 26,
       },
@@ -34,10 +54,20 @@ export function matchGeometryRules(node: CSTNode, options?: CSTCollectorOptions)
 
   // 4.1 Partial Index Differentiation: A_{\mu,\nu} -> palette.derivative
   if (node.kind === "script" && node.isIndexPartialDerivative) {
+    const start = options?.forLatexWrap
+      ? node.arg.length > 0
+        ? node.arg[0].start
+        : node.start + 1
+      : node.start;
+    const end = options?.forLatexWrap
+      ? node.arg.length > 0
+        ? node.arg[node.arg.length - 1].end
+        : node.end
+      : node.end;
     return [
       {
-        start: node.start,
-        end: node.end,
+        start,
+        end,
         color: palette?.derivative || "#bb9af7",
         priority: 26,
       },
@@ -46,9 +76,16 @@ export function matchGeometryRules(node: CSTNode, options?: CSTCollectorOptions)
 
   // 4.1 Musical Isomorphism: X^\flat, \omega^\sharp -> palette.chain (green)
   if (node.kind === "script" && node.isMusicalIsomorphism) {
+    const start = options?.forLatexWrap
+      ? node.base
+        ? node.base.start
+        : node.arg.length > 0
+        ? node.arg[0].start
+        : node.start + 1
+      : node.start;
     return [
       {
-        start: node.start,
+        start,
         end: node.end,
         color: palette?.chain || "#9ece6a",
         priority: 26,

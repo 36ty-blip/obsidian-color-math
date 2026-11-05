@@ -24,7 +24,7 @@ import {
   DELIMITER_AUTO_REPAIR,
 } from "../config/unicode";
 import { scanMarkdown } from "../parsers/markdown_scanner";
-import { lookupCatalog } from "../parsers/catalog";
+import { lookupCatalog, ROLE_PARAMETER, ROLE_CONSTANT } from "../parsers/catalog";
 
 export interface UnicodeConversionOptions {
   convertDefiniteIntegrals?: boolean; // default: false (preserves \int_a^b)
@@ -200,7 +200,7 @@ export function convertLatexToUnicode(
         let replacement = fastMap.get(cmd);
         if (!replacement) {
           const catalogEntry = lookupCatalog(cmd);
-          if (catalogEntry && (catalogEntry.role === "parameter" || catalogEntry.role === "constant")) {
+          if (catalogEntry && (catalogEntry.roleId === ROLE_PARAMETER || catalogEntry.roleId === ROLE_CONSTANT)) {
             replacement = catalogEntry.unicode;
           }
         }

@@ -78,8 +78,26 @@ const NUMBER_LEADER_REGEX =
  * - Explicit \text{...} and \mathrm{...} units.
  */
 export function findUnitSpans(rawBody: string, options?: UnitOptions): UnitSpan[] {
-  const body = rawBody.includes("%") ? maskComments(rawBody) : rawBody;
   const spans: UnitSpan[] = [];
+
+  // Fast gate: If there are no digits, no micro, no degrees, and no text wrappers, no units can match
+  if (
+    !/\d/.test(rawBody) &&
+    !rawBody.includes("\\mu") &&
+    !rawBody.includes("µ") &&
+    !rawBody.includes("\\circ") &&
+    !rawBody.includes("°") &&
+    !rawBody.includes("\\text") &&
+    !rawBody.includes("\\mathrm") &&
+    !rawBody.includes("Ω") &&
+    !rawBody.includes("\\Omega") &&
+    !rawBody.includes("Å") &&
+    !rawBody.includes("\\AA")
+  ) {
+    return spans;
+  }
+
+  const body = rawBody.includes("%") ? maskComments(rawBody) : rawBody;
 
   function addSpan(start: number, end: number, text: string) {
     if (start >= end) return;

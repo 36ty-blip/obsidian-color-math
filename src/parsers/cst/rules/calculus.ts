@@ -43,12 +43,14 @@ export function matchCalculusRules(node: CSTNode, options?: CSTCollectorOptions)
     }
     if (node.evaluationLimits) {
       for (const limit of node.evaluationLimits) {
-        spans.push({
-          start: limit.start,
-          end: limit.end,
-          color: evalColor,
-          priority: 26,
-        });
+        if (limit.kind === "script" && limit.arg.length > 0) {
+          spans.push({
+            start: limit.arg[0].start,
+            end: limit.arg[limit.arg.length - 1].end,
+            color: evalColor,
+            priority: 26,
+          });
+        }
       }
     }
     return spans;
@@ -56,10 +58,20 @@ export function matchCalculusRules(node: CSTNode, options?: CSTCollectorOptions)
 
   // 1.1 Higher-Order Derivatives: f^{(n)}(x) or f''(x) -> palette.derivative (Tokyo Purple #bb9af7)
   if (node.kind === "script" && node.scriptType === "superscript" && node.isHigherOrderDerivative) {
+    const start = options?.forLatexWrap
+      ? node.arg.length > 0
+        ? node.arg[0].start
+        : node.start
+      : node.start;
+    const end = options?.forLatexWrap
+      ? node.arg.length > 0
+        ? node.arg[node.arg.length - 1].end
+        : node.end
+      : node.end;
     return [
       {
-        start: node.start,
-        end: node.end,
+        start,
+        end,
         color: palette?.derivative || "#bb9af7",
         priority: 26,
       },

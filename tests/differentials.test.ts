@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { findDifferentialSpans, SUBDIFFERENTIAL_PATTERN } from "../src/parsers/differentials";
-import { colorLatexBody } from "../src/converters/generic";
+import { colorLatexBody, computeSemanticMathSpans } from "../src/converters/generic";
 import { DEFAULT_COLORS } from "../src/config";
 
 describe("Calculus Differentials & Derivatives Disambiguation", () => {
@@ -59,14 +59,37 @@ describe("Calculus Differentials & Derivatives Disambiguation", () => {
       expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.derivative}}{\\frac{d}{dx}}`);
     });
 
-    it("protects 'd' from variable data-flow hashing in dx", () => {
+    it("Option B: infinitesimal differential dx inherits variable hash color of x", () => {
       const result = colorLatexBody("\\int x^2 \\, dx", DEFAULT_COLORS, {
         variableDataFlow: true,
         colorDifferentials: true,
       });
-      // dx should be atomic derivative color, not split into random hashed variable colors
-      expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.derivative}}{dx}`);
+      // dx should be atomic token inheriting the variable hash color of x (#7aa2f7)
+      expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{dx}`);
       expect(result).not.toContain(`\\textcolor{${DEFAULT_COLORS.main}}{d}`);
+    });
+
+    it("Option B: da inherits variable hash of a in \\int x^2 + d + a^2 da", () => {
+      const result = colorLatexBody("\\int x^2 + d + a^2 \\; da", DEFAULT_COLORS, {
+        variableDataFlow: true,
+        colorDifferentials: true,
+      });
+      // a^2 has purple #bb9af7
+      expect(result).toContain(`\\textcolor{#bb9af7}{a}`);
+      // da inherits purple #bb9af7 as an atomic unit
+      expect(result).toContain(`\\textcolor{#bb9af7}{da}`);
+      // standalone d is peach #ff9e64
+      expect(result).toContain(`\\textcolor{#ff9e64}{d}`);
+    });
+
+    it("Option B fallback: when colorInfinitesimals is false, da splits into individual scalar variable hashes", () => {
+      const result = colorLatexBody("\\int x^2 + d + a^2 \\; da", DEFAULT_COLORS, {
+        variableDataFlow: true,
+        colorDifferentials: true,
+        colorInfinitesimals: false,
+      });
+      // d is peach #ff9e64 and a is purple #bb9af7
+      expect(result).toContain(`\\textcolor{#ff9e64}{d}\\textcolor{#bb9af7}{a}`);
     });
   });
 

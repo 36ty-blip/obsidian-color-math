@@ -31,9 +31,16 @@ export function matchDynamicsRules(node: CSTNode, options?: CSTCollectorOptions)
 
   // 3.1 Flow Evolution Operator: \Phi^t(x_0) -> palette.parameter
   if (node.kind === "script" && node.isFlowEvolution) {
+    const start = options?.forLatexWrap
+      ? node.base
+        ? node.base.start
+        : node.arg.length > 0
+        ? node.arg[0].start
+        : node.start + 1
+      : node.start;
     return [
       {
-        start: node.start,
+        start,
         end: node.end,
         color: palette?.parameter || "#ff9e64",
         priority: 26,
@@ -43,9 +50,16 @@ export function matchDynamicsRules(node: CSTNode, options?: CSTCollectorOptions)
 
   // 3.1 Invariant Manifolds: W^s, W^u, W^c -> palette.chain (green)
   if (node.kind === "script" && node.isInvariantManifold) {
+    const start = options?.forLatexWrap
+      ? node.base
+        ? node.base.start
+        : node.arg.length > 0
+        ? node.arg[0].start
+        : node.start + 1
+      : node.start;
     return [
       {
-        start: node.start,
+        start,
         end: node.end,
         color: palette?.chain || "#9ece6a",
         priority: 26,

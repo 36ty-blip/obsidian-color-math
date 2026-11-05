@@ -135,6 +135,30 @@ describe("Phase 8: ⚡ Max Speed Syntactic Sugar & Ergonomics", () => {
       );
     });
 
+    it("normalizes cases, dcases, rcases, align, aligned, gather, and split environments", () => {
+      expect(normalizeBracketMatrices("cases[x, x >= 0; -x, x < 0]")).toBe(
+        "\\begin{cases} x & x >= 0 \\\\ -x & x < 0 \\end{cases}"
+      );
+      expect(normalizeBracketMatrices("dcases[x, x >= 0; -x, x < 0]")).toBe(
+        "\\begin{dcases} x & x >= 0 \\\\ -x & x < 0 \\end{dcases}"
+      );
+      expect(normalizeBracketMatrices("rcases[x, x >= 0; -x, x < 0]")).toBe(
+        "\\begin{rcases} x & x >= 0 \\\\ -x & x < 0 \\end{rcases}"
+      );
+      expect(normalizeBracketMatrices("align[a &= b + c; d &= e + f]")).toBe(
+        "\\begin{aligned} a &= b + c \\\\ d &= e + f \\end{aligned}"
+      );
+      expect(normalizeBracketMatrices("aligned[a &= b; c &= d]")).toBe(
+        "\\begin{aligned} a &= b \\\\ c &= d \\end{aligned}"
+      );
+      expect(normalizeBracketMatrices("gather[E = mc^2; F = ma]")).toBe(
+        "\\begin{gathered} E = mc^2 \\\\ F = ma \\end{gathered}"
+      );
+      expect(normalizeBracketMatrices("split[a &= b + c; &= d]")).toBe(
+        "\\begin{split} a &= b + c \\\\ &= d \\end{split}"
+      );
+    });
+
     it("normalizes delimiter-wrapped matrix shorthands (|mat[]|, ||mat[]||, \\{mat[]\\})", () => {
       expect(normalizeBracketMatrices("|mat[1, 2; 3, 4]|")).toBe(
         "\\begin{vmatrix} 1 & 2 \\\\ 3 & 4 \\end{vmatrix}"
@@ -171,6 +195,73 @@ describe("Phase 8: ⚡ Max Speed Syntactic Sugar & Ergonomics", () => {
       const res = validateMatrixDelimiters(ragged);
       expect(res.isRagged).toBe(true);
       expect(res.raggedRows).toEqual([2]);
+    });
+
+    it("auto-pads ragged matrix rows to maximum column dimension when enabled", () => {
+      const ragged = "mat[1, 2, 3; 4, 5]";
+      const padded = normalizeMathSyntax(ragged, { raggedRowDiagnostics: true });
+      expect(padded).toBe("\\begin{matrix} 1 & 2 & 3 \\\\ 4 & 5 & \\end{matrix}");
+    });
+
+    it("leaves ragged rows unpadded when raggedRowDiagnostics is false", () => {
+      const ragged = "mat[1, 2, 3; 4, 5]";
+      const unpadded = normalizeMathSyntax(ragged, { raggedRowDiagnostics: false });
+      expect(unpadded).toBe("\\begin{matrix} 1 & 2 & 3 \\\\ 4 & 5 \\end{matrix}");
+    });
+
+    it("rectifies raw LaTeX matrix environments when raggedRowDiagnostics is true", () => {
+      const rawRagged = "\\begin{pmatrix} 1 & 2 & 3 \\\\ 4 & 5 \\end{pmatrix}";
+      const rectified = normalizeMathSyntax(rawRagged, { raggedRowDiagnostics: true });
+      expect(rectified).toBe("\\begin{pmatrix} 1 & 2 & 3 \\\\ 4 & 5 & \\end{pmatrix}");
+    });
+
+    it("strictly exempts alignment families (aligned, cases) from rectilinear column padding", () => {
+      const alignedInput = "aligned[a &= b + c; &= d]";
+      const alignedOutput = normalizeBracketMatrices(alignedInput, "matrix", true, true, true);
+      expect(alignedOutput).toBe("\\begin{aligned} a &= b + c \\\\ &= d \\end{aligned}");
+
+      const casesInput = "cases[x > 0, 1; 0]";
+      const casesOutput = normalizeBracketMatrices(casesInput, "matrix", true, true, true);
+      expect(casesOutput).toBe("\\begin{cases} x > 0 & 1 \\\\ 0 \\end{cases}");
+    });
+  });
+
+  describe("Mid-Typing Virtual Delimiter Sealing & Crash Immunity", () => {
+    it("auto-seals mid-typing unclosed bracket matrices", () => {
+      // With default padding, row 2 is padded to 2 columns
+      expect(normalizeBracketMatrices("pmat[1, 2; 3")).toBe(
+        "\\begin{pmatrix} 1 & 2 \\\\ 3 & \\end{pmatrix}"
+      );
+      // With padding disabled, row 2 remains unpadded
+      expect(normalizeBracketMatrices("pmat[1, 2; 3", "matrix", true, true, false)).toBe(
+        "\\begin{pmatrix} 1 & 2 \\\\ 3 \\end{pmatrix}"
+      );
+      expect(normalizeBracketMatrices("mat[1, 2; 3, 4")).toBe(
+        "\\begin{matrix} 1 & 2 \\\\ 3 & 4 \\end{matrix}"
+      );
+    });
+
+    it("auto-seals unclosed delimiter-wrapped matrix shorthands", () => {
+      // Unclosed inner bracket
+      expect(normalizeBracketMatrices("|mat[1, 2")).toBe(
+        "\\begin{vmatrix} 1 & 2 \\end{vmatrix}"
+      );
+      // Closed inner bracket, unclosed outer delimiter
+      expect(normalizeBracketMatrices("|mat[1, 2; 3, 4]")).toBe(
+        "\\begin{vmatrix} 1 & 2 \\\\ 3 & 4 \\end{vmatrix}"
+      );
+    });
+
+    it("auto-seals mid-typing chained roots and bracket fractions in normalizeMathSyntax", () => {
+      expect(normalizeMathSyntax("sqrt[3][x")).toBe("\\sqrt[3]{x}");
+      expect(normalizeMathSyntax("frac[a][b")).toBe("\\frac{a}{b}");
+      expect(normalizeMathSyntax("frac[a")).toBe("\\frac{a}{}");
+    });
+
+    it("auto-seals mid-typing unclosed raw LaTeX environments in normalizeMathSyntax", () => {
+      expect(normalizeMathSyntax("\\begin{pmatrix} 1 & 2", { crashImmunityAutoSeal: true })).toBe(
+        "\\begin{pmatrix} 1 & 2 \\end{pmatrix}"
+      );
     });
   });
 
@@ -256,6 +347,25 @@ describe("Phase 8: ⚡ Max Speed Syntactic Sugar & Ergonomics", () => {
       const varSpans = collectVariableSpans(input);
       const varInsideSqrt = varSpans.filter((s) => s.start >= 0 && s.end <= 4);
       expect(varInsideSqrt).toHaveLength(0);
+    });
+    it("recognizes align[ as an atomic alignment constructor and desugars in colorLatexBody without splitting align into letters", () => {
+      const input = "align[\na &= b + c;\nd &= e + f\n]";
+      const normalized = normalizeMathSyntax(input);
+      expect(normalized).toBe("\\begin{aligned} a &= b + c \\\\ d &= e + f \\end{aligned}");
+
+      const colored = colorLatexBody(input, DEFAULT_COLORS);
+      expect(colored).toContain("\\begin{aligned}");
+      expect(colored).toContain("\\end{aligned}");
+      // Must NOT contain separate \textcolor wraps on letters of "align"
+      expect(colored).not.toMatch(/\\textcolor\{[^}]+\}\{a\}\\textcolor\{[^}]+\}\{l\}/);
+
+      const taxSpans = collectTaxonomySpans(input, DEFAULT_COLORS);
+      const alignSpan = taxSpans.find((s) => s.start === 0 && s.end === 5);
+      expect(alignSpan).toBeDefined();
+
+      const varSpans = collectVariableSpans(input);
+      const varInsideAlign = varSpans.filter((s) => s.start >= 0 && s.end <= 5);
+      expect(varInsideAlign).toHaveLength(0);
     });
   });
 

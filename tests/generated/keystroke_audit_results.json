@@ -1,0 +1,49 @@
+{
+  "totalEquations": 83,
+  "totalKeystrokes": 1436,
+  "passedKeystrokes": 1436,
+  "failedKeystrokes": 0,
+  "passRatePct": "100.0%",
+  "byCategory": {
+    "radicals": {
+      "total": 39,
+      "failed": 0
+    },
+    "fractions_stacking": {
+      "total": 114,
+      "failed": 0
+    },
+    "structural_styling": {
+      "total": 140,
+      "failed": 0
+    },
+    "extensible_arrows": {
+      "total": 73,
+      "failed": 0
+    },
+    "nested_adversarial": {
+      "total": 99,
+      "failed": 0
+    },
+    "corpus_base": {
+      "total": 971,
+      "failed": 0
+    }
+  },
+  "byFailureType": {
+    "UNCLOSED_MACRO_ARG": 0,
+    "UNCLOSED_BRACKET": 0,
+    "DANGLING_OPERATOR": 0,
+    "INCOMPLETE_COMMAND": 0,
+    "OTHER_PARSE_ERROR": 0
+  },
+  "byEngineBreakdown": {
+    "mathjaxPassCount": 1436,
+    "mathjaxFailCount": 0,
+    "katexPassCount": 1436,
+    "katexFailCount": 0,
+    "bothPassedCount": 1436
+  },
+  "mathjaxErrors": [],
+  "failures": []
+}

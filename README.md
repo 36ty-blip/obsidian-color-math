@@ -37,7 +37,38 @@ $$ \textcolor{#e0af68}{i}\textcolor{#e0af68}{\hbar} \textcolor{#bb9af7}{\frac{\p
 
 ---
 
+## 🧭 Bidirectional Rendered-Math ⟷ Source Navigation & Double Map Architecture
+
+Click any rendered symbol, fraction, or matrix cell directly inside Obsidian Live Preview, and Color Math instantly teleports the CodeMirror 6 editor cursor to the exact character span in your raw LaTeX source.
+
+<p align="center">
+  <img src="docs/assets/spatial_coordinates_4d_diagram.jpg" alt="4D Spatial Coordinate Space for Mathematical Expressions" width="100%">
+</p>
+
+### The Double Map Architecture ($\Phi_1 \circ \Phi_2$)
+
+Planar 2D mathematics cannot be mapped using naive 1D string offsets without syntax displacement. Color Math guarantees mathematical rigor through a formal, two-tier bijective map:
+
+$$\mathcal{R}_{\text{raw}} \xleftrightarrow[\quad\text{Map 2: Exact Span Provenance}\quad]{\Phi_2} \mathcal{M}_{\text{Canonical Math IR}} \xleftrightarrow[\quad\text{Map 1: Structural CHTML}\quad]{\Phi_1} \mathcal{D}_{\text{DOM}}$$
+
+* **$\Phi_2$: Raw Source to Canonical Math IR ($\mathcal{R}_{\text{raw}} \longleftrightarrow \mathcal{M}_{\text{IR}}$)**: Maps author UTF-16 byte intervals `[from, to]` directly to Concrete Syntax Tree (CST) semantic nodes with 32-bit layout slot codes. Token length expansions (e.g., bare `sin` $\to$ `\sin` or Typst shorthands) are tracked without modifying source markdown on disk.
+* **$\Phi_1$: Canonical Math IR to Structural DOM ($\mathcal{M}_{\text{IR}} \longleftrightarrow \mathcal{D}_{\text{DOM}}$)**: Generates rendered MathJax CHTML layout trees. Both the CodeMirror 6 IDE Styler and MathJax consume the identical CST semantic token stream, guaranteeing **100% forward visual color parity**.
+* **$\Phi_1^{-1} \circ \Phi_2^{-1}$: Reverse Click-to-Edit Navigation ($\mathcal{D}_{\text{DOM}} \longrightarrow \mathcal{R}_{\text{raw}}$)**: Clicking any rendered CHTML glyph, fraction numerator, or matrix element immediately pulls back through the canonical AST token directly into the author's exact source span `[from, to]`, focusing and selecting the corresponding characters in the CodeMirror 6 editor.
+
+---
+
 ## ✨ Features & Ergonomics
+
+### ⚡ Max Speed Syntactic Sugar Suite (Shift-Free Ergonomics)
+
+Zero-Shift typing shorthands inspired by modern mathematical notebooks, designed to maximize writing speed while preserving canonical LaTeX output:
+
+- **Double-Quoted Text Strings**: Type `"hi there"` $\to$ `\text{hi there}` naturally without backslash or brace friction.
+- **Shift-Free Matrix Shorthands**: Write matrices effortlessly using `mat[...]`, `pmat[...]`, `bmat[...]`, `vmat[...]`, or `dmat[...]` with semicolons (`;`), physical newlines, or `\\` row breaks. Also supports universal `\mat[...]` and `\mat{...}`.
+- **ASCII Operator Ligatures**: Instant conversion of zero-Shift ligatures (`>=` $\to \ge$, `<=` $\to \le$, `!=` $\to \neq$, `:=` $\to \coloneqq$, `+-` $\to \pm$, `-+` $\to \mp$).
+- **Bracket Infix Division & Chained Roots**: Visual fractions and roots with zero nesting errors: `[a+b]/[c+d]` $\to \frac{a+b}{c+d}$, `sqrt[x]` $\to \sqrt{x}$, and `sqrt[3][x]` $\to \sqrt[3]{x}$.
+- **Bare Mathematical Functions**: Clean trigonometric and logarithmic functions without backslashes (`sin(x)`, `ln(x)`, `exp(x)`) via $\mathcal{O}(1)$ bracket-anchored hash dispatching.
+- **Comprehensive Reference**: Full documentation and keystroke savings catalog available in [`docs/MAX_SPEED_GUIDE.md`](docs/MAX_SPEED_GUIDE.md).
 
 ### Typst Features
 
@@ -49,10 +80,20 @@ $$ \textcolor{#e0af68}{i}\textcolor{#e0af68}{\hbar} \textcolor{#bb9af7}{\frac{\p
 
 ### Core Features
 
+- **Floating Live Math Preview Tooltip**:
+  - **Real-Time Caret Preview**: A rendered MathJax preview floats directly above your cursor while editing inline LaTeX (`$...$`), providing instant visual feedback as you type.
+  - **Sub-Expression Targeted Navigation**: Hover or click any rendered token inside the preview tooltip to highlight or position your editor cursor directly on the corresponding LaTeX source span.
+  - **Strict Table Cell Singleton Coordinator**: Enforces mutual exclusion in the DOM so that editing inside Markdown table cells (`<td>`, `.cm-table-widget`) never spawns duplicate tooltips.
+  - **Top-Layer Stacking Priority**: Portaled directly to `document.body` with `position: fixed` and `z-index: var(--layer-tooltip, 99999)` without `!important`, rendering cleanly above note text, callouts, and modals without clipping.
 - **Zero Note Modification (Live Interceptor)**: Hooks directly into Obsidian's internal MathJax rendering engine. Equations appear in full color in **Live Preview** and **Reading View** without altering your raw markdown notes on disk.
 - **Live Syntax Warnings & Compiler Crash Immunity**:
   - **Live Preview Squiggly Warnings**: Unclosed quotes (`"`), stray braces (`}`), and unbalanced delimiters receive subtle red wavy underlines directly in Live Preview to flag syntax mistakes without interrupting your typing.
+  - **Two-Tier Progressive Macro Auto-Sealing (`{▢}`, `[▢]`)**: Backed by an authoritative 613-signature KaTeX/MathJax macro dictionary. Mid-keystroke placeholder auto-sealing prevents MathJax from flashing red error boxes while typing unclosed macros (`\sqrt`, `\frac`, `\binom`), verified across 2,373 keystroke prefix slices.
   - **Auto-Healing & Compiler Crash Immunity**: Automatically auto-seals unclosed delimiters, converts unclosed quotes (`$x = 1 " if y = 0$`) into `\text{...}`, balances stray braces as `{}`, and heals unclosed `\left` with ghost closing tags so MathJax and KaTeX never throw fatal rendering errors while you type.
+- **Delimiter Scope Flooding Immunity & Extensible Scaling**:
+  - **Zero LaTeX Pollution**: Delimiter depth coloring is applied purely via CodeMirror 6 viewport DOM decorations with zero `\textcolor` wrapping on `\left...\right`, preserving pristine LaTeX source structure.
+  - **MathJax v4 Extensible Stretchy Delimiters**: Automatic clip-path scaling for tall determinants (`\left| ... \right|`) and multi-line matrices without vertical cutoff.
+  - **Universal Font Modifiers**: Universal delimiter support across `{...}`, `[...]`, and `(...)` for font modifiers (`bold`, `scr`, `cal`, `frak`, `bb`, `\text`).
 - **Smart Whitespace & Function-Aware Normalization**:
   - Context-aware argument grouping replaces TeX's rigid single-token splitting. Intelligently groups multi-digit numbers (`\frac 12 3` $\to \frac{12}{3}$), cohesive monomials (`\frac 1 2x` $\to \frac{1}{2x}$), parenthesized terms (`\frac (a+b) c` $\to \frac{a+b}{c}$), and function calls (`\frac \sin(x) \cos(x)` $\to \frac{\sin(x)}{\cos(x)}$).
   - Strictly respects matrix and alignment cell walls (`&` and `\\`) to prevent arguments from overflowing across tabular boundaries.
@@ -81,14 +122,17 @@ $$ \textcolor{#e0af68}{i}\textcolor{#e0af68}{\hbar} \textcolor{#bb9af7}{\frac{\p
 
 ## ⚡ Performance & Battle-Tested Reliability
 
-- **👑 Lemire MPHF Engine (6,897+ Symbols)**: Full-string FNV-1a hashing with Daniel Lemire's branchless fast range reduction and a 16 KB L1 displacement table delivers **55 ns flat lookup** across 6,897 mathematical symbols with 100% collision-free resolution.
+- **👑 Lemire MPHF Engine (9,342+ Symbols)**: Full-string FNV-1a hashing with Daniel Lemire's branchless fast range reduction and a 16 KB L1 displacement table delivers **55 ns flat lookup** across 9,342 mathematical symbols with 100% collision-free resolution.
+- **Balanced 3-Stage Lifecycle Pipeline & Predictive Session Cache**: Startup is split into Stage 1 `onload()` minimal mount ($<10\,\text{ms}$), Stage 2 `onLayoutReady()` predictive active-note targeting ($<15\,\text{ms}$) with 32-bit FNV-1a hash verification (priming the in-memory span cache in $<0.001\,\text{ms}$), and Stage 3 `requestIdleCallback` background warm-up. Eradicates whole-vault `iterateAllLeaves` reflow storms.
+- **🧪 WebAssembly (WASM) Accelerator (Feature Preview)**: An upcoming high-performance Rust core (`color_math_wasm.wasm`) targeting `wasm32-unknown-unknown` designed for bare-metal CST tokenization, symbol queries, and delimiter matching. Currently in experimental feature preview testing; the plugin operates natively on its battle-tested, zero-dependency pure TypeScript engine.
+- **Fast-Fail Predictive Lookahead Gating**: 6-door cascade eliminates 99.0% of false-positive hash lookups on bare variables (wasted lookups drop from 392,990 to 4,082 across 172,823 mathematical expressions in 6,392 corpus documents).
 - **Battle-Tested Reliability (172,000+ Formulas)**: Validated across a corpus of **6,392 multi-page math documents** and **172,823 mathematical formulas** from university-level mathematics, physics, and engineering — resulting in **0 syntax regressions** and **0 parser crashes**.
-- **120 Hz Display Budget ($<8.33\text{ ms}$)**: Sub-microsecond tokenization ensures smooth, lag-free typing even on 120 Hz high-refresh displays.
+- **144 Hz Display Latency Budget (<6.94 ms)**: Sub-microsecond tokenization ensures smooth, lag-free typing even on 144 Hz high-refresh displays (~6,944 μs per-frame budget).
 - **Linear Time Complexity $\mathcal{O}(N)$**: Single-pass tokenization without backtracking — scales smoothly with note length.
 - **Viewport-Constrained**: Live Preview highlights only equations currently visible on screen, keeping 10,000-word notes stutter-free.
 - **Zero Idle CPU (0.0%)**: Purely event-driven; no background polling loops, watchers, or worker processes.
 - **Hard-Bounded Memory**: Built-in LRU render cache keeps memory overhead under ~5 MB.
-- **100% Local & Private**: Pure TypeScript with zero binary dependencies, zero telemetry, and zero network calls. Fully compatible with desktop and mobile (iOS & Android).
+- **100% Local & Private**: Pure TypeScript core with zero mandatory binary dependencies, zero telemetry, and zero network calls. Fully compatible with desktop and mobile (iOS & Android).
 
 ---
 
@@ -101,20 +145,25 @@ $$ \textcolor{#e0af68}{i}\textcolor{#e0af68}{\hbar} \textcolor{#bb9af7}{\frac{\p
 
 ### Everyday Usage
 - **Read & Write**: Just write your equations naturally (`$...$` or `$$...$$`). Color Math renders them automatically in Live Preview and Reading View.
+- **Click-to-Edit Navigation**: Click any rendered element in Live Preview to jump directly to its exact token in the raw LaTeX editor.
 - **Ribbon Palette Icon (`fx`)**: Click the left ribbon icon for instant access to Bake and Clean actions.
 - **Command Palette (`Ctrl+P` / `Cmd+P`)**:
-  - `Color Math: Bake colors into note (Permanent)`
-  - `Color Math: Clean baked colors from note`
+  - `Color Math: Bake colors into note (Permanent)`: Embeds standard LaTeX `\textcolor{...}{...}` wrappers.
+  - `Color Math: Clean baked colors from note`: Strips all color markup back to uncolored LaTeX.
   - `Color Math: Bake / Clean current math block`
   - `Color Math: Bake / Clean selection`
+  - `Color Math: Convert Unicode math to LaTeX in active note (Restore TeX)`
+  - `Color Math: Open syntax and operator reference guide`
 
 ---
 
 ## 🛠️ Settings & Customization
 
 Open **Settings > Color Math** to customize:
-- **Palette**: Fine-tune individual hex values for variables, numbers, operators, differentials, and constants.
+- **Logical 4-Group Palette Hierarchy**: Fine-tune individual hex values organized logically into Group A (Core & Constants), Group B (Calculus & Transforms), Group C (Relations & Operators), and Group D (Structure & Sets).
+- **Floating Tip Opacity & Backdrop**: Smooth $0\%\dots 100\%$ opacity slider and opaque background toggle for the live inline math tooltip.
 - **Feature Toggles**: Individually enable or disable rainbow delimiters, calculus differentials, physical units, or bra-ket notation.
+- **Instant Search Aliases**: Embedded search aliases across all sections (`tooltip`, `floating`, `opacity`, `slider`, `rainbow`, `hash`) for instant filtering in Obsidian's settings tab.
 - **Interactive Preview**: Live equation sandbox inside the settings tab to test your palette in real time.
 
 ---

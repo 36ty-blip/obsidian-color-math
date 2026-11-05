@@ -8,6 +8,7 @@ import {
   ScriptNode,
 } from "../src/parsers/cst_parser";
 import { DEFAULT_COLORS, RAINBOW_DELIMITER_COLORS } from "../src/config";
+import { colorLatexBody } from "../src/converters/generic";
 
 describe("MathCSTParser & Part 0 Foundations", () => {
   it("0.1 Delimiter Error Scoping: flags true compiler errors, relaxes math delimiters", () => {
@@ -129,5 +130,24 @@ describe("MathCSTParser & Part 0 Foundations", () => {
 
     console.log(`\n[CST Parser Performance] ${avgUs.toFixed(2)} µs/op`);
     expect(avgUs).toBeGreaterThan(0);
+  });
+
+  it("HTML & Link Attribute Macros: protects 1st argument of \\class and \\href while coloring 2nd math argument", () => {
+    const classFormula = "\\class{my-custom-style}{x^2 + y^2 = z^2}";
+    const coloredClass = colorLatexBody(classFormula, DEFAULT_COLORS, {
+      enableTaxonomy: true,
+      variableDataFlow: true,
+      useCST: true,
+    });
+    expect(coloredClass.startsWith("\\class{my-custom-style}{")).toBe(true);
+    expect(coloredClass).toContain("\\textcolor");
+
+    const hrefFormula = "\\href{https://example.com/a-b}{f(x) + 1}";
+    const coloredHref = colorLatexBody(hrefFormula, DEFAULT_COLORS, {
+      enableTaxonomy: true,
+      variableDataFlow: true,
+      useCST: true,
+    });
+    expect(coloredHref.startsWith("\\href{https://example.com/a-b}{")).toBe(true);
   });
 });

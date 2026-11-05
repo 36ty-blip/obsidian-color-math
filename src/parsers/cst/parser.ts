@@ -10,8 +10,12 @@ import {
   ScriptNode,
   IdentifierNode,
   OperatorNode,
+  UnderOverNode,
 } from "./types";
 import { DelimiterStack } from "./stack";
+import { lookupCatalog } from "../catalog";
+import { findDifferentialSpans, DifferentialSpan } from "../differentials";
+import { readVerbEnd, skipMacroDefinition } from "../../utils/latex_helpers";
 import {
   CHAR_BACKSLASH,
   CHAR_LBRACE,
@@ -25,6 +29,8 @@ import {
   CHAR_PERCENT,
   CHAR_PRIME,
   isGreekCommand,
+  BARE_FUNCTION_WORDS,
+  UNICODE_GREEK_TO_LATEX,
   OPTIONAL_BRACKET_COMMANDS,
   COMMON_DIMENSIONLESS_SET,
   TENSOR_BASE_SYMBOLS,
@@ -63,6 +69,44 @@ const STOP_PAREN_OR_BRACKET = 2;    // ')' (41) or ']' (93)
 const STOP_ESCAPED_RBRACE = 3;      // '\}'
 const STOP_PIPE = 4;                // '|' or '\|'
 const STOP_ANGLE_OR_PIPE = 5;       // '\rangle' or '|'
+const STOP_KET = 6;                 // '\rangle' (Dirac Ket)
+const STOP_END_ENV = 7;             // '\end{...}' (LaTeX Environment)
+
+const ARRAY_COLSPEC_ENVS = new Set([
+  "array",
+  "darray",
+  "tabular",
+  "tabular*",
+  "subarray",
+  "alignedat",
+  "alignat",
+  "alignat*",
+  "xalignat",
+  "xalignat*",
+  "xxalignat",
+]);
+
+function setNonEnum(obj: object, key: string, value: unknown): void {
+  Object.defineProperty(obj, key, {
+    value,
+    enumerable: false,
+    writable: true,
+    configurable: true,
+  });
+}
+
+function isDiffOperatorNode(node: CSTNode): boolean {
+  if (node.kind === "identifier") {
+    return node.text === "d" || node.text === "\\mathrm{d}" || node.text === "\\delta";
+  }
+  if (node.kind === "command") {
+    return node.name === "\\partial" || node.name === "\\delta" || node.name === "∂";
+  }
+  if (node.kind === "operator") {
+    return node.text === "∂" || node.text === "\\partial" || node.operatorType === "differential";
+  }
+  return false;
+}
 
 export class MathCSTParser {
   private text: string;
@@ -78,7 +122,214 @@ export class MathCSTParser {
   }
 
   public parse(): CSTNode[] {
-    return this.parseNodeList(0, STOP_NONE);
+    const nodes = this.parseNodeList(0, STOP_NONE);
+    const diffSpans = findDifferentialSpans(this.text);
+    this.annotateNeighborsAndCompounds(nodes, diffSpans);
+    return nodes;
+  }
+
+  private annotateNeighborsAndCompounds(nodes: CSTNode[], diffSpans: DifferentialSpan[]): void {
+    if (!nodes || nodes.length === 0) return;
+
+    // Partition nodes by matrix cell walls (& and \\) so neighbor links never cross rows or columns
+    let segment: CSTNode[] = [];
+    const flushSegment = () => {
+      if (segment.length === 0) return;
+
+      // Collect flat sequence of leaf-level nodes in this slot segment
+      const slotLeaves: CSTNode[] = [];
+      const collectSlotFlatLeaves = (list: CSTNode[]) => {
+        for (let i = 0; i < list.length; i++) {
+          const n = list[i];
+          if (n.kind === "group" && n.delimType === "bare_brace") {
+            collectSlotFlatLeaves(n.children);
+          } else if (
+            n.kind === "identifier" ||
+            n.kind === "number" ||
+            n.kind === "operator" ||
+            n.kind === "punctuation" ||
+            n.kind === "command" ||
+            n.kind === "text" ||
+            n.kind === "boundary"
+          ) {
+            slotLeaves.push(n);
+          }
+        }
+      };
+      collectSlotFlatLeaves(segment);
+
+      for (let i = 0; i < slotLeaves.length; i++) {
+        const curr = slotLeaves[i];
+        if (i > 0) setNonEnum(curr, "prevLeaf", slotLeaves[i - 1]);
+        if (i + 1 < slotLeaves.length) setNonEnum(curr, "nextLeaf", slotLeaves[i + 1]);
+
+        if (diffSpans.length > 0 && i + 1 < slotLeaves.length && isDiffOperatorNode(curr)) {
+          const next = slotLeaves[i + 1];
+          const inDiffSpan = diffSpans.some(
+            (ds) =>
+              (ds.kind === "differential" && curr.start === ds.start && next.end <= ds.end) ||
+              (ds.kind === "derivative_fraction" && curr.start >= ds.start && next.end <= ds.end)
+          );
+          if (inDiffSpan) {
+            setNonEnum(curr, "compoundRole", "diff_op");
+            setNonEnum(curr, "compoundPartner", next);
+            setNonEnum(next, "compoundRole", "diff_var");
+            setNonEnum(next, "compoundPartner", curr);
+          }
+        }
+      }
+
+      segment = [];
+    };
+
+    for (const node of nodes) {
+      const isAmpersand =
+        (node.kind === "punctuation" && node.char === "&") ||
+        (node.kind === "identifier" && node.text === "&") ||
+        (node.kind === "operator" && node.text === "&");
+      const isRowBreak =
+        node.kind === "command" &&
+        (node.name === "\\\\" || node.name === "\\cr" || node.name === "\\newline");
+
+      if (isAmpersand || isRowBreak) {
+        flushSegment();
+        continue;
+      }
+
+      segment.push(node);
+
+      // Recurse into child slots
+      if (node.kind === "fraction") {
+        this.annotateNeighborsAndCompounds(node.numerator, diffSpans);
+        this.annotateNeighborsAndCompounds(node.denominator, diffSpans);
+      } else if (node.kind === "script") {
+        this.annotateNeighborsAndCompounds(node.arg, diffSpans);
+      } else if (node.kind === "group") {
+        this.annotateNeighborsAndCompounds(node.children, diffSpans);
+        if (node.normLimits) this.annotateNeighborsAndCompounds(node.normLimits, diffSpans);
+        if (node.evaluationLimits) this.annotateNeighborsAndCompounds(node.evaluationLimits, diffSpans);
+      } else if (node.kind === "underover") {
+        this.annotateNeighborsAndCompounds(node.base, diffSpans);
+        if (node.script) this.annotateNeighborsAndCompounds(node.script, diffSpans);
+      }
+    }
+    flushSegment();
+  }
+
+  public findClosingBrace(startBraceIdx: number): number {
+    let depth = 0;
+    let i = startBraceIdx;
+    while (i < this.len) {
+      const code = this.text.charCodeAt(i);
+      if (code === CHAR_PERCENT) {
+        while (i < this.len && this.text.charCodeAt(i) !== 10 && this.text.charCodeAt(i) !== 13) {
+          i++;
+        }
+        continue;
+      }
+      if (code === CHAR_BACKSLASH) {
+        i += 2; // skip escaped character (e.g. \{ or \})
+        continue;
+      }
+      if (code === CHAR_LBRACE) {
+        depth++;
+      } else if (code === CHAR_RBRACE) {
+        depth--;
+        if (depth === 0) {
+          return i;
+        }
+      }
+      i++;
+    }
+    return -1;
+  }
+
+  private findKetClosingRangle(fromIdx: number): number {
+    let braceDepth = 0;
+    let parenDepth = 0;
+    let bracketDepth = 0;
+    let i = fromIdx;
+    while (i < this.len) {
+      const code = this.text.charCodeAt(i);
+      if (code === CHAR_PERCENT) {
+        while (i < this.len && this.text.charCodeAt(i) !== 10 && this.text.charCodeAt(i) !== 13) {
+          i++;
+        }
+        continue;
+      }
+      if (code === CHAR_LBRACE) {
+        braceDepth++;
+        i++;
+        continue;
+      }
+      if (code === CHAR_RBRACE) {
+        if (braceDepth > 0) braceDepth--;
+        i++;
+        continue;
+      }
+      if (code === CHAR_LPAREN) {
+        parenDepth++;
+        i++;
+        continue;
+      }
+      if (code === CHAR_RPAREN) {
+        if (parenDepth > 0) parenDepth--;
+        i++;
+        continue;
+      }
+      if (code === CHAR_LBRACKET) {
+        bracketDepth++;
+        i++;
+        continue;
+      }
+      if (code === CHAR_RBRACKET) {
+        if (bracketDepth > 0) bracketDepth--;
+        i++;
+        continue;
+      }
+
+      if (braceDepth === 0 && parenDepth === 0 && bracketDepth === 0) {
+        if (code === CHAR_BACKSLASH && this.text.startsWith("\\rangle", i)) {
+          return i;
+        }
+        if (
+          code === 124 || // '|'
+          code === 38 ||  // '&'
+          code === 61 ||  // '='
+          code === 60 ||  // '<'
+          code === 62 ||  // '>'
+          code === 10 || code === 13 // newlines
+        ) {
+          return -1;
+        }
+        if (code === CHAR_BACKSLASH) {
+          if (
+            this.text.startsWith("\\\\", i) ||
+            this.text.startsWith("\\begin", i) ||
+            this.text.startsWith("\\end", i) ||
+            this.text.startsWith("\\langle", i) ||
+            this.text.startsWith("\\to", i) ||
+            this.text.startsWith("\\mapsto", i) ||
+            this.text.startsWith("\\le", i) ||
+            this.text.startsWith("\\ge", i) ||
+            this.text.startsWith("\\mid", i)
+          ) {
+            return -1;
+          }
+        }
+      }
+
+      if (code === CHAR_BACKSLASH) {
+        i++;
+        while (i < this.len && /[a-zA-Z]/.test(this.text[i])) {
+          i++;
+        }
+        continue;
+      }
+
+      i++;
+    }
+    return -1;
   }
 
   private parseNodeList(depth: number, stopMode: number): CSTNode[] {
@@ -97,10 +348,26 @@ export class MathCSTParser {
       if (stopMode === STOP_ESCAPED_RBRACE && code === CHAR_BACKSLASH && this.text.startsWith("\\}", this.index)) {
         break;
       }
-      if (stopMode === STOP_PIPE && (code === 124 || (code === CHAR_BACKSLASH && (this.text.startsWith("\\|", this.index) || this.text.startsWith("\\Vert", this.index))))) {
-        break;
+      if (stopMode === STOP_PIPE) {
+        if (code === 124 || (code === CHAR_BACKSLASH && (this.text.startsWith("\\|", this.index) || this.text.startsWith("\\Vert", this.index)))) {
+          break;
+        }
+        if (code === CHAR_RPAREN || code === CHAR_RBRACKET) {
+          break;
+        }
       }
       if (stopMode === STOP_ANGLE_OR_PIPE && (code === 124 || (code === CHAR_BACKSLASH && this.text.startsWith("\\rangle", this.index)))) {
+        break;
+      }
+      if (stopMode === STOP_KET && code === CHAR_BACKSLASH && this.text.startsWith("\\rangle", this.index)) {
+        break;
+      }
+      if (
+        stopMode === STOP_END_ENV &&
+        code === CHAR_BACKSLASH &&
+        this.text.startsWith("\\end", this.index) &&
+        (this.index + 4 >= this.len || !/[a-zA-Z]/.test(this.text[this.index + 4]))
+      ) {
         break;
       }
 
@@ -144,6 +411,37 @@ export class MathCSTParser {
         const wasResidue = this.expectingResidueArgs;
         this.expectingResidueArgs = false;
         const groupNode = this.parseStandardGroup(depth, code === CHAR_LPAREN ? "(" : "[", wasResidue);
+        if (code === CHAR_LBRACKET) {
+          // Check for bracket infix division: [num]/[den] or [num]/{den}
+          let after = this.index;
+          while (after < this.len && this.text.charCodeAt(after) <= 32) after++;
+          if (after < this.len && this.text.charCodeAt(after) === 47 /* '/' */) {
+            let afterSlash = after + 1;
+            while (afterSlash < this.len && this.text.charCodeAt(afterSlash) <= 32) afterSlash++;
+            if (
+              afterSlash < this.len &&
+              (this.text.charCodeAt(afterSlash) === CHAR_LBRACE ||
+                this.text.charCodeAt(afterSlash) === CHAR_LBRACKET)
+            ) {
+              this.index = afterSlash;
+              const isDenBrace = this.text.charCodeAt(afterSlash) === CHAR_LBRACE;
+              const denGroup = isDenBrace
+                ? this.parseBareBraceGroup(depth)
+                : this.parseStandardGroup(depth, "[");
+              nodes.push({
+                kind: "fraction",
+                command: "\\frac",
+                start: groupNode.start,
+                end: denGroup.end,
+                numerator: groupNode.children,
+                denominator: denGroup.children,
+                isInfixSlash: true,
+                hasUnclosedBrace: groupNode.isSyntaxError || denGroup.isSyntaxError,
+              });
+              continue;
+            }
+          }
+        }
         nodes.push(groupNode);
         continue;
       }
@@ -151,9 +449,39 @@ export class MathCSTParser {
       // 5. Bare Grouping Braces: {
       if (code === CHAR_LBRACE) {
         const groupNode = this.parseBareBraceGroup(depth);
+        // Check for infix division: {num}/{den} or {num}/[den]
+        let after = this.index;
+        while (after < this.len && this.text.charCodeAt(after) <= 32) after++;
+        if (after < this.len && this.text.charCodeAt(after) === 47 /* '/' */) {
+          let afterSlash = after + 1;
+          while (afterSlash < this.len && this.text.charCodeAt(afterSlash) <= 32) afterSlash++;
+          if (
+            afterSlash < this.len &&
+            (this.text.charCodeAt(afterSlash) === CHAR_LBRACE ||
+              this.text.charCodeAt(afterSlash) === CHAR_LBRACKET)
+          ) {
+            this.index = afterSlash;
+            const isDenBrace = this.text.charCodeAt(afterSlash) === CHAR_LBRACE;
+            const denGroup = isDenBrace
+              ? this.parseBareBraceGroup(depth)
+              : this.parseStandardGroup(depth, "[");
+            nodes.push({
+              kind: "fraction",
+              command: "\\frac",
+              start: groupNode.start,
+              end: denGroup.end,
+              numerator: groupNode.children,
+              denominator: denGroup.children,
+              isInfixSlash: true,
+              hasUnclosedBrace: groupNode.isSyntaxError || denGroup.isSyntaxError,
+            });
+            continue;
+          }
+        }
         nodes.push(groupNode);
         continue;
       }
+
 
       // 6. Stray Unmatched Closing Delimiters: ), ], }
       if (code === CHAR_RPAREN || code === CHAR_RBRACKET || code === CHAR_RBRACE) {
@@ -187,23 +515,35 @@ export class MathCSTParser {
         continue;
       }
 
-      // 7b. Prime notation (e.g. f', y''')
+      // 7b. Prime notation (e.g. f', y''', x'^{2})
       if (code === CHAR_PRIME) {
         const primeStart = this.index;
         while (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_PRIME) {
           this.index++;
         }
-        const primeText = this.text.slice(primeStart, this.index);
+        const primeEnd = this.index;
+        const primeText = this.text.slice(primeStart, primeEnd);
         const prev = nodes.length > 0 ? nodes[nodes.length - 1] : undefined;
         const isFunction = prev && (prev.kind === "identifier" || prev.kind === "command");
+        const primeNode: CSTNode = { kind: "identifier", start: primeStart, end: primeEnd, text: primeText };
+
+        // In TeX / MathJax 4, x'^{2} merges the prime and following ^ into a single superscript <mjx-msup>
+        let mergedArg: CSTNode[] = [primeNode];
+        let scriptEnd = primeEnd;
+        if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_CARET) {
+          const supScript = this.parseScript(depth, "^", prev);
+          mergedArg = [primeNode, ...supScript.arg];
+          scriptEnd = supScript.end;
+        }
+
         nodes.push({
           kind: "script",
           scriptType: "superscript",
           base: prev,
-          arg: [{ kind: "identifier", start: primeStart, end: this.index, text: primeText }],
+          arg: mergedArg,
           isHigherOrderDerivative: Boolean(isFunction),
           start: primeStart,
-          end: this.index,
+          end: scriptEnd,
         });
         continue;
       }
@@ -229,7 +569,10 @@ export class MathCSTParser {
       }
 
       // 8b. Unicode Partial Differential / Domain Boundary Surface: ∂
-      const ch = this.text[this.index];
+      const cp = this.text.codePointAt(this.index) || code;
+      const charLen = cp > 0xFFFF ? 2 : 1;
+      const fullChar = String.fromCodePoint(cp);
+      const ch = fullChar;
       if (ch === "∂" || code === 8706) {
         const start = this.index;
         this.index++;
@@ -269,7 +612,74 @@ export class MathCSTParser {
         continue;
       }
 
+      // 8c. Unicode Greek Symbols (α, β, γ, δ, π, σ, θ, etc. + Mathematical Alphanumeric Greek 𝝍, 𝜓, 𝛙, etc.)
+      const baseGreek = UNICODE_GREEK_TO_LATEX[ch] || (typeof ch.normalize === "function" ? UNICODE_GREEK_TO_LATEX[ch.normalize("NFKD")] : undefined);
+      if (baseGreek) {
+        nodes.push({
+          kind: "identifier",
+          start: this.index,
+          end: this.index + charLen,
+          text: baseGreek,
+          rawText: ch,
+          isGreek: true,
+          isShorthand: true,
+        });
+        this.index += charLen;
+        continue;
+      }
+
+      // 8d. Unicode & ASCII Arrows (→, ⟶, -->, ->, =>)
+      if (ch === "→" || ch === "⟶") {
+        nodes.push({
+          kind: "operator",
+          start: this.index,
+          end: this.index + ch.length,
+          text: "\\to",
+          rawText: ch,
+          operatorType: "relation",
+        });
+        this.index += ch.length;
+        continue;
+      }
+      if (ch === "-" && this.text.startsWith("-->", this.index)) {
+        nodes.push({
+          kind: "operator",
+          start: this.index,
+          end: this.index + 3,
+          text: "\\longrightarrow",
+          rawText: "-->",
+          operatorType: "relation",
+        });
+        this.index += 3;
+        continue;
+      }
+      if (ch === "-" && this.text.startsWith("->", this.index)) {
+        nodes.push({
+          kind: "operator",
+          start: this.index,
+          end: this.index + 2,
+          text: "\\to",
+          rawText: "->",
+          operatorType: "relation",
+        });
+        this.index += 2;
+        continue;
+      }
+      if (ch === "=" && this.text.startsWith("=>", this.index)) {
+        nodes.push({
+          kind: "operator",
+          start: this.index,
+          end: this.index + 2,
+          text: "\\implies",
+          rawText: "=>",
+          operatorType: "relation",
+        });
+        this.index += 2;
+        continue;
+      }
+
       // 9. Operators & Relations
+
       if ("=<>+-*/:·×#".includes(ch)) {
         const start = this.index;
         this.index++;
@@ -315,8 +725,8 @@ export class MathCSTParser {
         }
       }
 
-      // 10b. Punctuation (, ;)
-      if (",;".includes(ch)) {
+      // 10b. Punctuation (, ;, &)
+      if (",;&".includes(ch)) {
         const start = this.index;
         this.index++;
         nodes.push({
@@ -349,29 +759,84 @@ export class MathCSTParser {
         }
       }
 
-      // 11. Identifiers (Multi-letter Dimensionless Numbers vs Single Identifiers)
-      if (code >= 65 && code <= 90 && this.index + 1 < this.len) {
-        const nextCode = this.text.charCodeAt(this.index + 1);
-        if (nextCode >= 97 && nextCode <= 122) {
-          const thirdCode = this.index + 2 < this.len ? this.text.charCodeAt(this.index + 2) : 0;
-          const isLetter = (thirdCode >= 65 && thirdCode <= 90) || (thirdCode >= 97 && thirdCode <= 122);
-          if (!isLetter) {
-            const twoLetter = this.text.slice(this.index, this.index + 2);
-            if (COMMON_DIMENSIONLESS_SET.has(twoLetter)) {
-              const start = this.index;
-              this.index += 2;
-              nodes.push({
-                kind: "identifier",
-                start,
-                end: this.index,
-                text: twoLetter,
-                isDimensionless: true,
-              });
-              continue;
-            }
+
+      // 11. Identifiers & Words: Standard Functions (sin, cos, det, etc.), Constants (pi, oo), Dimensionless, or Single Identifiers
+      if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) {
+        let wEnd = this.index + 1;
+        while (wEnd < this.len) {
+          const c = this.text.charCodeAt(wEnd);
+          if ((c >= 65 && c <= 90) || (c >= 97 && c <= 122)) {
+            wEnd++;
+          } else {
+            break;
           }
         }
+        const word = this.text.slice(this.index, wEnd);
+        const lowerWord = word.toLowerCase();
+
+        // 11a. Standard Math Functions (sin, cos, tan, det, adj, ln, exp, etc.)
+        if (BARE_FUNCTION_WORDS.has(lowerWord)) {
+          const wStart = this.index;
+          this.index = wEnd;
+          nodes.push({
+            kind: "command",
+            start: wStart,
+            end: wEnd,
+            name: `\\${lowerWord}`,
+            rawText: word,
+            isShorthand: true,
+          } as CommandNode);
+          continue;
+        }
+
+        // 11b. Bare pi
+        if (lowerWord === "pi") {
+          const wStart = this.index;
+          this.index = wEnd;
+          nodes.push({
+            kind: "identifier",
+            start: wStart,
+            end: wEnd,
+            text: "\\pi",
+            rawText: word,
+            isGreek: true,
+            isConstant: true,
+            isShorthand: true,
+          } as IdentifierNode);
+          continue;
+        }
+
+        // 11c. Bare oo (infinity)
+        if (lowerWord === "oo") {
+          const wStart = this.index;
+          this.index = wEnd;
+          nodes.push({
+            kind: "identifier",
+            start: wStart,
+            end: wEnd,
+            text: "\\infty",
+            rawText: word,
+            isConstant: true,
+            isShorthand: true,
+          } as IdentifierNode);
+          continue;
+        }
+
+        // 11d. Dimensionless Numbers
+        if (COMMON_DIMENSIONLESS_SET.has(word)) {
+          const wStart = this.index;
+          this.index = wEnd;
+          nodes.push({
+            kind: "identifier",
+            start: wStart,
+            end: wEnd,
+            text: word,
+            isDimensionless: true,
+          });
+          continue;
+        }
       }
+
 
       // 3.1 Wronskian Determinant W(y_1, y_2)
       if (code === 87 && this.index + 1 < this.len && this.text.charCodeAt(this.index + 1) === CHAR_LPAREN) {
@@ -387,15 +852,44 @@ export class MathCSTParser {
         continue;
       }
 
+      // Double-quoted string literals: "..."
+      if (code === 34) { // '"'
+        const start = this.index;
+        this.index++;
+        while (this.index < this.len && this.text.charCodeAt(this.index) !== 34) {
+          if (this.text.charCodeAt(this.index) === CHAR_BACKSLASH && this.index + 1 < this.len) {
+            this.index++;
+          }
+          this.index++;
+        }
+        const hasClosing = this.index < this.len && this.text.charCodeAt(this.index) === 34;
+        if (hasClosing) {
+          this.index++;
+        }
+        const textContent = this.text.slice(start + 1, hasClosing ? this.index - 1 : this.index);
+        nodes.push({
+          kind: "text",
+          start,
+          end: this.index,
+          text: textContent,
+          command: '""',
+        });
+        continue;
+      }
+
       // 1.2 Imaginary unit i / j in complex arithmetic (e.g. 2i, 2\pi i, e^{i\theta}, x + iy)
       const isImaginary = (code === 105 || code === 106) && this.isImaginaryUnitContext(nodes);
       const idStart = this.index;
-      this.index++;
+      const idCp = this.text.codePointAt(this.index) || code;
+      const idCharLen = idCp > 0xFFFF ? 2 : 1;
+      const idChar = String.fromCodePoint(idCp);
+      this.index += idCharLen;
       nodes.push({
         kind: "identifier",
         start: idStart,
         end: this.index,
-        text: ch,
+        text: idChar,
+        rawText: idChar,
         isImaginaryUnit: isImaginary,
       });
     }
@@ -433,27 +927,140 @@ export class MathCSTParser {
       return null;
     }
 
-    // Skip environment headers: \begin{...} or \end{...}
-    if (cmd === "\\begin" || cmd === "\\end") {
-      this.skipBracedGroup();
-      this.skipBracedGroup(); // optional format argument e.g. {cc|c}
+    // Parse environment blocks (\begin{...} ... \end{...}) into isolated matrix/table GroupNodes
+    if (cmd === "\\begin") {
+      const envName = this.readBracedGroupContent();
+      if (envName && ARRAY_COLSPEC_ENVS.has(envName)) {
+        this.skipOptionalBracket();
+        this.skipWhitespace();
+        if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_LBRACE) {
+          this.skipBracedGroup(); // optional format argument e.g. \begin{array}{cc|c} or \begin{alignedat}{2}
+        }
+      }
+      const openEnd = this.index;
+      const children = this.parseNodeList(depth + 1, STOP_END_ENV);
+      let closeStart = this.index;
+      let closeEnd = this.index;
+      if (
+        this.index < this.len &&
+        this.text.startsWith("\\end", this.index) &&
+        (this.index + 4 >= this.len || !/[a-zA-Z]/.test(this.text[this.index + 4]))
+      ) {
+        closeStart = this.index;
+        this.index += 4;
+        this.readBracedGroupContent();
+        closeEnd = this.index;
+      }
+      return {
+        kind: "group",
+        delimType: "matrix",
+        openStart: start,
+        openEnd,
+        openText: this.text.slice(start, openEnd),
+        closeStart,
+        closeEnd,
+        closeText: closeEnd > closeStart ? this.text.slice(closeStart, closeEnd) : "",
+        depth,
+        start,
+        end: closeEnd,
+        children,
+      };
+    }
+    if (cmd === "\\end") {
+      this.readBracedGroupContent();
       return null;
     }
 
-    // Math font styling commands: \mathbf{w}, \boldsymbol{\sigma}, \vec{x}, \bm{u}
-    if (cmd === "\\mathbf" || cmd === "\\boldsymbol" || cmd === "\\vec" || cmd === "\\bm") {
-      this.skipWhitespace();
-      if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_LBRACE) {
-        const close = this.text.indexOf("}", this.index + 1);
+    // Skip verbatim blocks: \verb|...|
+    if (cmd === "\\verb") {
+      const v = readVerbEnd(this.text, start);
+      if (v) {
+        this.index = v[0];
+        return null;
+      }
+    }
+
+    // Skip macro definitions: \def, \newcommand, etc.
+    if (
+      cmd === "\\def" ||
+      cmd === "\\edef" ||
+      cmd === "\\gdef" ||
+      cmd === "\\xdef" ||
+      cmd === "\\let" ||
+      cmd === "\\newcommand" ||
+      cmd === "\\renewcommand" ||
+      cmd === "\\providecommand" ||
+      cmd === "\\DeclareMathOperator"
+    ) {
+      const macroEnd = skipMacroDefinition(this.text, start);
+      if (macroEnd !== null) {
+        this.index = macroEnd;
+        return null;
+      }
+    }
+
+    // Math font styling & accent commands: \mathbf{w}, \boldsymbol{\sigma}, \vec{x}, \bm{u}, \hat{a}, \dot{x}, \mathbb{R}, \mathcal{L}
+    if (
+      cmd === "\\mathbf" ||
+      cmd === "\\boldsymbol" ||
+      cmd === "\\pmb" ||
+      cmd === "\\vec" ||
+      cmd === "\\bm" ||
+      cmd === "\\hat" ||
+      cmd === "\\widehat" ||
+      cmd === "\\tilde" ||
+      cmd === "\\widetilde" ||
+      cmd === "\\bar" ||
+      cmd === "\\overline" ||
+      cmd === "\\underline" ||
+      cmd === "\\overrightarrow" ||
+      cmd === "\\overleftarrow" ||
+      cmd === "\\overleftrightarrow" ||
+      cmd === "\\dot" ||
+      cmd === "\\ddot" ||
+      cmd === "\\mathbb" ||
+      cmd === "\\Bbb" ||
+      cmd === "\\mathcal" ||
+      cmd === "\\mathrm" ||
+      cmd === "\\mathit" ||
+      cmd === "\\mathfrak" ||
+      cmd === "\\mathsf" ||
+      cmd === "\\mathtt"
+    ) {
+      let cur = this.index;
+      while (cur < this.len && this.text.charCodeAt(cur) <= 32) cur++;
+      if (cur < this.len && this.text.charCodeAt(cur) === CHAR_LBRACE) {
+        const close = this.findClosingBrace(cur);
         if (close !== -1) {
-          const inner = this.text.slice(this.index + 1, close).trim();
-          this.index = close + 1;
-          return {
-            kind: "identifier",
-            start,
-            end: this.index,
-            text: `${cmd}{${inner}}`,
-          };
+          const inner = this.text.slice(cur + 1, close).trim();
+          if ((cmd === "\\mathbb" || cmd === "\\Bbb") && (inner === "P" || inner === "E")) {
+            // Handled as special probability operator below
+          } else if (cmd === "\\mathcal" && inner === "L") {
+            // Handled as Lie derivative below
+          } else if (cmd === "\\bar" || cmd === "\\overline") {
+            const conj = this.tryParseConjugate(start, cmd);
+            if (conj) return conj;
+          } else if (
+            (cmd === "\\overrightarrow" ||
+              cmd === "\\overleftarrow" ||
+              cmd === "\\overleftrightarrow" ||
+              cmd === "\\widehat" ||
+              cmd === "\\widetilde" ||
+              cmd === "\\overline" ||
+              cmd === "\\underline" ||
+              cmd === "\\vec"
+              ? /^(?:\\[a-zA-Z]+|[a-zA-Z0-9]+)(?:\s*[_^]\s*(?:\{[^{}]*\}|\\[a-zA-Z]+|[a-zA-Z0-9]))*$/
+              : /^(?:\\[a-zA-Z]+|[a-zA-Z0-9])(?:\s*[_^]\s*(?:\{[^{}]*\}|\\[a-zA-Z]+|[a-zA-Z0-9]))*$/
+            ).test(inner)
+          ) {
+            this.index = close + 1;
+            return {
+              kind: "identifier",
+              start,
+              end: this.index,
+              text: `${cmd}{${inner}}`,
+            };
+          }
         }
       }
     }
@@ -561,7 +1168,16 @@ export class MathCSTParser {
 
     // Double vertical norm bars: \| or \Vert or \left\|
     if (cmd === "\\|" || cmd === "\\Vert") {
-      return this.parseNormGroup(start, depth);
+      if (this.findMatchingNormClose(this.index) !== -1) {
+        return this.parseNormGroup(start, depth);
+      }
+      return {
+        kind: "operator",
+        start,
+        end: this.index,
+        text: cmd,
+        operatorType: "divisibility",
+      };
     }
 
     // 1.2 Complex Conjugation: \bar{z}, \overline{z}
@@ -583,11 +1199,23 @@ export class MathCSTParser {
 
     // 4.1 Exterior Calculus: \wedge, \bigwedge
     if (cmd === "\\wedge" || cmd === "\\bigwedge") {
+      let opEnd = this.index;
+      if (cmd === "\\bigwedge") {
+        let cur = this.index;
+        while (cur < this.len && /\s/.test(this.text[cur])) cur++;
+        if (cur < this.len && this.text.startsWith("\\", cur)) {
+          const mod = this.text.slice(cur).match(/^\\(displaylimits|limits|nolimits)(?![A-Za-z])/);
+          if (mod) {
+            opEnd = cur + mod[0].length;
+            this.index = opEnd;
+          }
+        }
+      }
       return {
         kind: "operator",
         start,
-        end: this.index,
-        text: cmd,
+        end: opEnd,
+        text: this.text.slice(start, opEnd),
         operatorType: "wedge",
       };
     }
@@ -675,8 +1303,73 @@ export class MathCSTParser {
 
     // 1.2 Residue Operator & Proximal Operator: \operatorname{Res}, \mathrm{Res}, \Res, \operatorname{prox}
     if (cmd === "\\operatorname" || cmd === "\\mathrm" || cmd === "\\text") {
+      if (cmd === "\\operatorname" && this.index < this.len && this.text.charCodeAt(this.index) === 42) {
+        this.index++; // consume '*' in \operatorname*
+      }
       const specialNode = this.tryParseSpecialOperator(start, cmd, depth);
       if (specialNode) return specialNode;
+    }
+
+    // First-class Text Nodes matching MathJax <mjx-mtext> 1:1
+    if (
+      cmd === "\\text" ||
+      cmd === "\\textbf" ||
+      cmd === "\\textit" ||
+      cmd === "\\texttt" ||
+      cmd === "\\textrm" ||
+      cmd === "\\textnormal" ||
+      cmd === "\\textsf" ||
+      cmd === "\\mbox" ||
+      cmd === "\\mathrm" ||
+      cmd === "\\operatorname"
+    ) {
+      this.skipWhitespace();
+      if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_LBRACE) {
+        const close = this.findClosingBrace(this.index);
+        if (close !== -1) {
+          const textContent = this.text.slice(this.index + 1, close);
+          const nodeEnd = close + 1;
+          this.index = nodeEnd;
+          return {
+            kind: "text",
+            start,
+            end: nodeEnd,
+            text: textContent,
+            command: cmd,
+          };
+        }
+      }
+    }
+
+    // Skip opaque layout/label/tag macros without MathJax visible text output: \tag{...}, \phantom{...}, etc.
+    if (
+      cmd === "\\tag" ||
+      cmd === "\\label" ||
+      cmd === "\\ref" ||
+      cmd === "\\eqref" ||
+      cmd === "\\phantom" ||
+      cmd === "\\hphantom" ||
+      cmd === "\\vphantom" ||
+      cmd === "\\hspace" ||
+      cmd === "\\vspace" ||
+      cmd === "\\class" ||
+      cmd === "\\cssId" ||
+      cmd === "\\style" ||
+      cmd === "\\data" ||
+      cmd === "\\href" ||
+      cmd === "\\htmlClass" ||
+      cmd === "\\htmlId" ||
+      cmd === "\\htmlStyle" ||
+      cmd === "\\htmlData"
+    ) {
+      this.skipWhitespace();
+      if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_LBRACE) {
+        const close = this.findClosingBrace(this.index);
+        if (close !== -1) {
+          this.index = close + 1;
+          return null;
+        }
+      }
     }
     if (cmd === "\\Res") {
       this.expectingResidueArgs = true;
@@ -722,11 +1415,23 @@ export class MathCSTParser {
 
     // 5.1 Kronecker & Hadamard: \otimes, \bigotimes, \odot
     if (cmd === "\\otimes" || cmd === "\\bigotimes") {
+      let opEnd = this.index;
+      if (cmd === "\\bigotimes") {
+        let cur = this.index;
+        while (cur < this.len && /\s/.test(this.text[cur])) cur++;
+        if (cur < this.len && this.text.startsWith("\\", cur)) {
+          const mod = this.text.slice(cur).match(/^\\(displaylimits|limits|nolimits)(?![A-Za-z])/);
+          if (mod) {
+            opEnd = cur + mod[0].length;
+            this.index = opEnd;
+          }
+        }
+      }
       return {
         kind: "operator",
         start,
-        end: this.index,
-        text: cmd,
+        end: opEnd,
+        text: this.text.slice(start, opEnd),
         operatorType: "kronecker",
       };
     }
@@ -774,7 +1479,7 @@ export class MathCSTParser {
       this.skipWhitespace();
       let modArg = "";
       if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_LBRACE) {
-        const close = this.text.indexOf("}", this.index + 1);
+        const close = this.findClosingBrace(this.index);
         if (close !== -1) {
           modArg = this.text.slice(this.index, close + 1);
           this.index = close + 1;
@@ -835,7 +1540,7 @@ export class MathCSTParser {
     if (cmd === "\\mathbb") {
       this.skipWhitespace();
       if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_LBRACE) {
-        const close = this.text.indexOf("}", this.index + 1);
+        const close = this.findClosingBrace(this.index);
         if (close !== -1) {
           const inner = this.text.slice(this.index + 1, close).trim();
           if (inner === "P" || inner === "E") {
@@ -898,6 +1603,21 @@ export class MathCSTParser {
       this.skipOptionalBracket();
     }
 
+    // Tier 2 Fallback: Extensible Under/Over structural operators via Lemire MPHF
+    const cat = lookupCatalog(cmd);
+    if (cat?.extensible) {
+      if (
+        cmd === "\\underbrace" ||
+        cmd === "\\overbrace" ||
+        cmd === "\\underbracket" ||
+        cmd === "\\overbracket" ||
+        cmd === "\\underset" ||
+        cmd === "\\overset"
+      ) {
+        return this.parseUnderOver(start, cmd, depth);
+      }
+    }
+
     return {
       kind: "command",
       start,
@@ -915,7 +1635,7 @@ export class MathCSTParser {
 
     let target = "";
     if (this.text.charCodeAt(cur) === CHAR_LBRACE) {
-      const close = this.text.indexOf("}", cur + 1);
+      const close = this.findClosingBrace(cur);
       if (close !== -1) {
         const inner = this.text.slice(cur + 1, close).trim();
         if (BOUNDARY_SURFACE_INNER_PATTERN.test(inner)) {
@@ -940,7 +1660,7 @@ export class MathCSTParser {
       const subStart = cur;
       cur++;
       if (cur < this.len && this.text.charCodeAt(cur) === CHAR_LBRACE) {
-        const close = this.text.indexOf("}", cur + 1);
+        const close = this.findClosingBrace(cur);
         if (close !== -1) {
           subscript = this.text.slice(subStart, close + 1);
           cur = close + 1;
@@ -963,22 +1683,55 @@ export class MathCSTParser {
   }
 
   private tryParseConjugate(start: number, cmd: string): IdentifierNode | null {
-    this.skipWhitespace();
-    if (this.index >= this.len) return null;
+    let cur = this.index;
+    while (cur < this.len && this.text.charCodeAt(cur) <= 32) {
+      cur++;
+    }
+    if (cur >= this.len) return null;
 
     let target = "";
-    if (this.text.charCodeAt(this.index) === CHAR_LBRACE) {
-      const close = this.text.indexOf("}", this.index + 1);
+    if (this.text.charCodeAt(cur) === CHAR_LBRACE) {
+      const close = this.findClosingBrace(cur);
       if (close !== -1) {
-        target = this.text.slice(this.index + 1, close).trim();
-        this.index = close + 1;
+        const inner = this.text.slice(cur + 1, close).trim();
+        // Positively validate that the conjugated target is a single identifier/symbol
+        if (!/^(?:\\[a-zA-Z]+|[a-zA-Z0-9])(?:\s*[_^]\s*(?:\{[^{}]*\}|\\[a-zA-Z]+|[a-zA-Z0-9]))*$/.test(inner)) {
+          return null;
+        }
+        target = inner;
+        cur = close + 1;
       }
     } else {
-      target = this.text[this.index];
-      this.index++;
+      if (this.text.charCodeAt(cur) === CHAR_BACKSLASH) {
+        let endCmd = cur + 1;
+        while (endCmd < this.len && /[a-zA-Z]/.test(this.text[endCmd])) {
+          endCmd++;
+        }
+        const cmdName = this.text.slice(cur, endCmd);
+        if (
+          cmdName === "\\left" ||
+          cmdName === "\\right" ||
+          cmdName === "\\begin" ||
+          cmdName === "\\end" ||
+          cmdName === "\\frac" ||
+          cmdName === "\\dfrac" ||
+          cmdName === "\\tfrac" ||
+          cmdName === "\\cfrac"
+        ) {
+          return null;
+        }
+        target = cmdName;
+        cur = endCmd;
+      } else if (/[a-zA-Z0-9]/.test(this.text[cur])) {
+        target = this.text[cur];
+        cur++;
+      } else {
+        return null;
+      }
     }
 
     if (!target) return null;
+    this.index = cur;
     return {
       kind: "identifier",
       text: `${cmd}{${target}}`,
@@ -993,7 +1746,7 @@ export class MathCSTParser {
     if (this.index >= this.len || this.text.charCodeAt(this.index) !== CHAR_LBRACE) {
       return null;
     }
-    const close = this.text.indexOf("}", this.index + 1);
+    const close = this.findClosingBrace(this.index);
     if (close === -1) return null;
 
     const inner = this.text.slice(this.index + 1, close).trim();
@@ -1077,15 +1830,48 @@ export class MathCSTParser {
   }
 
   private parseFraction(start: number, cmd: string, depth: number): FractionNode {
-    const numRes = this.parseBracedArgument(depth + 1);
-    const denRes = this.parseBracedArgument(depth + 1);
+    this.skipWhitespace();
+    let numNodes: CSTNode[] = [];
+    let numUnclosed = false;
+    if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_LBRACE) {
+      const numRes = this.parseBracedArgument(depth + 1);
+      numNodes = numRes.nodes;
+      numUnclosed = numRes.isUnclosed;
+    } else if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_BACKSLASH) {
+      const cNode = this.parseCommand(depth + 1);
+      if (cNode) numNodes = [cNode];
+    } else if (this.index < this.len && this.text.charCodeAt(this.index) > 32) {
+      const s = this.text[this.index];
+      const sStart = this.index;
+      this.index++;
+      const isNum = s >= "0" && s <= "9";
+      numNodes = [isNum ? { kind: "number", start: sStart, end: this.index, value: s } : { kind: "identifier", start: sStart, end: this.index, text: s }];
+    }
+
+    this.skipWhitespace();
+    let denNodes: CSTNode[] = [];
+    let denUnclosed = false;
+    if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_LBRACE) {
+      const denRes = this.parseBracedArgument(depth + 1);
+      denNodes = denRes.nodes;
+      denUnclosed = denRes.isUnclosed;
+    } else if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_BACKSLASH) {
+      const cNode = this.parseCommand(depth + 1);
+      if (cNode) denNodes = [cNode];
+    } else if (this.index < this.len && this.text.charCodeAt(this.index) > 32) {
+      const s = this.text[this.index];
+      const sStart = this.index;
+      this.index++;
+      const isNum = s >= "0" && s <= "9";
+      denNodes = [isNum ? { kind: "number", start: sStart, end: this.index, value: s } : { kind: "identifier", start: sStart, end: this.index, text: s }];
+    }
 
     // 1.2 Wirtinger Differentials: \frac{\partial f}{\partial z} vs \frac{\partial f}{\partial \bar{z}}
     let isWirtinger = false;
     let isHolomorphic: boolean | undefined;
 
-    const numText = this.nodesToRawText(numRes.nodes).trim();
-    const denText = this.nodesToRawText(denRes.nodes).trim();
+    const numText = this.nodesToRawText(numNodes).trim();
+    const denText = this.nodesToRawText(denNodes).trim();
 
     if (
       (numText.includes("\\partial") || numText.includes("∂")) &&
@@ -1109,12 +1895,127 @@ export class MathCSTParser {
       command: cmd,
       start,
       end: this.index,
-      numerator: numRes.nodes,
-      denominator: denRes.nodes,
-      hasUnclosedBrace: numRes.isUnclosed || denRes.isUnclosed,
+      numerator: numNodes,
+      denominator: denNodes,
+      hasUnclosedBrace: numUnclosed || denUnclosed,
       isWirtinger,
       isHolomorphic,
       isLegendreCandidate,
+    };
+  }
+
+  private parseUnderOver(start: number, cmd: UnderOverNode["operator"], depth: number): UnderOverNode {
+    const isPrefix = cmd === "\\underset" || cmd === "\\overset";
+    const isUnder = cmd === "\\underbrace" || cmd === "\\underbracket" || cmd === "\\underset";
+    const targetRole = isUnder ? "underscript" : "overscript";
+
+    if (isPrefix) {
+      // Prefix form: \underset{script}{base} or \overset{script}{base}
+      this.skipWhitespace();
+      let scriptNodes: CSTNode[] = [];
+      const scriptStart: number = this.index;
+      if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_LBRACE) {
+        const res = this.parseBracedArgument(depth + 1);
+        scriptNodes = res.nodes;
+      } else if (this.index < this.len && this.text.charCodeAt(this.index) > 32) {
+        const single = this.text[this.index];
+        const sStart = this.index;
+        this.index++;
+        scriptNodes = [{ kind: "identifier", start: sStart, end: this.index, text: single }];
+      }
+      const scriptEnd = this.index;
+
+      this.skipWhitespace();
+      let baseNodes: CSTNode[] = [];
+      const baseStart = this.index;
+      if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_LBRACE) {
+        const res = this.parseBracedArgument(depth + 1);
+        baseNodes = res.nodes;
+      } else if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_BACKSLASH) {
+        const cNode = this.parseCommand(depth + 1);
+        if (cNode) baseNodes = [cNode];
+      } else if (this.index < this.len && this.text.charCodeAt(this.index) > 32) {
+        const single = this.text[this.index];
+        const sStart = this.index;
+        this.index++;
+        baseNodes = [{ kind: "identifier", start: sStart, end: this.index, text: single }];
+      }
+      const baseEnd = this.index;
+
+      return {
+        kind: "underover",
+        operator: cmd,
+        base: baseNodes,
+        script: scriptNodes,
+        targetRole,
+        baseStart,
+        baseEnd,
+        scriptStart,
+        scriptEnd,
+        start,
+        end: this.index,
+      };
+    }
+
+    // Postfix form: \underbrace{base}_{script} or \overbrace{base}^{script}
+    // Optional bracket options for \underbracket / \overbracket e.g. [0.5pt][1pt]
+    this.skipOptionalBracket();
+    this.skipOptionalBracket();
+
+    this.skipWhitespace();
+    const baseStart = this.index;
+    let baseNodes: CSTNode[] = [];
+    if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_LBRACE) {
+      const res = this.parseBracedArgument(depth + 1);
+      baseNodes = res.nodes;
+    } else if (this.index < this.len && this.text.charCodeAt(this.index) > 32) {
+      const single = this.text[this.index];
+      const sStart = this.index;
+      this.index++;
+      baseNodes = [{ kind: "identifier", start: sStart, end: this.index, text: single }];
+    }
+    const baseEnd = this.index;
+
+    // Lookahead for optional subscript '_' (for under) or superscript '^' (for over)
+    this.skipWhitespace();
+    let scriptNodes: CSTNode[] | null = null;
+    let scriptStart: number | undefined;
+    let scriptEnd: number | undefined;
+
+    if (this.index < this.len) {
+      const nextCode = this.text.charCodeAt(this.index);
+      if (nextCode === CHAR_UNDERSCORE || nextCode === CHAR_CARET) {
+        scriptStart = this.index;
+        this.index++; // consume '_' or '^'
+        this.skipWhitespace();
+        if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_LBRACE) {
+          const res = this.parseBracedArgument(depth + 1);
+          scriptNodes = res.nodes;
+        } else if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_BACKSLASH) {
+          const cNode = this.parseCommand(depth + 1);
+          if (cNode) scriptNodes = [cNode];
+        } else if (this.index < this.len && this.text.charCodeAt(this.index) > 32) {
+          const single = this.text[this.index];
+          const sStart = this.index;
+          this.index++;
+          scriptNodes = [{ kind: "identifier", start: sStart, end: this.index, text: single }];
+        }
+        scriptEnd = this.index;
+      }
+    }
+
+    return {
+      kind: "underover",
+      operator: cmd,
+      base: baseNodes,
+      script: scriptNodes,
+      targetRole,
+      baseStart,
+      baseEnd,
+      scriptStart,
+      scriptEnd,
+      start,
+      end: this.index,
     };
   }
 
@@ -1235,7 +2136,7 @@ export class MathCSTParser {
       this.markResiduePoleArguments(children);
     }
 
-    return {
+    const groupNode: GroupNode = {
       kind: "group",
       delimType,
       openStart,
@@ -1259,44 +2160,42 @@ export class MathCSTParser {
       end: closeEnd ?? this.index,
       children,
     };
+    for (const lim of evaluationLimits) {
+      if (lim.kind === "script") lim.base = groupNode;
+    }
+    return groupNode;
   }
 
   private parsePipeDelimited(depth: number, prevNodes: CSTNode[]): CSTNode | null {
     const start = this.index;
     const rest = this.text.slice(start);
 
-    // 1. Dirac Ket: |\psi\rangle or |0\rangle or |n\rangle
-    const ketMatch = rest.match(/^\|([^|\r\n\\]*(?:\\[a-zA-Z]+)*[^|\r\n]*?)\\rangle/);
-    if (ketMatch) {
+    // 1. Dirac Ket: |\psi\rangle or |0\rangle or |n\rangle or |\psi(t)\rangle
+    const rangleIdx = this.findKetClosingRangle(start + 1);
+    if (rangleIdx !== -1) {
       this.index++; // skip '|'
       const openEnd = this.index;
-      const innerText = ketMatch[1];
-      const innerStart = this.index;
-      const sub = new MathCSTParser(innerText).parse();
-      const children: CSTNode[] = [];
-      for (const n of sub) {
-        children.push({
-          ...n,
-          start: innerStart + n.start,
-          end: innerStart + n.end,
-        });
+      const children = this.parseNodeList(depth + 1, STOP_KET);
+      if (this.index < this.len && this.text.startsWith("\\rangle", this.index)) {
+        const closeStart = this.index;
+        this.index += 7; // skip '\rangle'
+        const closeEnd = this.index;
+        return {
+          kind: "group",
+          delimType: "pipe",
+          openStart: start,
+          openEnd,
+          openText: "|",
+          closeStart,
+          closeEnd,
+          closeText: "\\rangle",
+          isKet: true,
+          depth,
+          start,
+          end: closeEnd,
+          children,
+        };
       }
-      this.index = start + ketMatch[0].length;
-      return {
-        kind: "group",
-        delimType: "pipe",
-        openStart: start,
-        openEnd,
-        openText: "|",
-        closeStart: this.index - 7,
-        closeEnd: this.index,
-        closeText: "\\rangle",
-        isKet: true,
-        depth,
-        start,
-        end: this.index,
-        children,
-      };
     }
 
     // 2. Matrix Determinant / Group Order: |A|, |M|, |B|, |G|, |\mathbf{A}|
@@ -1568,6 +2467,45 @@ export class MathCSTParser {
     };
   }
 
+  private findMatchingNormClose(start: number): number {
+    let cur = start;
+    let parenDepth = 0;
+    let bracketDepth = 0;
+    let braceDepth = 0;
+
+    while (cur < this.len) {
+      const c = this.text.charCodeAt(cur);
+      if (c === CHAR_BACKSLASH) {
+        if (this.text.startsWith("\\|", cur) || this.text.startsWith("\\Vert", cur)) {
+          if (parenDepth === 0 && bracketDepth === 0 && braceDepth === 0) {
+            return cur;
+          }
+        } else if (this.text.startsWith("\\right", cur)) {
+          return -1;
+        }
+        cur += 2;
+        continue;
+      }
+      if (c === CHAR_LPAREN) parenDepth++;
+      else if (c === CHAR_RPAREN) {
+        if (parenDepth === 0) return -1;
+        parenDepth--;
+      } else if (c === CHAR_LBRACKET) bracketDepth++;
+      else if (c === CHAR_RBRACKET) {
+        if (bracketDepth === 0) return -1;
+        bracketDepth--;
+      } else if (c === CHAR_LBRACE) braceDepth++;
+      else if (c === CHAR_RBRACE) {
+        if (braceDepth === 0) return -1;
+        braceDepth--;
+      } else if (c === 61 && parenDepth === 0 && bracketDepth === 0 && braceDepth === 0) {
+        return -1;
+      }
+      cur++;
+    }
+    return -1;
+  }
+
   private parseNormGroup(openStart: number, depth: number): GroupNode {
     const openEnd = this.index;
     const openText = this.text.slice(openStart, openEnd);
@@ -1617,7 +2555,7 @@ export class MathCSTParser {
       }
     }
 
-    return {
+    const groupNode: GroupNode = {
       kind: "group",
       delimType: "pipe",
       openStart,
@@ -1635,6 +2573,10 @@ export class MathCSTParser {
       end: closeEnd ?? this.index,
       children,
     };
+    for (const lim of normLimits) {
+      if (lim.kind === "script") lim.base = groupNode;
+    }
+    return groupNode;
   }
 
   private parseLeftRightGroup(openStart: number, depth: number): GroupNode {
@@ -1755,7 +2697,7 @@ export class MathCSTParser {
     }
 
     const isUnclosed = closeStart === undefined;
-    return {
+    const groupNode: GroupNode = {
       kind: "group",
       delimType: "sized",
       openStart,
@@ -1783,11 +2725,19 @@ export class MathCSTParser {
       end: closeEnd ?? this.index,
       children,
     };
+    for (const lim of normLimits) {
+      if (lim.kind === "script") lim.base = groupNode;
+    }
+    for (const lim of evaluationLimits) {
+      if (lim.kind === "script") lim.base = groupNode;
+    }
+    return groupNode;
   }
 
   private parseScript(depth: number, char: "_" | "^", prevNode?: CSTNode): ScriptNode {
     const start = this.index;
     this.index++; // skip '_' or '^'
+    this.skipWhitespace();
     const scriptType = char === "_" ? "subscript" : "superscript";
 
     let arg: CSTNode[];
@@ -1884,8 +2834,8 @@ export class MathCSTParser {
         (innerText === "\\dagger" || innerText === "†") &&
         (LADDER_BASE_SYMBOLS.has(prevText) ||
           LADDER_BASE_SYMBOLS.has(baseText) ||
-          /^[abcABC]/.test(baseText) ||
-          /^[abcABC]/.test(prevText))
+          /^[abcABC]$/.test(baseText) ||
+          /^[abcABC]$/.test(prevText))
       ) {
         isLadderOperator = true;
       }
@@ -1994,9 +2944,10 @@ export class MathCSTParser {
     return { nodes, isUnclosed };
   }
 
-  private skipBracedGroup(): void {
+  private readBracedGroupContent(): string | null {
     this.skipWhitespace();
-    if (this.index >= this.len || this.text.charCodeAt(this.index) !== CHAR_LBRACE) return;
+    if (this.index >= this.len || this.text.charCodeAt(this.index) !== CHAR_LBRACE) return null;
+    const innerStart = this.index + 1;
     this.index++;
     let depth = 1;
     while (this.index < this.len && depth > 0) {
@@ -2005,6 +2956,11 @@ export class MathCSTParser {
       else if (c === CHAR_RBRACE) depth--;
       this.index++;
     }
+    return this.text.slice(innerStart, Math.max(innerStart, this.index - 1)).trim();
+  }
+
+  private skipBracedGroup(): void {
+    this.readBracedGroupContent();
   }
 
   private skipOptionalBracket(): void {

@@ -2,7 +2,14 @@ import { describe, it, expect } from "vitest";
 import katex from "katex";
 import { colorLatexBody, computeSemanticMathSpans } from "../src/converters/generic";
 import { DEFAULT_PALETTE } from "../src/config";
-import { matchBareSymbol, lookupCatalog, matchBareFunction } from "../src/parsers/catalog";
+import {
+  matchBareSymbol,
+  lookupCatalog,
+  matchBareFunction,
+  ROLE_PARAMETER,
+  ROLE_OPERATOR,
+  ROLE_DERIVATIVE,
+} from "../src/parsers/catalog";
 import { collectVariableSpans } from "../src/parsers/variable_hash";
 import { normalizeMathSyntax, normalizeBareGreekInMath, normalizeBareFunctions } from "../src/utils/latex_helpers";
 import { collectScannerSpans } from "../src/parsers/scanner";
@@ -16,7 +23,7 @@ describe("Typst Standards & User Issues Diagnostics", () => {
     const bareZeta = matchBareSymbol(text, 0);
     expect(bareZeta).not.toBeNull();
     expect(bareZeta?.entry.canonical).toBe("\\zeta");
-    expect(bareZeta?.entry.role).toBe("parameter");
+    expect(bareZeta?.entry.roleId).toBe(ROLE_PARAMETER);
 
     const varSpans = collectVariableSpans(text, DEFAULT_PALETTE);
     // zeta should be a single span of length 4 (0 to 4), NOT split into z (0 to 1) and eta (1 to 4)
@@ -27,8 +34,8 @@ describe("Typst Standards & User Issues Diagnostics", () => {
   it("unifies nabla and \\nabla as operator with identical color", () => {
     const bareNabla = lookupCatalog("nabla");
     const macroNabla = lookupCatalog("\\nabla");
-    expect(bareNabla?.role).toBe("operator");
-    expect(macroNabla?.role).toBe("operator");
+    expect(bareNabla?.roleId).toBe(ROLE_OPERATOR);
+    expect(macroNabla?.roleId).toBe(ROLE_OPERATOR);
     expect(bareNabla?.priority).toBe(macroNabla?.priority);
 
     const colored = colorLatexBody("nabla + \\nabla", DEFAULT_PALETTE);
@@ -39,8 +46,8 @@ describe("Typst Standards & User Issues Diagnostics", () => {
   it("unifies partial and \\partial as differential with identical color", () => {
     const barePartial = lookupCatalog("partial");
     const macroPartial = lookupCatalog("\\partial");
-    expect(barePartial?.role).toBe("differential");
-    expect(macroPartial?.role).toBe("differential");
+    expect(barePartial?.roleId).toBe(ROLE_DERIVATIVE);
+    expect(macroPartial?.roleId).toBe(ROLE_DERIVATIVE);
     expect(barePartial?.priority).toBe(macroPartial?.priority);
 
     const colored = colorLatexBody("partial + \\partial", DEFAULT_PALETTE);
