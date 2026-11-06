@@ -16,6 +16,7 @@ import "@mathjax/src/js/input/tex/color/ColorConfiguration.js";
 
 import { stampMathJaxDOM } from "../src/editor/dom_stamper";
 import { getMathJaxElementRange } from "../src/editor/weakmap_index";
+import { highlightSelectionInMathContainer } from "../src/editor/inline_tooltip";
 import { MathCSTParser } from "../src/parsers/cst/parser";
 import { CSTNode } from "../src/parsers/cst/types";
 import { createFakeElement, FakeElement } from "./tri_engine_harness";
@@ -402,5 +403,48 @@ describe("4D Spatial Tensor Bijective Verification Suite", () => {
 
     console.log("=======================================================\n");
     expect(mutationDiscrepancyCount).toBe(0);
+  });
+
+  it("Tier 4: CodeMirror 6 Live Selection & Caret Synchronization Gate", () => {
+    const targetLatex = "\\underbrace{a+b+c}_{x}\\qquad\\overbrace{d+e+\\cdots+f}^{y}";
+    const container = renderRealMathJaxDOM(targetLatex);
+    stampMathJaxDOM(container as any, targetLatex);
+
+    // 1. Collapsed Caret Test (from === to):
+    // For every stamped semantic token leaf, placing a collapsed cursor at its boundaries
+    // must attach strictly a caret pseudo-element (.color-math-caret-before / after)
+    // and MUST NOT add any whole-token box outlines (.color-math-selected-target).
+    const leaves = container.querySelectorAll("mjx-mi, mjx-mn, mjx-mo, mjx-mtext");
+    expect(leaves.length).toBeGreaterThan(0);
+
+    for (const leaf of leaves) {
+      const m = leaf.className.match(/cm-src-(\d+)-(\d+)/);
+      if (!m) continue;
+      const start = parseInt(m[1], 10);
+      const end = parseInt(m[2], 10);
+
+      // Caret at start boundary of token
+      highlightSelectionInMathContainer(container as any, start, start);
+      expect(container.querySelectorAll(".color-math-selected-target").length).toBe(0);
+      expect(container.querySelectorAll(".color-math-caret-before, .color-math-caret-after").length).toBeGreaterThanOrEqual(1);
+
+      // Caret at end boundary of token
+      highlightSelectionInMathContainer(container as any, end, end);
+      expect(container.querySelectorAll(".color-math-selected-target").length).toBe(0);
+      expect(container.querySelectorAll(".color-math-caret-before, .color-math-caret-after").length).toBeGreaterThanOrEqual(1);
+    }
+
+    // 2. Sub-expression Range Selection Test (from < to):
+    // Selecting "a+b+c" (offset [12, 17]) must highlight strictly the selected sub-expression
+    // and MUST clear all caret pseudo-elements.
+    const aPlusBPlusCStart = 12;
+    const aPlusBPlusCEnd = 17;
+    highlightSelectionInMathContainer(container as any, aPlusBPlusCStart, aPlusBPlusCEnd);
+
+    const rangeTargets = container.querySelectorAll(".color-math-selected-target");
+    expect(rangeTargets.length).toBeGreaterThanOrEqual(1);
+
+    const remainingCarets = container.querySelectorAll(".color-math-caret-before, .color-math-caret-after");
+    expect(remainingCarets.length).toBe(0);
   });
 });

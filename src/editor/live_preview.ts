@@ -14,7 +14,7 @@ import { ColorPalette, ColorMathOptions } from "../config";
 import { computeSemanticMathSpans } from "../converters/generic";
 import { scanMarkdown } from "../parsers/markdown_scanner";
 import { containsColorWrapper } from "../utils/latex_helpers";
-import { ColorSpan, selectColorSpans, flattenColorSpans } from "../utils/spans";
+import { selectColorSpans, flattenColorSpans } from "../utils/spans";
 import { getCachedOrComputedSpans } from "../parsers/engine_bridge";
 import { resolveOnDemandRange, ResolvedRange } from "./lazy_navigation";
 import { getMathJaxElementRange, indexMathJaxElement } from "./weakmap_index";
@@ -366,8 +366,8 @@ export function createColorMathLivePlugin(
         this.view.focus();
 
         // Guard against Obsidian inline-math widget unfold resetting selection on the next frame
-        if (typeof requestAnimationFrame === "function") {
-          requestAnimationFrame(() => {
+        if (typeof window.requestAnimationFrame === "function") {
+          window.requestAnimationFrame(() => {
             if (this.lastNavigationSelection === sel) {
               const cur = this.view.state.selection.main;
               if (cur.anchor !== sel.anchor || cur.head !== sel.head) {
@@ -576,8 +576,8 @@ export function createColorMathLivePlugin(
           });
           this.view.focus();
 
-          if (typeof requestAnimationFrame === "function") {
-            requestAnimationFrame(() => {
+          if (typeof window.requestAnimationFrame === "function") {
+            window.requestAnimationFrame(() => {
               if (this.lastNavigationSelection === sel) {
                 const cur = this.view.state.selection.main;
                 if (cur.anchor !== sel.anchor || cur.head !== sel.head) {
@@ -704,8 +704,8 @@ export function createColorMathLivePlugin(
         if (update.docChanged || update.viewportChanged || update.selectionSet) {
           this.decorations = this.buildDecorations(update.view);
           this.syncSelectionToRenderedMath(update.view);
-          if (typeof requestAnimationFrame === "function") {
-            requestAnimationFrame(() => {
+          if (typeof window.requestAnimationFrame === "function") {
+            window.requestAnimationFrame(() => {
               this.syncSelectionToRenderedMath(update.view);
             });
           }

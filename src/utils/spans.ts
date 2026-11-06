@@ -6,6 +6,7 @@ export interface ColorSpan {
   color: string;
   priority?: number;
   role?: string;
+  needsOuterGroup?: boolean;
 }
 
 function crosses(left: ColorSpan, right: ColorSpan): boolean {
@@ -235,6 +236,9 @@ export function applyColorSpans(source: string, spans: ColorSpan[]): string {
       const sortedClosings = [...closeList].sort((a, b) => b.start - a.start);
       for (let i = 0; i < sortedClosings.length; i++) {
         pieces.push("}");
+        if (sortedClosings[i].needsOuterGroup) {
+          pieces.push("}");
+        }
       }
     }
 
@@ -242,6 +246,14 @@ export function applyColorSpans(source: string, spans: ColorSpan[]): string {
     if (openList) {
       const sortedOpenings = [...openList].sort((a, b) => b.end - a.end);
       for (const span of sortedOpenings) {
+        const needsGroup =
+          idx === span.start &&
+          /(?:\\dd|\\d|\\dh|\\diff)(?![a-zA-Z])(?:\s*\[[^\]]*\])?\s*$/.test(source.slice(0, idx)) &&
+          (idx === 0 || source[idx - 1] !== "{");
+        if (needsGroup) {
+          span.needsOuterGroup = true;
+          pieces.push("{");
+        }
         pieces.push(`\\textcolor{${span.color}}{`);
       }
     }

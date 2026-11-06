@@ -76,9 +76,39 @@ describe("WebAssembly Opt-In Toggle Switch (`useWebAssembly`)", () => {
       }
     );
 
-    // When WASM is operational, fallbackFn is skipped
+    // When WASM is operational and no semantic augmentation is requested, fallbackFn is skipped
     expect(fallbackCalled).toBe(false);
     expect(spans.length).toBeGreaterThan(0);
+  });
+
+  it("preserves variable data-flow hash spans (x, a, oo) when useWebAssembly is true", () => {
+    clearMathSpanCache();
+    const testMath = "x + a = oo";
+    let fallbackCalled = false;
+
+    const spans = getCachedOrComputedSpans(
+      testMath,
+      COLORS,
+      { useWebAssembly: true, variableDataFlow: true },
+      () => {
+        fallbackCalled = true;
+        return computeSemanticMathSpans(testMath, COLORS, { variableDataFlow: true }, false);
+      }
+    );
+
+    // Fallback is called to augment WASM CST with variable data-flow hashes
+    expect(fallbackCalled).toBe(true);
+    // x (start 0, end 1), + (2..3), a (4..5), = (6..7), oo (8..10)
+    const xSpan = spans.find((s) => s.start === 0 && s.end === 1);
+    const aSpan = spans.find((s) => s.start === 4 && s.end === 5);
+    const ooSpan = spans.find((s) => s.start === 8 && s.end === 10);
+
+    expect(xSpan).toBeDefined();
+    expect(xSpan?.priority).toBe(26);
+    expect(aSpan).toBeDefined();
+    expect(aSpan?.priority).toBe(26);
+    expect(ooSpan).toBeDefined();
+    expect(ooSpan?.priority).toBe(22);
   });
 
   it("falls back gracefully to pure TypeScript when WASM is disabled even if useWebAssembly is true", async () => {

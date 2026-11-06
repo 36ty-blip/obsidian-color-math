@@ -7,11 +7,13 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
-import katex from "katex";
+import { RangeSetBuilder } from "@codemirror/state";
+import { Decoration } from "@codemirror/view";
 import { validateLatexWithMathJax } from "./validator";
 import { RAW_MATHEMATICAL_CORPUS, buildTypingCorpus, TypingScript } from "./keystroke/typing_corpus";
 import { normalizeMathSyntax, autoSealUnclosedDelimiters } from "../src/utils/latex_helpers";
-import { colorLatexBody } from "../src/converters/generic";
+import { colorLatexBody, computeSemanticMathSpans } from "../src/converters/generic";
+import { selectColorSpans, flattenColorSpans } from "../src/utils/spans";
 import { DEFAULT_COLORS, DEFAULT_OPTIONS, ColorMathOptions } from "../src/config";
 
 export interface MacroAuditEquation {
@@ -101,7 +103,7 @@ export interface KeystrokeFailure {
   errorMessage: string;
   failureType: "UNCLOSED_MACRO_ARG" | "UNCLOSED_BRACKET" | "DANGLING_OPERATOR" | "INCOMPLETE_COMMAND" | "OTHER_PARSE_ERROR";
   mathjaxStatus: { valid: boolean; error?: string };
-  katexStatus: { valid: boolean; error?: string };
+  cm6Status: { valid: boolean; error?: string };
 }
 
 export interface KeystrokeAuditSummary {
@@ -115,8 +117,8 @@ export interface KeystrokeAuditSummary {
   byEngineBreakdown: {
     mathjaxPassCount: number;
     mathjaxFailCount: number;
-    katexPassCount: number;
-    katexFailCount: number;
+    cm6PassCount: number;
+    cm6FailCount: number;
     bothPassedCount: number;
   };
   mathjaxErrors: Array<{ equationName: string; prefix: string; sealed: string; error: string }>;
@@ -173,8 +175,8 @@ export function runKeystrokePrefixAudit(): KeystrokeAuditSummary {
   const byEngineBreakdown = {
     mathjaxPassCount: 0,
     mathjaxFailCount: 0,
-    katexPassCount: 0,
-    katexFailCount: 0,
+    cm6PassCount: 0,
+    cm6FailCount: 0,
     bothPassedCount: 0,
   };
 
@@ -225,29 +227,34 @@ export function runKeystrokePrefixAudit(): KeystrokeAuditSummary {
         continue;
       }
 
-      // 2. Dual-Engine Validator: Independent tracking of KaTeX and MathJax v4
-      let katexValid = false;
-      let katexErr: string | undefined;
+      // 2. CodeMirror 6 Live Preview incremental decoration validation
+      let cm6Valid = false;
+      let cm6Err: string | undefined;
 
       try {
-        katex.renderToString(sealed, {
-          throwOnError: true,
-          displayMode: true,
-          strict: false,
-          macros: {
-            "\\xleftrightarrow": "\\xrightarrow{#1}",
-            "\\xRightarrow": "\\xrightarrow{#1}",
-            "\\xLeftarrow": "\\xleftarrow{#1}",
-            "\\xLeftrightarrow": "\\xrightarrow{#1}",
-            "\\xmapsto": "\\xrightarrow{#1}",
-          },
-        });
-        katexValid = true;
-      } catch (kErr: any) {
-        katexErr = kErr.message;
+        const rawSpans = computeSemanticMathSpans(prefix, DEFAULT_COLORS, options);
+        const selected = selectColorSpans(prefix, rawSpans);
+        const cmSpans = flattenColorSpans(selected);
+        const builder = new RangeSetBuilder<Decoration>();
+        let lastFrom = -1;
+        for (const span of cmSpans) {
+          const from = span.start;
+          const to = span.end;
+          if (from < to && to <= prefix.length) {
+            if (from < lastFrom) {
+              throw new Error(`Out of order range [${from}, ${to}] after lastFrom ${lastFrom} in prefix "${prefix}"`);
+            }
+            builder.add(from, to, Decoration.mark({ class: `color-math-role-${span.role || "main"}` }));
+            lastFrom = from;
+          }
+        }
+        builder.finish();
+        cm6Valid = true;
+      } catch (cErr: any) {
+        cm6Err = cErr.message;
       }
 
-      // MathJax v4 validation (authoritative for Obsidian users on final colored LaTeX)
+      // MathJax 4 validation (authoritative for Obsidian users on final colored LaTeX)
       const mjRes = validateLatexWithMathJax(colored);
       const mathjaxValid = mjRes.valid;
       const mathjaxErr = mjRes.error;
@@ -264,19 +271,19 @@ export function runKeystrokePrefixAudit(): KeystrokeAuditSummary {
         });
       }
 
-      if (katexValid) byEngineBreakdown.katexPassCount++;
-      else byEngineBreakdown.katexFailCount++;
+      if (cm6Valid) byEngineBreakdown.cm6PassCount++;
+      else byEngineBreakdown.cm6FailCount++;
 
-      if (mathjaxValid && katexValid) byEngineBreakdown.bothPassedCount++;
+      if (mathjaxValid && cm6Valid) byEngineBreakdown.bothPassedCount++;
 
-      // In Obsidian, MathJax is the true engine. If MathJax renders, user sees valid math:
-      const overallValid = mathjaxValid || katexValid;
+      // Both MathJax 4 and CodeMirror 6 must validate cleanly
+      const overallValid = mathjaxValid && cm6Valid;
 
       if (overallValid) {
         passedKeystrokes++;
       } else {
         byCategory[eq.category].failed++;
-        const effectiveErr = mathjaxErr || katexErr || "Syntax error";
+        const effectiveErr = mathjaxErr || cm6Err || "Syntax error";
         const fType = classifyFailure(prefix, sealed, effectiveErr);
         byFailureType[fType]++;
         failures.push({
@@ -291,7 +298,7 @@ export function runKeystrokePrefixAudit(): KeystrokeAuditSummary {
           errorMessage: effectiveErr,
           failureType: fType,
           mathjaxStatus: { valid: mathjaxValid, error: mathjaxErr },
-          katexStatus: { valid: katexValid, error: katexErr },
+          cm6Status: { valid: cm6Valid, error: cm6Err },
         });
       }
     }
@@ -331,13 +338,13 @@ if (require.main === module || !process.env.VITEST) {
   console.log(`Duration:           ${elapsed} ms\n`);
 
   console.log("-------------------------------------------------------------------------");
-  console.log("ENGINE VALIDATION BREAKDOWN (MathJax v4 vs KaTeX):");
+  console.log("ENGINE VALIDATION BREAKDOWN (MathJax 4 vs CodeMirror 6 Live Preview):");
   console.log("-------------------------------------------------------------------------");
   const mjRate = ((summary.byEngineBreakdown.mathjaxPassCount / summary.totalKeystrokes) * 100).toFixed(1);
-  const ktRate = ((summary.byEngineBreakdown.katexPassCount / summary.totalKeystrokes) * 100).toFixed(1);
-  console.log(`• MathJax v4 (Obsidian): ${summary.byEngineBreakdown.mathjaxPassCount} / ${summary.totalKeystrokes} passed (${mjRate}%) | Failed: ${summary.byEngineBreakdown.mathjaxFailCount}`);
-  console.log(`• KaTeX (Fast-Path):     ${summary.byEngineBreakdown.katexPassCount} / ${summary.totalKeystrokes} passed (${ktRate}%) | Failed: ${summary.byEngineBreakdown.katexFailCount}`);
-  console.log(`• Both Engines Passed:   ${summary.byEngineBreakdown.bothPassedCount} / ${summary.totalKeystrokes}\n`);
+  const cmRate = ((summary.byEngineBreakdown.cm6PassCount / summary.totalKeystrokes) * 100).toFixed(1);
+  console.log(`• MathJax 4 (Obsidian):        ${summary.byEngineBreakdown.mathjaxPassCount} / ${summary.totalKeystrokes} passed (${mjRate}%) | Failed: ${summary.byEngineBreakdown.mathjaxFailCount}`);
+  console.log(`• CodeMirror 6 (Live Preview): ${summary.byEngineBreakdown.cm6PassCount} / ${summary.totalKeystrokes} passed (${cmRate}%) | Failed: ${summary.byEngineBreakdown.cm6FailCount}`);
+  console.log(`• Both Engines Passed:         ${summary.byEngineBreakdown.bothPassedCount} / ${summary.totalKeystrokes}\n`);
 
   if (summary.mathjaxErrors.length > 0) {
     console.log("-------------------------------------------------------------------------");

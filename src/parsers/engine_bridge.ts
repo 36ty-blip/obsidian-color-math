@@ -1,9 +1,9 @@
 import { ColorPalette, ColorMathOptions, COLORS } from "../config";
-import { ColorSpan, selectColorSpans } from "../utils/spans";
+import { ColorSpan, selectColorSpans, flattenColorSpans } from "../utils/spans";
 import { LruCache } from "../utils/lru_cache";
 import { parseMathWithCST } from "./cst/index";
 import { isWasmCstReady, parseWasmCstSpans } from "./wasm_cst";
-import { initWasmCatalog, isWasmCatalogReady, disableWasmCatalog } from "./wasm_catalog";
+import { initWasmCatalog } from "./wasm_catalog";
 import { WASM_BASE64 } from "./wasm_binary";
 
 // Bounded LRU cache: maps `${optionsHash}::${mathBody}` -> ColorSpan[]
@@ -231,6 +231,22 @@ export function getCachedOrComputedSpans(
         activeMode: options?.activeMode,
       });
       if (wasmSpans && wasmSpans.length > 0) {
+        const needsSemanticAugmentation =
+          options?.variableDataFlow ||
+          options?.enableTaxonomy ||
+          options?.colorUnits ||
+          options?.colorDifferentials ||
+          options?.colorDimensionless ||
+          options?.colorQuantumOperators ||
+          options?.colorBraKet;
+
+        if (needsSemanticAugmentation) {
+          const legacySpans = fallbackFn();
+          const spans = flattenColorSpans(selectColorSpans(body, [...legacySpans, ...wasmSpans]));
+          mathSpanCache.set(cacheKey, spans);
+          return spans;
+        }
+
         mathSpanCache.set(cacheKey, wasmSpans);
         return wasmSpans;
       }

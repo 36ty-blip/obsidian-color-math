@@ -5,7 +5,7 @@
 import { MathCSTParser } from "../parsers/cst/parser";
 import { CSTNode, FractionNode, ScriptNode, SpatialCoordinate4D, UnderOverNode } from "../parsers/cst/types";
 import { getMathJaxElementRange } from "./weakmap_index";
-import { getElementText, getExpectedLeafNodeText, isLeafTextMatch } from "./quaternion_reconciler";
+import { getElementText, isLeafTextMatch } from "./quaternion_reconciler";
 
 export interface MultiScaleRange {
   glyph: { start: number; end: number };      // W=0
@@ -51,6 +51,8 @@ export const SPACING_COMMANDS = new Set([
   "\\hskip",
   "\\kern",
 ]);
+
+export const BIG_OPS = new Set(["\\sum", "\\prod", "\\coprod", "\\bigcup", "\\bigcap", "\\lim"]);
 
 export const FONT_ACCENT_COMMANDS = new Set([
   "\\mathbf",
@@ -138,7 +140,6 @@ export function collectLeaves(nodes: CSTNode[], acc: CSTNode[] = []): CSTNode[] 
         // Big operators with limits (\sum, \prod, \lim, etc.)
         // MathJax CHTML renders <mjx-munderover> with <mjx-over> (superscript) FIRST,
         // then <mjx-box> wrapping <mjx-munder> (<mjx-base> command, then <mjx-under> subscript).
-        const BIG_OPS = new Set(["\\sum", "\\prod", "\\coprod", "\\bigcup", "\\bigcap", "\\lim"]);
         if (BIG_OPS.has(node.name)) {
           let s1: ScriptNode | null = null;
           let s2: ScriptNode | null = null;

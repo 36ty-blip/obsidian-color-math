@@ -10,8 +10,8 @@ export interface FakeElement {
   className: string;
   textContent: string;
   classList: {
-    add: (cls: string) => void;
-    remove: (cls: string) => void;
+    add: (...tokens: string[]) => void;
+    remove: (...tokens: string[]) => void;
     contains: (cls: string) => boolean;
   };
   children: FakeElement[];
@@ -50,8 +50,8 @@ export function createFakeElement(tagName: string, children: FakeElement[] = [],
       text = val;
     },
     classList: {
-      add: (cls: string) => classes.add(cls),
-      remove: (cls: string) => classes.delete(cls),
+      add: (...tokens: string[]) => tokens.forEach((c) => classes.add(c)),
+      remove: (...tokens: string[]) => tokens.forEach((c) => classes.delete(c)),
       contains: (cls: string) => classes.has(cls),
     },
     children: [...children],

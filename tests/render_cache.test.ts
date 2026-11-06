@@ -8,6 +8,7 @@ import {
   readRenderCache,
   writeRenderCache,
   pruneRenderCache,
+  sanitizeRenderCache,
   hydrateElementFromHtml,
   RenderCacheData,
 } from "../src/cache/render_cache";
@@ -483,5 +484,146 @@ describe("Zero-MathJax Persistent Render Cache (render_cache.json)", () => {
     expect(fp1).toContain("v:1.0.106");
     expect(fp2).toContain("v:1.0.107");
     expect(fp1).not.toBe(fp2);
+  });
+
+  it("sanitizes poisoned syntax errors and error banners from persistent cache data", () => {
+    const data: RenderCacheData = {
+      version: 2,
+      settingsFingerprint: "test",
+      renders: {
+        clean1: { html: "<mjx-container><mjx-math>clean</mjx-math></mjx-container>", ts: 100 },
+        error1: { html: '<mjx-container title="Color Math Error: Misplaced &"></mjx-container>', ts: 101 },
+        error2: { html: '<mjx-container data-mjx-error="Syntax error"></mjx-container>', ts: 102 },
+        error3: { html: '<mjx-container><mjx-merror>Error</mjx-merror></mjx-container>', ts: 103 },
+        empty: { html: "   ", ts: 104 },
+      },
+    };
+
+    sanitizeRenderCache(data);
+
+    expect(data.renders.clean1).toBeDefined();
+    expect(data.renders.error1).toBeUndefined();
+    expect(data.renders.error2).toBeUndefined();
+    expect(data.renders.error3).toBeUndefined();
+    expect(data.renders.empty).toBeUndefined();
+  });
+
+  it("never persists ephemeral floating math tooltip renders to disk", async () => {
+    const fakeMathJax = {
+      tex2chtml(latex: string, options?: any) {
+        return {
+          tagName: "MJX-CONTAINER",
+          outerHTML: `<mjx-container class="MathJax">${latex}</mjx-container>`,
+          cloneNode: () => ({ outerHTML: `<mjx-container class="MathJax">${latex}</mjx-container>` }),
+          setAttribute: () => {},
+          getAttribute: () => null,
+          querySelector: () => null,
+        } as any;
+      },
+    };
+
+    const originalDoc = (globalThis as any).document;
+    (globalThis as any).document = {
+      createElement: () => ({ setAttribute: () => {} }),
+      head: { querySelector: () => ({ textContent: "long stylesheet rule content exceeding 50 chars for test" }) },
+    };
+    (globalThis as any).window = { MathJax: fakeMathJax };
+
+    const interceptor = new MathJaxInterceptor(
+      () => DEFAULT_COLORS,
+      () => DEFAULT_OPTIONS,
+      () => true,
+      () => "inline"
+    );
+
+    const persistentCache: RenderCacheData = {
+      version: 2,
+      settingsFingerprint: "test",
+      renders: {},
+    };
+
+    try {
+      interceptor.setPersistentCache(persistentCache);
+      await interceptor.install();
+
+      // Tooltip renders with ephemeral: true
+      const testLatex = "x + y";
+      fakeMathJax.tex2chtml(testLatex, { display: true, ephemeral: true });
+
+      // In-memory cache has it for fast live tooltip hover
+      const hash = computeMathHash(testLatex, (interceptor as any).getContextKey() + "|D");
+      expect((interceptor as any).renderCache.has(hash)).toBe(true);
+
+      // BUT persistent disk cache has ZERO entries (never polluted by in-flight typing!)
+      expect(persistentCache.renders[hash]).toBeUndefined();
+      expect(Object.keys(persistentCache.renders).length).toBe(0);
+    } finally {
+      (globalThis as any).document = originalDoc;
+      delete (globalThis as any).window;
+    }
+  });
+
+  it("bypasses persistent cache when MathJax stylesheet in head is empty or unmounted", async () => {
+    let mathJaxCalled = false;
+    const fakeMathJax = {
+      tex2chtml(latex: string, options?: any) {
+        mathJaxCalled = true;
+        return {
+          tagName: "MJX-CONTAINER",
+          outerHTML: `<mjx-container class="MathJax">COMPILED_BY_MATHJAX</mjx-container>`,
+          cloneNode: () => ({ outerHTML: `<mjx-container class="MathJax">COMPILED_BY_MATHJAX</mjx-container>` }),
+          setAttribute: () => {},
+          getAttribute: () => null,
+          querySelector: () => null,
+        } as any;
+      },
+    };
+
+    // Simulate empty stylesheet in head (e.g. right after reload or cold boot)
+    const originalDoc = (globalThis as any).document;
+    (globalThis as any).document = {
+      createElement: () => ({ setAttribute: () => {} }),
+      head: {
+        querySelector: (sel: string) => {
+          if (sel === "style#MJX-CHTML-styles") return { textContent: "" }; // Empty!
+          return null;
+        },
+      },
+    };
+    (globalThis as any).window = { MathJax: fakeMathJax };
+
+    const interceptor = new MathJaxInterceptor(
+      () => DEFAULT_COLORS,
+      () => DEFAULT_OPTIONS,
+      () => true,
+      () => "inline"
+    );
+
+    const testLatex = "e^{i\\pi} + 1 = 0";
+    const testHash = computeMathHash(testLatex, (interceptor as any).getContextKey() + "|D");
+    const persistentCache: RenderCacheData = {
+      version: 2,
+      settingsFingerprint: "test",
+      renders: {
+        [testHash]: {
+          html: `<mjx-container class="MathJax">CACHED_UNSTYLED_HTML</mjx-container>`,
+          display: true,
+          ts: Date.now(),
+        },
+      },
+    };
+
+    try {
+      interceptor.setPersistentCache(persistentCache);
+      await interceptor.install();
+
+      // Because stylesheet is empty, getCachedElement must return null and fall through to MathJax
+      const res = fakeMathJax.tex2chtml(testLatex, { display: true });
+      expect(mathJaxCalled).toBe(true);
+      expect((res as any).outerHTML).toContain("COMPILED_BY_MATHJAX");
+    } finally {
+      (globalThis as any).document = originalDoc;
+      delete (globalThis as any).window;
+    }
   });
 });

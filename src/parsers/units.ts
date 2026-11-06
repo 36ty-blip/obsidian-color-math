@@ -132,7 +132,14 @@ export function findUnitSpans(rawBody: string, options?: UnitOptions): UnitSpan[
     const fullMatch = match[0];
     const numPart = match[1];
     const numOffset = fullMatch.lastIndexOf(numPart);
-    const numEnd = match.index + numOffset + numPart.length;
+    const numStart = match.index + numOffset;
+    const numEnd = numStart + numPart.length;
+
+    // If inside a line-break dimension argument: \\[...], skip!
+    const beforeNum = body.slice(0, numStart);
+    if (/\\\\[ \t]*\[[^\]]*$/.test(beforeNum)) {
+      continue;
+    }
 
     const rest = body.slice(numEnd);
     if (!rest || rest.length === 0) continue;

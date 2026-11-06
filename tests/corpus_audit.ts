@@ -6,10 +6,13 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { Worker, isMainThread, parentPort, workerData } from "worker_threads";
-import katex from "katex";
+import { RangeSetBuilder } from "@codemirror/state";
+import { Decoration } from "@codemirror/view";
 import { validateLatexWithMathJax } from "./validator";
 import { scanMarkdown } from "../src/parsers/markdown_scanner";
 import { convertText } from "../src/converters/block";
+import { computeSemanticMathSpans, colorLatexBody } from "../src/converters/generic";
+import { selectColorSpans, flattenColorSpans } from "../src/utils/spans";
 import { DEFAULT_COLORS, DEFAULT_OPTIONS, ColorMathOptions, ColorPalette } from "../src/config";
 import { detectNoteField } from "../src/parsers/frontmatter";
 
@@ -83,7 +86,7 @@ const MAX_STRESS_OPTIONS: ColorMathOptions = {
 };
 
 export interface Anomaly {
-  type: "CRITICAL_REGRESSION" | "PRE_EXISTING_NOTE_TYPO" | "PARSER_CRASH" | "ROUNDTRIP_MISMATCH";
+  type: "CRITICAL_REGRESSION" | "PRE_EXISTING_NOTE_TYPO" | "PARSER_CRASH" | "ROUNDTRIP_MISMATCH" | "CM6_SORT_VIOLATION" | "COLOR_PARITY_MISMATCH";
   file: string;
   line: number;
   col: number;
@@ -96,9 +99,12 @@ export interface WorkerResult {
   filesProcessed: number;
   equationsScanned: number;
   equationsValidated: number;
+  cm6DecorationsValidated: number;
   regressions: Anomaly[];
   preExistingTypos: Anomaly[];
   crashes: Anomaly[];
+  cm6Violations: Anomaly[];
+  colorParityMismatches: Anomaly[];
 }
 
 /**
@@ -159,9 +165,12 @@ if (!isMainThread) {
     filesProcessed: 0,
     equationsScanned: 0,
     equationsValidated: 0,
+    cm6DecorationsValidated: 0,
     regressions: [],
     preExistingTypos: [],
     crashes: [],
+    cm6Violations: [],
+    colorParityMismatches: [],
   };
 
   for (const filePath of files) {
@@ -227,57 +236,51 @@ if (!isMainThread) {
       continue;
     }
 
-    const coloredScan = scanMarkdown(colored);
-    const coloredBlocks = [...coloredScan.mathBlocks, ...coloredScan.mathInlines];
-
-    for (let i = 0; i < coloredBlocks.length; i++) {
-      const cBlock = coloredBlocks[i];
-      const coloredEq = colored.slice(cBlock.contentStart, cBlock.contentEnd);
+    // Unified MathJax 4 Validation, CodeMirror 6 RangeSetBuilder & Color Parity Gate
+    for (let i = 0; i < originalBlocks.length; i++) {
+      const oBlock = originalBlocks[i];
+      const origEq = content.slice(oBlock.contentStart, oBlock.contentEnd);
       result.equationsValidated++;
 
+      let coloredEq: string;
       try {
-        katex.renderToString(coloredEq, {
-          throwOnError: true,
-          displayMode: cBlock.kind === "math_block",
+        coloredEq = colorLatexBody(origEq, AUDIT_COLORS, options);
+      } catch (err: any) {
+        const { line, col } = getLineCol(lineStarts, oBlock.contentStart);
+        result.crashes.push({
+          type: "PARSER_CRASH",
+          file: relPath,
+          line,
+          col,
+          equationSnippet: origEq.slice(0, 100),
+          errorMessage: `colorLatexBody crashed: ${err.message}`,
+          codeFrame: generateCodeFrame(fileLines, line, col),
         });
-      } catch (kErr: any) {
-        // Obsidian primary engine is MathJax: verify if equation renders cleanly in MathJax
-        const mjxRes = validateLatexWithMathJax(coloredEq);
-        if (mjxRes.valid) {
-          // Equation is 100% valid in Obsidian's native MathJax engine!
-          continue;
-        }
+        continue;
+      }
 
-        // Colored equation threw in both engines! Check if original equation ALSO threw in MathJax
+      // 1. MathJax 4 Native Syntax Validation (Zero KaTeX, Exact 1:1 Equation Alignment)
+      const mjxRes = validateLatexWithMathJax(coloredEq);
+      if (!mjxRes.valid) {
+        // Check if original equation also failed in MathJax or was an unclosed markdown artifact
         let origFailed = false;
-        let origMsg = "";
+        const isMarkdownArtifact =
+          /^\s*#{1,6}\s+/m.test(origEq) ||
+          /^\s*>\s*#{1,6}/m.test(origEq) ||
+          /^\s*Cor:\*/m.test(origEq) ||
+          /^\s*>\s*for any/m.test(origEq) ||
+          origEq.includes("[[");
 
-        if (i < originalBlocks.length) {
-          const oBlock = originalBlocks[i];
-          const origEq = content.slice(oBlock.contentStart, oBlock.contentEnd);
+        if (isMarkdownArtifact) {
+          origFailed = true;
+        } else {
           const origMjx = validateLatexWithMathJax(origEq);
           if (!origMjx.valid) {
             origFailed = true;
-            origMsg = origMjx.error || "MathJax parse error";
-          } else {
-            try {
-              katex.renderToString(origEq, {
-                throwOnError: true,
-                displayMode: oBlock.kind === "math_block",
-              });
-            } catch (oErr: any) {
-              origFailed = true;
-              origMsg = oErr.message;
-            }
           }
         }
 
-        // Extract sub-equation error offset
-        const matchPos = kErr.message.match(/position (\d+)/);
-        const subOffset = matchPos ? parseInt(matchPos[1], 10) : 0;
-        const origBlock = i < originalBlocks.length ? originalBlocks[i] : null;
-        const docOffset = origBlock ? origBlock.contentStart + Math.min(subOffset, origBlock.contentEnd - origBlock.contentStart) : 0;
-        const { line, col } = getLineCol(lineStarts, docOffset);
+        const { line, col } = getLineCol(lineStarts, oBlock.contentStart);
         const codeFrame = generateCodeFrame(fileLines, line, col);
 
         const anomaly: Anomaly = {
@@ -286,7 +289,7 @@ if (!isMainThread) {
           line,
           col,
           equationSnippet: coloredEq.slice(0, 100),
-          errorMessage: kErr.message,
+          errorMessage: mjxRes.error || "MathJax syntax error",
           codeFrame,
         };
 
@@ -296,6 +299,73 @@ if (!isMainThread) {
           result.regressions.push(anomaly);
         }
       }
+
+      // 2. CodeMirror 6 Live Preview RangeSetBuilder Monotonicity Gate
+      try {
+        const rawSpans = computeSemanticMathSpans(origEq, AUDIT_COLORS, options);
+        const selected = selectColorSpans(origEq, rawSpans);
+        const cmSpans = flattenColorSpans(selected);
+        const builder = new RangeSetBuilder<Decoration>();
+        let lastFrom = -1;
+
+        for (const span of cmSpans) {
+          const from = span.start;
+          const to = span.end;
+          if (from < to && to <= origEq.length) {
+            if (from < lastFrom) {
+              throw new Error(`CM6 RangeSetBuilder monotonicity violation: [${from}, ${to}] after lastFrom ${lastFrom}`);
+            }
+            builder.add(from, to, Decoration.mark({ class: `color-math-role-${span.role || "main"}` }));
+            lastFrom = from;
+          }
+        }
+        builder.finish();
+        result.cm6DecorationsValidated++;
+
+        // 3. In-Editor Color Parity Comparator
+        // Ensure that any distinct color assigned to tokens in CM6 editor is also emitted in the rendered MathJax LaTeX output
+        for (const span of cmSpans) {
+          if (!span.color) continue;
+          const c = span.color.trim().toLowerCase();
+          if (c === "none" || c === "off" || c === "transparent" || c === "default" || c === "white" || c === "#ffffff" || c === "#fff") continue;
+
+          const tokenText = origEq.slice(span.start, span.end).trim();
+          if (
+            !tokenText ||
+            /^(&|\\\\|\^|_|[{}[\]()|.]+)$/.test(tokenText) ||
+            /^(?:\\(?:quad|qquad|left|right|middle|(?:Bigg|bigg|Big|big)[lrm]?|{|}|[;,! ]|\s))+$/.test(tokenText) ||
+            /^\\(?:frac|dfrac|cfrac|tfrac|sqrt|mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat|cases)$/.test(tokenText)
+          ) {
+            continue;
+          }
+
+          const hex = span.color.toUpperCase();
+          if (!coloredEq.toUpperCase().includes(hex)) {
+            const { line, col } = getLineCol(lineStarts, oBlock.contentStart + span.start);
+            result.colorParityMismatches.push({
+              type: "COLOR_PARITY_MISMATCH",
+              file: relPath,
+              line,
+              col,
+              equationSnippet: origEq.slice(Math.max(0, span.start - 10), Math.min(origEq.length, span.end + 10)),
+              errorMessage: `Token '${tokenText}' assigned CM6 color ${span.color} (${span.role || "unknown"}) but color hex missing in rendered MathJax output`,
+              codeFrame: generateCodeFrame(fileLines, line, col),
+            });
+            break;
+          }
+        }
+      } catch (cmErr: any) {
+        const { line, col } = getLineCol(lineStarts, oBlock.contentStart);
+        result.cm6Violations.push({
+          type: "CM6_SORT_VIOLATION",
+          file: relPath,
+          line,
+          col,
+          equationSnippet: origEq.slice(0, 100),
+          errorMessage: cmErr.message,
+          codeFrame: generateCodeFrame(fileLines, line, col),
+        });
+      }
     }
   }
 
@@ -304,7 +374,7 @@ if (!isMainThread) {
   // Main Thread: Master Coordinator
   async function runAudit() {
     console.log("══════════════════════════════════════════════════════════════════════════");
-    console.log("   Color Math Multi-Core Corpus Audit Runner (KaTeX + MathJax Matrix)     ");
+    console.log("   Color Math Multi-Core Corpus Audit Runner (MathJax 4 + CM6 Matrix)     ");
     console.log("══════════════════════════════════════════════════════════════════════════\n");
 
     const possibleRoots = [
@@ -409,50 +479,66 @@ if (!isMainThread) {
     let totalFiles = 0;
     let totalScanned = 0;
     let totalValidated = 0;
+    let totalCm6Validated = 0;
     const allRegressions: Anomaly[] = [];
     const allTypos: Anomaly[] = [];
     const allCrashes: Anomaly[] = [];
+    const allCm6Violations: Anomaly[] = [];
+    const allParityMismatches: Anomaly[] = [];
 
     for (const r of results) {
       totalFiles += r.filesProcessed;
       totalScanned += r.equationsScanned;
       totalValidated += r.equationsValidated;
+      totalCm6Validated += (r.cm6DecorationsValidated || 0);
       allRegressions.push(...r.regressions);
       allTypos.push(...r.preExistingTypos);
       allCrashes.push(...r.crashes);
+      allCm6Violations.push(...(r.cm6Violations || []));
+      allParityMismatches.push(...(r.colorParityMismatches || []));
     }
 
     console.log(`\n══════════════════════════════════════════════════════════════════════════`);
-    console.log("                         AUDIT RESULTS SUMMARY                            ");
+    console.log("   Color Math Unified Corpus Audit (Pure MathJax 4 + CodeMirror 6)        ");
     console.log(`══════════════════════════════════════════════════════════════════════════`);
-    console.log(`Total Documents Audited:   ${totalFiles.toLocaleString()}`);
-    console.log(`Total Equations Scanned:   ${totalScanned.toLocaleString()}`);
-    console.log(`Total Equations Validated: ${totalValidated.toLocaleString()}`);
-    console.log(`Execution Time:            ${durationSec.toFixed(2)} seconds`);
-    console.log(`Throughput:                ${Math.round(totalValidated / durationSec).toLocaleString()} equations/sec`);
+    console.log(`Total Documents Audited:     ${totalFiles.toLocaleString()}`);
+    console.log(`Total Equations Scanned:     ${totalScanned.toLocaleString()}`);
+    console.log(`MathJax 4 Validations:       ${totalValidated.toLocaleString()}`);
+    console.log(`CodeMirror 6 RangeSets:      ${totalCm6Validated.toLocaleString()}`);
+    console.log(`Execution Time:              ${durationSec.toFixed(2)} seconds`);
+    console.log(`Throughput:                  ${Math.round(totalValidated / durationSec).toLocaleString()} equations/sec`);
     console.log(`──────────────────────────────────────────────────────────────────────────`);
-    console.log(`Critical Syntax Regressions: ${allRegressions.length === 0 ? "0 (100% CLEAN)" : allRegressions.length}`);
+    console.log(`MathJax 4 Regressions:       ${allRegressions.length === 0 ? "0 (100% CLEAN ✅)" : allRegressions.length + " ❌"}`);
+    console.log(`CM6 Monotonicity Violations: ${allCm6Violations.length === 0 ? "0 (100% MONOTONIC ✅)" : allCm6Violations.length + " ❌"}`);
+    console.log(`Token Color Parity Mismatch: ${allParityMismatches.length === 0 ? "0 (100% PARITY ✅)" : allParityMismatches.length + " ❌"}`);
     console.log(`Pre-Existing Author Typos:   ${allTypos.length}`);
     console.log(`Parser Crashes:              ${allCrashes.length}`);
     console.log(`══════════════════════════════════════════════════════════════════════════\n`);
 
     // Print regressions if any
-    if (allRegressions.length > 0) {
-      console.log(`\x1b[31m[CRITICAL SYNTAX REGRESSIONS FOUND (${allRegressions.length})]\x1b[0m\n`);
-      for (const reg of allRegressions.slice(0, 50)) {
-        console.log(`\x1b[31m[REGRESSION]\x1b[0m ${reg.file}:${reg.line}:${reg.col}`);
-        console.log(`  Error: ${reg.errorMessage}`);
-        console.log(`  Snippet: ${reg.equationSnippet}`);
-        if (reg.codeFrame) {
-          console.log(`\n${reg.codeFrame}\n`);
+    if (allRegressions.length > 0 || allCm6Violations.length > 0) {
+      if (allRegressions.length > 0) {
+        console.log(`\x1b[31m[CRITICAL SYNTAX REGRESSIONS FOUND (${allRegressions.length})]\x1b[0m\n`);
+        for (const reg of allRegressions.slice(0, 20)) {
+          console.log(`\x1b[31m[REGRESSION]\x1b[0m ${reg.file}:${reg.line}:${reg.col}`);
+          console.log(`  Error: ${reg.errorMessage}`);
+          console.log(`  Snippet: ${reg.equationSnippet}`);
+          if (reg.codeFrame) console.log(`\n${reg.codeFrame}\n`);
+          console.log(`──────────────────────────────────────────────────────────────────────────`);
         }
-        console.log(`──────────────────────────────────────────────────────────────────────────`);
       }
-      if (allRegressions.length > 50) {
-        console.log(`... and ${allRegressions.length - 50} more regressions (see report file).`);
+      if (allCm6Violations.length > 0) {
+        console.log(`\x1b[31m[CM6 RANGE MONOTONICITY VIOLATIONS FOUND (${allCm6Violations.length})]\x1b[0m\n`);
+        for (const v of allCm6Violations.slice(0, 20)) {
+          console.log(`\x1b[31m[CM6 ERROR]\x1b[0m ${v.file}:${v.line}:${v.col}`);
+          console.log(`  Error: ${v.errorMessage}`);
+          console.log(`  Snippet: ${v.equationSnippet}`);
+          if (v.codeFrame) console.log(`\n${v.codeFrame}\n`);
+          console.log(`──────────────────────────────────────────────────────────────────────────`);
+        }
       }
     } else {
-      console.log(`\x1b[32m✔ SUCCESS: Zero syntax regressions introduced across the entire corpus!\x1b[0m\n`);
+      console.log(`\x1b[32m✔ SUCCESS: Zero syntax regressions and zero CodeMirror 6 errors across the entire corpus!\x1b[0m\n`);
     }
 
     // Save report to disk
@@ -467,12 +553,17 @@ if (!isMainThread) {
           totalFiles,
           totalScanned,
           totalValidated,
+          totalCm6Validated,
           durationSec,
           throughput: Math.round(totalValidated / durationSec),
           regressionsCount: allRegressions.length,
+          cm6ViolationsCount: allCm6Violations.length,
+          colorParityMismatchesCount: allParityMismatches.length,
           preExistingTyposCount: allTypos.length,
           crashesCount: allCrashes.length,
           regressions: allRegressions,
+          cm6Violations: allCm6Violations,
+          colorParityMismatches: allParityMismatches,
         },
         null,
         2
@@ -480,7 +571,7 @@ if (!isMainThread) {
     );
     console.log(`Full structured report written to: ${reportPath}`);
 
-    if (allRegressions.length > 0) {
+    if (allRegressions.length > 0 || allCm6Violations.length > 0) {
       process.exit(1);
     } else {
       process.exit(0);

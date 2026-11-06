@@ -52,7 +52,7 @@ export async function readSessionCache(
       if (!exists) return null;
     }
     const raw = await adapter.read(path);
-    if (!raw) return null;
+    if (typeof raw !== "string" || !raw) return null;
     const data = JSON.parse(raw);
     if (
       data &&
@@ -102,11 +102,14 @@ export async function writeSessionCache(
  */
 export function getActiveNoteFromLayout(layout: any): string | null {
   if (!layout) return null;
-  const activeId = layout.active;
+  const rawActive: unknown = layout.active;
+  const activeId = typeof rawActive === "string" ? rawActive : null;
   if (activeId) {
     const found = findLeafById(layout.main, activeId);
-    if (found?.state?.file) return found.state.file;
-    if (found?.state?.state?.file) return found.state.state.file;
+    const leafFile: unknown = found?.state?.file;
+    if (typeof leafFile === "string") return leafFile;
+    const nestedFile: unknown = found?.state?.state?.file;
+    if (typeof nestedFile === "string") return nestedFile;
   }
   return findFirstMarkdownFile(layout.main);
 }
@@ -126,9 +129,11 @@ function findLeafById(node: any, id: string): any {
 function findFirstMarkdownFile(node: any): string | null {
   if (!node) return null;
   if (node.type === "leaf") {
-    if (typeof node.state?.file === "string") return node.state.file;
-    if (node.state?.type === "markdown" && typeof node.state?.state?.file === "string") {
-      return node.state.state.file;
+    const stateFile: unknown = node.state?.file;
+    if (typeof stateFile === "string") return stateFile;
+    const nestedFile: unknown = node.state?.state?.file;
+    if (node.state?.type === "markdown" && typeof nestedFile === "string") {
+      return nestedFile;
     }
   }
   if (Array.isArray(node.children)) {
@@ -147,7 +152,8 @@ export function getActiveNoteFromWorkspace(workspace: any): string | null {
   if (!workspace) return null;
   if (typeof workspace.getActiveFile === "function") {
     const file = workspace.getActiveFile();
-    if (file?.path) return file.path;
+    const filePath: unknown = file?.path;
+    if (typeof filePath === "string") return filePath;
   }
   if (typeof workspace.getLayout === "function") {
     const layout = workspace.getLayout();

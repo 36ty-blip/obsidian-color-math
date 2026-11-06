@@ -99,8 +99,7 @@ describe("Dual-Engine MathJax & KaTeX Validation Suite", () => {
         console.error(`Dual Validation Error for [${tc.name}]:`, res.error);
         console.error("Converted LaTeX:", converted);
       }
-      expect(res.valid, `Dual engine validation failed: ${res.error}`).toBe(true);
-      expect(res.katex.valid).toBe(true);
+      expect(res.valid, `MathJax engine validation failed: ${res.error}`).toBe(true);
       expect(res.mathjax.valid).toBe(true);
     });
 
@@ -111,8 +110,7 @@ describe("Dual-Engine MathJax & KaTeX Validation Suite", () => {
         console.error(`All-features Validation Error for [${tc.name}]:`, res.error);
         console.error("Converted LaTeX:", converted);
       }
-      expect(res.valid, `Dual engine validation failed: ${res.error}`).toBe(true);
-      expect(res.katex.valid).toBe(true);
+      expect(res.valid, `MathJax engine validation failed: ${res.error}`).toBe(true);
       expect(res.mathjax.valid).toBe(true);
     });
   }
@@ -131,7 +129,7 @@ And a 2x2 matrix:
 $$\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$$
 `;
     const converted = convertText(doc, DEFAULT_COLORS, allFeaturesEnabled);
-    const result = validateMarkdownMath(converted, "both");
+    const result = validateMarkdownMath(converted, "mathjax");
     expect(result.valid).toBe(true);
     expect(result.failures).toHaveLength(0);
   });

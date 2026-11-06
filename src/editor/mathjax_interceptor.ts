@@ -62,6 +62,12 @@ export class MathJaxInterceptor {
 
   clearCache(): void {
     this.renderCache.clear();
+    if (this.persistentCache && this.persistentCache.renders) {
+      this.persistentCache.renders = {};
+      if (this.onCacheDirty) {
+        this.onCacheDirty();
+      }
+    }
   }
 
   setPersistentCache(cache: RenderCacheData | null, onDirty?: () => void): void {
@@ -99,6 +105,12 @@ export class MathJaxInterceptor {
     ].filter(Boolean).join("|");
   }
 
+  private isChtmlStylesheetReady(): boolean {
+    if (typeof document === "undefined" || !document.head || typeof document.head.querySelector !== "function") return true;
+    const style = document.head.querySelector("style#MJX-CHTML-styles");
+    return style !== null && (style.textContent?.length ?? 0) > 50;
+  }
+
   private getCachedElement<T extends HTMLElement | SVGElement>(hash: string, latex?: string): T | null {
     const cached = this.renderCache.get(hash);
     if (cached) {
@@ -118,7 +130,13 @@ export class MathJaxInterceptor {
     }
 
     // Secondary check: Persistent Zero-MathJax Render Cache
+    // Guard: Only hydrate from disk cache if MathJax's CHTML stylesheet exists in <head>.
+    // If <head> has no MathJax stylesheet (e.g. cold boot or after reload), bypass persistent cache
+    // so MathJax natively compiles at least once, populating <head> with glyph metrics!
     if (this.persistentCache && this.persistentCache.renders && this.persistentCache.renders[hash]) {
+      if (!this.isChtmlStylesheetReady()) {
+        return null;
+      }
       const record = this.persistentCache.renders[hash];
       record.ts = Date.now();
       const hydrated = hydrateElementFromHtml<T>(record.html);
@@ -262,6 +280,7 @@ export class MathJaxInterceptor {
       const wrappedTex2chtml = (latex: string, options?: unknown) => {
         if (!this.isEnabled()) return orig.call(mathJax, latex, options);
         const isDisplay = Boolean((options as { display?: boolean } | undefined)?.display);
+        const isEphemeral = Boolean((options as { ephemeral?: boolean } | undefined)?.ephemeral);
         const hash = computeMathHash(latex, this.getContextKey() + (isDisplay ? "|D" : "|I"));
         const cached = this.getCachedElement<HTMLElement>(hash, latex);
         if (cached) return cached;
@@ -284,7 +303,7 @@ export class MathJaxInterceptor {
               if (this.onCacheDirty) this.onCacheDirty();
             }
           } else {
-            this.cacheElement(hash, finalResult, isDisplay);
+            this.cacheElement(hash, finalResult, isDisplay, !isEphemeral);
           }
           return finalResult;
         } catch (err) {
@@ -306,6 +325,7 @@ export class MathJaxInterceptor {
       mathJax.tex2chtmlPromise = async (latex: string, options?: unknown) => {
         if (!this.isEnabled()) return orig.call(mathJax, latex, options);
         const isDisplay = Boolean((options as { display?: boolean } | undefined)?.display);
+        const isEphemeral = Boolean((options as { ephemeral?: boolean } | undefined)?.ephemeral);
         const hash = computeMathHash(latex, this.getContextKey() + (isDisplay ? "|D" : "|I"));
         const cached = this.getCachedElement<HTMLElement>(hash, latex);
         if (cached) return cached;
@@ -334,7 +354,7 @@ export class MathJaxInterceptor {
               if (this.onCacheDirty) this.onCacheDirty();
             }
           } else {
-            this.cacheElement(hash, finalResult, isDisplay);
+            this.cacheElement(hash, finalResult, isDisplay, !isEphemeral);
           }
           return finalResult;
         } catch (err) {
@@ -459,6 +479,8 @@ export class MathJaxInterceptor {
     if (typeof dom.getAttribute === "function") {
       const errAttr = dom.getAttribute("data-mjx-error");
       if (errAttr) return errAttr;
+      const titleAttr = dom.getAttribute("title");
+      if (titleAttr && titleAttr.includes("Color Math Error:")) return titleAttr;
     }
 
     let errNode: DomErrorCandidate | null = null;
@@ -480,6 +502,12 @@ export class MathJaxInterceptor {
       const textContent = errNode.textContent?.trim();
       return attrError || attrTitle || textContent || "LaTeX syntax error";
     }
+
+    if ("textContent" in (el as any) && typeof (el as any).textContent === "string") {
+      const txt = (el as any).textContent as string;
+      if (txt.includes("[Color Math:")) return txt;
+    }
+
     return null;
   }
 

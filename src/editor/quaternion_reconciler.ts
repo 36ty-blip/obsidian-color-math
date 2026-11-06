@@ -23,16 +23,12 @@ import {
   MASK_TRANSPARENT_INTERMEDIATE,
   MASK_STRETCHY_FRAGMENTS,
   MASK_SLOT_CONTAINERS,
-  TAG_NONE,
   TAG_NUM,
   TAG_DEN,
   TAG_BOX,
   TAG_ROOT,
-  TAG_SUB,
-  TAG_SUP,
   TAG_UNDER,
   TAG_OVER,
-  TAG_SCRIPT,
   ROLE_FUNCTION,
   ROLE_OPERATOR,
   ROLE_RELATION,
@@ -67,7 +63,7 @@ function matchesSelector(el: Element, sel: string): boolean {
 function elementContains(parent: Element | null, child: Element): boolean {
   if (!parent || !child) return false;
   if (typeof (parent as any).contains === "function") {
-    return (parent as any).contains(child);
+    return Boolean((parent as any).contains(child));
   }
   let curr: Element | null = child.parentElement;
   while (curr) {
@@ -130,11 +126,18 @@ export function getElementText(el: any): string {
   }
 
   // Fallback for live MathJax 4 CHTML where glyphs are encoded in <mjx-c class="mjx-cHEX">
-  const glyphEls: any[] = [];
-  if (typeof el.matches === "function" && el.matches("mjx-c")) {
-    glyphEls.push(el);
-  } else if (typeof el.querySelectorAll === "function") {
-    glyphEls.push(...Array.from(el.querySelectorAll("mjx-c")));
+  const domEl = el as Element;
+  const glyphEls: Element[] = [];
+  if (typeof domEl?.matches === "function" && domEl.matches("mjx-c")) {
+    glyphEls.push(domEl);
+  } else if (typeof domEl?.querySelectorAll === "function") {
+    const matched = domEl.querySelectorAll("mjx-c");
+    if (matched) {
+      for (let i = 0; i < matched.length; i++) {
+        const item = matched[i];
+        if (item) glyphEls.push(item);
+      }
+    }
   }
 
   if (glyphEls.length > 0) {
@@ -142,7 +145,7 @@ export function getElementText(el: any): string {
     for (const g of glyphEls) {
       const cls = typeof g.className === "string" ? g.className : "";
       const m = cls.match(/mjx-c([0-9A-Fa-f]+)/);
-      if (m) {
+      if (m && typeof m[1] === "string") {
         try {
           decoded += String.fromCodePoint(parseInt(m[1], 16));
         } catch {
@@ -427,6 +430,9 @@ export function isSliceTextCompatible(domText: string, rawSlice: string): boolea
 function passesFinalStampGate(el: Element, range: QuaternionResolvedRange): boolean {
   const { start, end, kind } = range;
   if (start < 0 || end <= start) return false;
+  if (el.classList && typeof el.classList.contains === "function" && el.classList.contains("color-math-cell-padding")) {
+    return false;
+  }
 
   // 1. 2D Cell / Line Containment Check
   let curr = el.parentElement;
@@ -740,7 +746,7 @@ export class QuaternionSpatialReconciler {
                 start: node.start,
                 end: groupArg.end,
                 text: fusedText,
-              } as CSTNode;
+              };
               this.reconciledNodes.add(node);
               this.reconciledNodes.add(groupArg);
               for (const gc of groupArg.children) {
@@ -1976,7 +1982,7 @@ export class QuaternionSpatialReconciler {
     const isInnerFencedMrow =
       node.delimType === "bare_brace" &&
       node.children.length > 0 &&
-      node.children.some((c) => c.kind === "group" && (c as GroupNode).delimType !== "bare_brace");
+      node.children.some((c) => c.kind === "group" && c.delimType !== "bare_brace");
 
     if (parentEl.matches("mjx-mrow") && !parentEl.classList.contains("cm-tensor-reconciled")) {
       groupRowEl = parentEl;
@@ -2378,6 +2384,33 @@ export class QuaternionSpatialReconciler {
       const nonEmptyCstRows = cstRows.filter((r) => r.hasContent);
       const nonEmptyMtrEls = mtrEls.filter(isDomRowNonEmpty);
 
+      const isCellEmpty = (mtd: Element): boolean =>
+        getElementText(mtd).trim() === "" &&
+        mtd.querySelector("mjx-c, mjx-frac, mjx-mfrac, mjx-sqrt, mjx-mroot, mjx-mspace, mjx-mtable") === null;
+
+      const pairRowCells = (rowMtds: Element[], cstCells: MatrixCellSpec[]): void => {
+        // If DOM has extra perimeter padding cells (e.g. leading & or trailing &) while CST cells have content
+        if (rowMtds.length > cstCells.length && cstCells.every((c) => c.nodes.length > 0)) {
+          const contentMtds = rowMtds.filter((mtd) => !isCellEmpty(mtd));
+          if (contentMtds.length === cstCells.length) {
+            for (let c = 0; c < contentMtds.length; c++) {
+              reconcilePairedCell(contentMtds[c], cstCells[c]);
+            }
+            for (const mtd of rowMtds) {
+              if (isCellEmpty(mtd)) {
+                mtd.classList.add("cm-tensor-reconciled", "color-math-cell-padding");
+              }
+            }
+            return;
+          }
+        }
+
+        const colCount = Math.min(rowMtds.length, cstCells.length);
+        for (let c = 0; c < colCount; c++) {
+          reconcilePairedCell(rowMtds[c], cstCells[c]);
+        }
+      };
+
       // If CST has empty spacer rows (from `\\ \\`) that caused row count mismatch or empty DOM rows,
       // pair non-empty CST rows 1:1 with non-empty DOM rows; otherwise pair row-by-row directly.
       if (
@@ -2388,10 +2421,7 @@ export class QuaternionSpatialReconciler {
           const cstRow = nonEmptyCstRows[r];
           const mtr = nonEmptyMtrEls[r];
           const rowMtds = getDirectRowMtds(mtr);
-          const colCount = Math.min(rowMtds.length, cstRow.cells.length);
-          for (let c = 0; c < colCount; c++) {
-            reconcilePairedCell(rowMtds[c], cstRow.cells[c]);
-          }
+          pairRowCells(rowMtds, cstRow.cells);
         }
         return;
       }
@@ -2401,10 +2431,7 @@ export class QuaternionSpatialReconciler {
         const cstRow = cstRows[r];
         const mtr = mtrEls[r];
         const rowMtds = getDirectRowMtds(mtr);
-        const colCount = Math.min(rowMtds.length, cstRow.cells.length);
-        for (let c = 0; c < colCount; c++) {
-          reconcilePairedCell(rowMtds[c], cstRow.cells[c]);
-        }
+        pairRowCells(rowMtds, cstRow.cells);
       }
       return;
     }
@@ -2462,7 +2489,7 @@ export class QuaternionSpatialReconciler {
     let isFunction = false;
     let rawName = "";
     if (node.kind === "identifier") {
-      const idText = (node as any).text || "";
+      const idText = node.text || "";
       if (idText.startsWith("\\")) {
         const catEntry = lookupCatalog(idText) || lookupCatalog(idText.slice(1));
         if (catEntry) {
@@ -2475,9 +2502,9 @@ export class QuaternionSpatialReconciler {
         expectedText = idText;
       }
     } else if (node.kind === "number") {
-      expectedText = (node as any).value || "";
+      expectedText = node.value || "";
     } else if (node.kind === "operator") {
-      const opText = (node as any).text || "";
+      const opText = node.text || "";
       if (opText.startsWith("\\")) {
         const catEntry = lookupCatalog(opText) || lookupCatalog(opText.slice(1));
         if (catEntry) {
@@ -2490,15 +2517,15 @@ export class QuaternionSpatialReconciler {
         expectedText = normalizeMathOperatorChars(opText);
       }
     } else if (node.kind === "punctuation") {
-      expectedText = (node as any).char || "";
+      expectedText = node.char || "";
     } else if (node.kind === "text") {
-      expectedText = ((node as any).text || "").trim();
+      expectedText = (node.text || "").trim();
       expectedTag = "MJX-MTEXT";
     } else if (node.kind === "boundary") {
       expectedText = (node as any).rawText || (this.latex ? this.latex.slice(node.start, node.end) : "");
       expectedTag = "MJX-MO";
     } else if (node.kind === "command") {
-      rawName = (node as any).name || "";
+      rawName = node.name || "";
       const bareName = rawName.startsWith("\\") ? rawName.slice(1) : rawName;
       const backslashName = rawName.startsWith("\\") ? rawName : "\\" + rawName;
       const catEntry = lookupCatalog(backslashName) || lookupCatalog(bareName);
@@ -2893,9 +2920,9 @@ export function extractCSTQuaternionTokens(
           const scriptStart = anchorBase ? anchorBase.start : (node.base ? node.base.start : node.start);
           const atomSpan = { start: scriptStart, end: node.end };
 
-          if (anchorBase && !results.some((r) => r.start === anchorBase!.start && r.end === anchorBase!.end)) {
+          if (anchorBase && !results.some((r) => r.start === anchorBase.start && r.end === anchorBase.end)) {
             if (anchorBase.kind === "group") {
-              walkSlot((anchorBase as GroupNode).children, activeZ, activeY, slotContext, sequenceX);
+              walkSlot(anchorBase.children, activeZ, activeY, slotContext, sequenceX);
             } else {
               const baseSpan = { start: anchorBase.start, end: anchorBase.end };
               results.push({

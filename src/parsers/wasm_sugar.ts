@@ -5,7 +5,7 @@
 // Dual-implementation safety: pure TypeScript remains default and active fallback.
 
 import { ColorMathOptions } from "../config";
-import { normalizeBracketMatrices, normalizeMathSyntax } from "../utils/latex_helpers";
+import { normalizeMathSyntax } from "../utils/latex_helpers";
 import { getRawWasmExports, isWasmCatalogReady } from "./wasm_catalog";
 
 /**

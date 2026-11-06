@@ -190,7 +190,8 @@ export function collectWasmLexerSpans(
   }
 
   const rainbowColors = options?.rainbowColors || RAINBOW_DELIMITER_COLORS;
-  const errorColor = options?.errorColor || "#f7768e";
+  const rawErrorColor: unknown = (options as Record<string, unknown> | undefined)?.errorColor;
+  const errorColor: string = typeof rawErrorColor === "string" ? rawErrorColor : "#f7768e";
 
   const spans: ColorSpan[] = new Array(tokens.length);
   for (let i = 0; i < tokens.length; i++) {

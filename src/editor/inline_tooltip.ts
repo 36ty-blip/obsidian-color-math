@@ -50,12 +50,21 @@ export function highlightSelectionInMathContainer(
   const structuralSelector =
     "mjx-num, mjx-den, mjx-sqrt, mjx-mroot, mjx-mtd, mjx-frac, mjx-mfrac, mjx-msub, mjx-msup, mjx-msubsup, mjx-munder, mjx-mover, mjx-munderover, mjx-script";
 
+  const isVisibleTarget = (el: HTMLElement): boolean => {
+    if (el.textContent && el.textContent.trim().length > 0) return true;
+    if (typeof el.querySelector === "function") {
+      return el.querySelector("mjx-c, mjx-frac, mjx-mfrac, mjx-sqrt, mjx-mroot, mjx-mtable, mjx-stretchy-h, mjx-stretchy-v") !== null;
+    }
+    return !el.classList?.contains("color-math-cell-padding");
+  };
+
   if (relTo > relFrom) {
     // 1. Check if there is an exact structural or leaf element matching [relFrom, relTo]
     const allCandidates = Array.from(
       container.querySelectorAll<HTMLElement>(`${structuralSelector}, ${leafSelector}`)
     );
     const exactMatches = allCandidates.filter((el) => {
+      if (!isVisibleTarget(el)) return false;
       const r = readRange(el);
       return r !== null && r.start === relFrom && r.end === relTo;
     });
@@ -73,6 +82,7 @@ export function highlightSelectionInMathContainer(
     // 2. Otherwise highlight all atomic leaf tokens whose source span overlaps [relFrom, relTo]
     const leaves = Array.from(container.querySelectorAll<HTMLElement>(leafSelector));
     for (const leaf of leaves) {
+      if (!isVisibleTarget(leaf)) continue;
       const r = readRange(leaf);
       if (r && Math.max(r.start, relFrom) < Math.min(r.end, relTo)) {
         leaf.classList.add("color-math-selected-target");
@@ -86,6 +96,7 @@ export function highlightSelectionInMathContainer(
     let bestSpanLen = Infinity;
 
     for (const leaf of leaves) {
+      if (!isVisibleTarget(leaf)) continue;
       const r = readRange(leaf);
       if (!r || r.end <= r.start) continue;
       if (relFrom >= r.start && relFrom <= r.end) {
@@ -333,7 +344,7 @@ export function createInlineMathTooltipExtension(
                       mathJax.tex2chtml.__colorMathActive();
                     let el: HTMLElement;
                     if (isInterceptorActive) {
-                      el = mathJax.tex2chtml(body, { display: true });
+                      el = mathJax.tex2chtml(body, { display: true, ephemeral: true });
                     } else {
                       const palette = getPalette();
                       const colored = colorLatexBody(body, palette, curOptions);
@@ -384,8 +395,8 @@ export function createInlineMathTooltipExtension(
                   registerSingleTooltipHost(host);
                   applyHostStyles();
                   syncTooltipSelection(view.state);
-                  if (typeof requestAnimationFrame === "function") {
-                    requestAnimationFrame(() => {
+                  if (typeof window.requestAnimationFrame === "function") {
+                    window.requestAnimationFrame(() => {
                       registerSingleTooltipHost(getHost());
                       applyHostStyles();
                       syncTooltipSelection(view.state);

@@ -867,5 +867,11 @@ body .cm-tooltip.color-math-tooltip-host,
   width: 100%;
 }
 
+/* Filtered settings item hidden during active live search filtering */
+.color-math-search-hidden {
+  display: none !important;
+}
+
+
 
 

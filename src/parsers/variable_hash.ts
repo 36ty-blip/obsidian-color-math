@@ -442,7 +442,8 @@ export function collectVariableSpans(
       // 2. Check if followed by parentheses: e.g. rank(A), nullity(A), f(x), ax(y + z)
       const afterWord = body.slice(index + word.length).trimStart();
       const hasArgs = afterWord.startsWith("(") || afterWord.startsWith("\\left(");
-      if (hasArgs) {
+      const isSubOrSuper = index > 0 && (body[index - 1] === "_" || body[index - 1] === "^");
+      if (hasArgs && !isSubOrSuper) {
         if (word.length >= 4) {
           // Multi-letter function call: skip entire word (e.g. rank, nullity, poly)
           index += word.length;

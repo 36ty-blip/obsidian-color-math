@@ -40,8 +40,8 @@
   "byEngineBreakdown": {
     "mathjaxPassCount": 1436,
     "mathjaxFailCount": 0,
-    "katexPassCount": 1436,
-    "katexFailCount": 0,
+    "cm6PassCount": 1436,
+    "cm6FailCount": 0,
     "bothPassedCount": 1436
   },
   "mathjaxErrors": [],

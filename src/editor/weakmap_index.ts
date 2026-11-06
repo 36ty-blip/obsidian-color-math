@@ -109,7 +109,7 @@ export function getMathJaxElementRange(target: Element): ResolvedRange | undefin
   // 2. Direct hydration from `data-cm-tensor` (when cloned from MathJaxInterceptor renderCache)
   if (typeof (target as any).getAttribute === "function") {
     const rawAttr = (target as any).getAttribute(TENSOR_ATTR);
-    if (rawAttr) {
+    if (typeof rawAttr === "string" && rawAttr) {
       const hydrated = deserializeTensorRange(rawAttr);
       if (hydrated) {
         mathjaxRangeMap.set(target, hydrated);
@@ -141,7 +141,7 @@ export function getMathJaxElementRange(target: Element): ResolvedRange | undefin
     }
     if (typeof (curr as any).getAttribute === "function") {
       const rawParentAttr = (curr as any).getAttribute(TENSOR_ATTR);
-      if (rawParentAttr) {
+      if (typeof rawParentAttr === "string" && rawParentAttr) {
         const hydratedParent = deserializeTensorRange(rawParentAttr);
         if (hydratedParent) {
           if (hydratedParent.coord && hydratedParent.coord.w >= 3) {

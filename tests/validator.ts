@@ -1,4 +1,3 @@
-import katex from "katex";
 import { mathjax } from "@mathjax/src/js/mathjax.js";
 import { TeX } from "@mathjax/src/js/input/tex.js";
 import { AbstractOutputJax } from "@mathjax/src/js/core/OutputJax.js";
@@ -76,12 +75,11 @@ function extractMathJaxError(node: any): string | null {
 export interface ValidationResult {
   valid: boolean;
   error?: string;
-  engine: "katex" | "mathjax";
+  engine: "mathjax";
 }
 
 export interface DualValidationResult {
   valid: boolean;
-  katex: ValidationResult;
   mathjax: ValidationResult;
   error?: string;
 }
@@ -98,17 +96,8 @@ function cleanLatex(latex: string): string {
 }
 
 export function validateLatexWithKaTeX(latex: string): ValidationResult {
-  const body = cleanLatex(latex);
-
-  try {
-    katex.renderToString(body, {
-      throwOnError: true,
-      strict: false,
-    });
-    return { valid: true, engine: "katex" };
-  } catch (err: any) {
-    return { valid: false, error: err?.message || String(err), engine: "katex" };
-  }
+  // Pure MathJax 4 canonical validator (KaTeX eradicated)
+  return validateLatexWithMathJax(latex);
 }
 
 export function validateLatexWithMathJax(latex: string): ValidationResult {
@@ -128,19 +117,11 @@ export function validateLatexWithMathJax(latex: string): ValidationResult {
 }
 
 export function validateLatexDual(latex: string): DualValidationResult {
-  const katexRes = validateLatexWithKaTeX(latex);
   const mathjaxRes = validateLatexWithMathJax(latex);
-
-  const valid = katexRes.valid && mathjaxRes.valid;
-  const errors: string[] = [];
-  if (!katexRes.valid) errors.push(`[KaTeX] ${katexRes.error}`);
-  if (!mathjaxRes.valid) errors.push(`[MathJax] ${mathjaxRes.error}`);
-
   return {
-    valid,
-    katex: katexRes,
+    valid: mathjaxRes.valid,
     mathjax: mathjaxRes,
-    error: errors.length > 0 ? errors.join(" | ") : undefined,
+    error: mathjaxRes.error,
   };
 }
 

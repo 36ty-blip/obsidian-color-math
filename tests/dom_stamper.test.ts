@@ -171,6 +171,34 @@ describe("Post-Render DOM Stamper", () => {
     expect(mtdB.className).toMatch(/cm-src-\d+-\d+/);
   });
 
+  it("never stamps empty perimeter padding matrix cells with non-empty content ranges", () => {
+    // LaTeX: \begin{bmatrix} & a & b & \\ & c & d & \end{bmatrix}
+    const latex = "\\begin{bmatrix} & a & b & \\\\ & c & d & \\end{bmatrix}";
+
+    const padLeft1 = createFakeElement("mjx-mtd");
+    const mtdA = createFakeElement("mjx-mtd", [createFakeElement("mjx-mi", [], "a")]);
+    const mtdB = createFakeElement("mjx-mtd", [createFakeElement("mjx-mi", [], "b")]);
+    const padRight1 = createFakeElement("mjx-mtd");
+
+    const padLeft2 = createFakeElement("mjx-mtd");
+    const mtdC = createFakeElement("mjx-mtd", [createFakeElement("mjx-mi", [], "c")]);
+    const mtdD = createFakeElement("mjx-mtd", [createFakeElement("mjx-mi", [], "d")]);
+    const padRight2 = createFakeElement("mjx-mtd");
+
+    const mtr1 = createFakeElement("mjx-mtr", [padLeft1, mtdA, mtdB, padRight1]);
+    const mtr2 = createFakeElement("mjx-mtr", [padLeft2, mtdC, mtdD, padRight2]);
+    const table = createFakeElement("mjx-mtable", [mtr1, mtr2]);
+    const root = createFakeElement("mjx-container", [table]);
+
+    stampMathJaxDOM(root as unknown as Element, latex);
+
+    // Padding cells must NOT have content source ranges
+    expect(padLeft1.className).not.toMatch(/cm-src-\d+-\d+/);
+    expect(padRight1.className).not.toMatch(/cm-src-\d+-\d+/);
+    expect(padLeft2.className).not.toMatch(/cm-src-\d+-\d+/);
+    expect(padRight2.className).not.toMatch(/cm-src-\d+-\d+/);
+  });
+
   it("stamps superscripts with base and script argument ranges", () => {
     // LaTeX: x^{2\alpha}
     const latex = "x^{2\\alpha}";

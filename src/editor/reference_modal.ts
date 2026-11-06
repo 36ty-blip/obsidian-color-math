@@ -43,7 +43,7 @@ export class ColorMathReferenceModal extends Modal {
     const toolbarEl = contentEl.createDiv({ cls: "color-math-reference-toolbar" });
 
     const titleEl = toolbarEl.createDiv({ cls: "color-math-reference-title" });
-    titleEl.createEl("span", {
+    titleEl.createSpan({
       text: "📐 Color Math — Syntax & Operator Reference",
       cls: "color-math-reference-heading",
     });

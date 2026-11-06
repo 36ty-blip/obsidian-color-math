@@ -103,10 +103,30 @@ export const OPTIONAL_BRACKET_COMMANDS = new Set([
   "\\rotatebox",
   "\\item",
   "\\substack",
+  "\\dd",
+  "\\dv",
+  "\\pdv",
+  "\\var",
+  "\\eval",
+  "\\qty",
+  "\\pqty",
+  "\\bqty",
+  "\\Bqty",
+  "\\vqty",
+  "\\abs",
+  "\\norm",
+  "\\order",
+  "\\diff",
+  "\\curl",
+  "\\grad",
+  "\\div",
+  "\\laplacian",
+  "\\dh",
+  "\\ddP",
 ]);
 
 export function isOptionalBracketCommand(cmd: string): boolean {
-  return OPTIONAL_BRACKET_COMMANDS.has(cmd) || /^\\[xX][a-zA-Z]+$/.test(cmd);
+  return OPTIONAL_BRACKET_COMMANDS.has(cmd) || /^\\[a-zA-Z]+$/.test(cmd);
 }
 
 export const COMMON_DIMENSIONLESS_SET = new Set([

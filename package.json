@@ -1,6 +1,6 @@
 {
   "name": "obsidian-color-math",
-  "version": "1.0.111",
+  "version": "1.0.115",
   "description": "AST-driven semantic syntax highlighting and real-time MathJax CHTML decoration for mathematical expressions in markdown notes.",
   "main": "main.js",
   "scripts": {
@@ -22,7 +22,7 @@
     "publish:github": "node scripts/publish_github.mjs",
     "publish:dry": "node scripts/publish_github.mjs --dry-run",
     "release:stats": "node scripts/telemetry.mjs",
-    "lint:obsidian": "eslint src/ --cache",
+    "lint:obsidian": "eslint src/",
     "lint:advisory": "eslint src/ --config eslint.advisory.mjs"
   },
   "dependencies": {

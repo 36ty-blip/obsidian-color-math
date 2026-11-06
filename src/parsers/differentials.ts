@@ -27,20 +27,20 @@ const DERIV_FRAC_REGEX = new RegExp(
     DIFF_VAR_PATTERN +
     ")?\\s*\\}\\s*\\{\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|∂)\\s*" +
     DIFF_VAR_PATTERN +
-    "(?:\\^\\{?\\d+\\}?)?(?:\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|∂)\\s*" +
+    "(?:\\^\\{?\\d+\\}?)?(?:\\s*(?:\\\\dd(?![a-zA-Z])|d|\\\\partial|\\\\mathrm\\{d\\}|∂)\\s*" +
     DIFF_VAR_PATTERN +
     ")*\\s*\\}",
   "g"
 );
 
 const DIFF_REGEX = new RegExp(
-  "(?:^|[\\s+\\-=*(){}\\]]|\\[|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)(\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|\\\\delta|∂)\\s*" +
+  "(?:^|[\\s+\\-=*(){}\\]]|\\[|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~|\\\\[a-zA-Z]+(?=\\\\dd))(\\s*(?:\\\\dd(?![a-zA-Z])|d|\\\\partial|\\\\mathrm\\{d\\}|\\\\delta|∂)\\s*" +
     DIFF_VAR_PATTERN +
     "(?![a-zA-Z0-9_])(?:\\^\\{?\\d+\\}?)?)",
   "g"
 );
 
-const D_OPERATOR_REGEX = /(?:d|\\partial|\\mathrm\{d\}|\\delta|∂)/;
+const D_OPERATOR_REGEX = /(?:\\dd(?![a-zA-Z])|d|\\partial|\\mathrm\{d\}|\\delta|∂)/;
 
 export interface BoundarySpan {
   start: number;
@@ -167,7 +167,7 @@ export function collectDifferentialSpans(
     if (d.kind === "differential") {
       if (options?.variableDataFlow) {
         // Option B: Extract coordinate variable (e.g. 'da' -> 'a', 'd\theta' -> '\theta', 'dx' -> 'x')
-        const targetVar = d.text.replace(/^(?:d|\\partial|\\mathrm\{d\}|\\delta|∂)\s*/, "");
+        const targetVar = d.text.replace(/^(?:\\\\dd|d|\\partial|\\mathrm\{d\}|\\delta|∂)\s*/, "");
         const varColor = hashStringToColor(targetVar, hashPalette);
         return {
           start: d.start,

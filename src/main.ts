@@ -12,7 +12,9 @@ import {
   TFile,
   ToggleComponent,
   TextComponent,
+  WorkspaceLeaf,
   editorLivePreviewField,
+  requireApiVersion,
 } from "obsidian";
 import {
   ColorPalette,
@@ -289,9 +291,46 @@ export default class ColorMathPlugin extends Plugin {
   private renderCacheData: RenderCacheData | null = null;
   private renderCachePromise: Promise<RenderCacheData | null> | null = null;
   private renderCacheDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private wasAppReloaded = false;
 
   async onload() {
     this.isPluginUnloaded = false;
+
+    // Detect if app was reloaded via Ctrl+R / Cmd+R / Reload command
+    try {
+      if (typeof window !== "undefined" && window.sessionStorage) {
+        if (window.sessionStorage.getItem("color-math-app-reloading") === "1") {
+          this.wasAppReloaded = true;
+          window.sessionStorage.removeItem("color-math-app-reloading");
+          clearMathSpanCache();
+        }
+      }
+    } catch {
+      // Ignore sessionStorage security exceptions
+    }
+
+    // Register reload detection handlers to capture subsequent reloads
+    if (typeof window !== "undefined") {
+      const markReloading = () => {
+        try {
+          window.sessionStorage?.setItem("color-math-app-reloading", "1");
+        } catch {
+          // Ignore
+        }
+      };
+      const onKeyDown = (e: KeyboardEvent) => {
+        if (((e.ctrlKey || e.metaKey) && (e.key === "r" || e.key === "R")) || e.key === "F5") {
+          markReloading();
+        }
+      };
+      window.addEventListener("beforeunload", markReloading);
+      window.addEventListener("keydown", onKeyDown, true);
+      this.register(() => {
+        window.removeEventListener("beforeunload", markReloading);
+        window.removeEventListener("keydown", onKeyDown, true);
+      });
+    }
+
     await this.loadSettings();
     setPalette(this.settings.palette);
     syncTooltipAppearance(
@@ -305,7 +344,8 @@ export default class ColorMathPlugin extends Plugin {
     }
 
     // Non-blocking Stage 1 pre-fetch of render_cache.json in parallel with DOM/event registration
-    this.renderCachePromise = readRenderCache(this.app.vault.adapter, (this.app.vault as any).configDir, this.manifest.id);
+    const configDir: string = typeof (this.app.vault as any).configDir === "string" ? (this.app.vault as any).configDir : ".obsidian";
+    this.renderCachePromise = readRenderCache(this.app.vault.adapter, configDir, this.manifest.id);
 
     // 0. Expose public developer API for inter-plugin interoperability & user scripting
     this.api = new ColorMathAPIImpl(this);
@@ -511,6 +551,23 @@ export default class ColorMathPlugin extends Plugin {
       },
     });
 
+    // 7b. Clear MathJax render cache & re-render
+    this.addCommand({
+      id: "clear-mathjax-cache",
+      name: "Clear MathJax render cache & re-render",
+      callback: async () => {
+        clearMathSpanCache();
+        this.interceptor?.clearCache();
+        if (this.renderCacheData) {
+          this.renderCacheData.renders = {};
+          const configDir: string = typeof (this.app.vault as any).configDir === "string" ? (this.app.vault as any).configDir : ".obsidian";
+          await writeRenderCache(this.app.vault.adapter, this.renderCacheData, configDir, this.manifest.id);
+        }
+        this.rerenderMath();
+        new Notice("Color Math: Render cache cleared. Re-rendering math formulas.");
+      },
+    });
+
     // 8. Convert LaTeX math to Unicode in active note (Declutter LaTeX)
     this.addCommand({
       id: "convert-math-to-unicode-note",
@@ -655,7 +712,7 @@ export default class ColorMathPlugin extends Plugin {
 
     // Cancel pending idle hydration and continuous cache debounce tasks
     if (this.renderCacheDebounceTimer !== null) {
-      clearTimeout(this.renderCacheDebounceTimer);
+      window.clearTimeout(this.renderCacheDebounceTimer);
       this.renderCacheDebounceTimer = null;
     }
     if (this.idleCallbackId !== null && typeof window !== "undefined" && typeof (window as any).cancelIdleCallback === "function") {
@@ -663,7 +720,7 @@ export default class ColorMathPlugin extends Plugin {
       this.idleCallbackId = null;
     }
     if (this.idleTimeoutId !== null) {
-      clearTimeout(this.idleTimeoutId);
+      window.clearTimeout(this.idleTimeoutId);
       this.idleTimeoutId = null;
     }
 
@@ -700,6 +757,10 @@ export default class ColorMathPlugin extends Plugin {
     // 1. Await persistent Zero-MathJax render cache & seed interceptor
     const cached = this.renderCachePromise ? await this.renderCachePromise : null;
     if (cached) {
+      if (this.wasAppReloaded) {
+        // App was reloaded by user (Ctrl+R / Cmd+R): clear in-memory renders so MathJax compiles fresh font metrics
+        cached.renders = {};
+      }
       this.renderCacheData = cached;
       this.interceptor?.setPersistentCache(this.renderCacheData, () => this.scheduleRenderCacheSave());
 
@@ -778,16 +839,16 @@ export default class ColorMathPlugin extends Plugin {
       this.idleCallbackId = (window as any).requestIdleCallback(runIdleHydration, { timeout: 1500 });
     } else {
       // Mobile / Safari / headless environment fallback
-      this.idleTimeoutId = setTimeout(runIdleHydration, 20);
+      this.idleTimeoutId = window.setTimeout(runIdleHydration, 20);
     }
   }
 
   public scheduleRenderCacheSave() {
     if (this.isPluginUnloaded) return;
     if (this.renderCacheDebounceTimer !== null) {
-      clearTimeout(this.renderCacheDebounceTimer);
+      window.clearTimeout(this.renderCacheDebounceTimer);
     }
-    this.renderCacheDebounceTimer = setTimeout(() => {
+    this.renderCacheDebounceTimer = window.setTimeout(() => {
       this.renderCacheDebounceTimer = null;
       void this.persistRenderCache();
     }, 1500);
@@ -841,7 +902,8 @@ export default class ColorMathPlugin extends Plugin {
       }
     }
 
-    await writeRenderCache(this.app.vault.adapter, this.renderCacheData, (this.app.vault as any).configDir, this.manifest.id);
+    const configDir: string = typeof (this.app.vault as any).configDir === "string" ? (this.app.vault as any).configDir : ".obsidian";
+    await writeRenderCache(this.app.vault.adapter, this.renderCacheData, configDir, this.manifest.id);
   }
 
   setupMcpTools() {
@@ -849,7 +911,7 @@ export default class ColorMathPlugin extends Plugin {
     this.mcpCleanup = registerColorMathMcpTools(this);
   }
 
-  rerenderMath(targetLeaf?: any) {
+  rerenderMath(targetLeaf?: WorkspaceLeaf | null) {
     if (targetLeaf && targetLeaf.view instanceof MarkdownView) {
       this.rerenderView(targetLeaf.view);
       this.app.workspace.updateOptions();
@@ -1959,9 +2021,8 @@ class ColorMathSettingTab extends PluginSettingTab {
    * while rendering the authentic rich custom UI through a single seamless root container.
    */
   getSettingDefinitions(): any[] {
-    const obsidianPkg = require("obsidian");
-    const isModernObsidian = typeof obsidianPkg.requireApiVersion === "function"
-      ? obsidianPkg.requireApiVersion("1.13.0")
+    const isModernObsidian = typeof requireApiVersion === "function"
+      ? requireApiVersion("1.13.0")
       : true;
     if (!isModernObsidian) {
       return [];
@@ -2007,12 +2068,12 @@ class ColorMathSettingTab extends PluginSettingTab {
     if (!trimmed) {
       // 1. Restore all settings items to default visibility
       for (const item of Array.from(allSettingItems)) {
-        item.style.display = "";
+        item.removeClass("color-math-search-hidden");
         item.removeClass("color-math-search-hit");
       }
       // 2. Restore sub-sections
       for (const sub of Array.from(allSubSections)) {
-        sub.style.display = "";
+        sub.removeClass("color-math-search-hidden");
         const id = sub.getAttribute("data-section-id");
         if (id) {
           const isCollapsed = this.plugin.settings.collapsedSections?.[id] ?? false;
@@ -2021,7 +2082,7 @@ class ColorMathSettingTab extends PluginSettingTab {
       }
       // 3. Restore main sections
       for (const section of Array.from(allSections)) {
-        section.style.display = "";
+        section.removeClass("color-math-search-hidden");
         const id = section.getAttribute("data-section-id");
         if (id) {
           const isCollapsed = this.plugin.settings.collapsedSections?.[id] ?? false;
@@ -2037,16 +2098,16 @@ class ColorMathSettingTab extends PluginSettingTab {
       const text = item.textContent?.toLowerCase() || "";
       const aliases = item.getAttribute("data-search-aliases") || "";
       const match = text.includes(trimmed) || aliases.includes(trimmed);
-      item.style.display = match ? "" : "none";
+      item.toggleClass("color-math-search-hidden", !match);
       item.toggleClass("color-math-search-hit", match);
     }
 
     // Auto-unfold matching sub-collapsibles
     for (const sub of Array.from(allSubSections)) {
-      const matchingItems = sub.querySelectorAll<HTMLElement>(".setting-item:not([style*='display: none'])");
+      const matchingItems = sub.querySelectorAll<HTMLElement>(".setting-item:not(.color-math-search-hidden)");
       const subTitle = sub.querySelector("summary")?.textContent?.toLowerCase() || "";
       const subMatch = subTitle.includes(trimmed) || matchingItems.length > 0;
-      sub.style.display = subMatch ? "" : "none";
+      sub.toggleClass("color-math-search-hidden", !subMatch);
       if (subMatch) {
         sub.open = true;
       }
@@ -2054,10 +2115,10 @@ class ColorMathSettingTab extends PluginSettingTab {
 
     // Auto-unfold matching main sections
     for (const section of Array.from(allSections)) {
-      const matchingItems = section.querySelectorAll<HTMLElement>(".setting-item:not([style*='display: none'])");
+      const matchingItems = section.querySelectorAll<HTMLElement>(".setting-item:not(.color-math-search-hidden)");
       const sectionTitle = section.querySelector("summary")?.textContent?.toLowerCase() || "";
       const sectionMatch = sectionTitle.includes(trimmed) || matchingItems.length > 0;
-      section.style.display = sectionMatch ? "" : "none";
+      section.toggleClass("color-math-search-hidden", !sectionMatch);
       if (sectionMatch) {
         section.open = true;
       }
@@ -2068,12 +2129,13 @@ class ColorMathSettingTab extends PluginSettingTab {
     // 1. Hook native Obsidian Settings modal search input
     const settingModal = (this.app as any).setting;
     const searchComp = settingModal?.searchComponent;
-    if (searchComp?.inputEl) {
-      this.plugin.registerDomEvent(searchComp.inputEl, "input", () => {
-        this.handleSearchQuery(searchComp.inputEl.value);
+    const rawInputEl = searchComp?.inputEl;
+    if (rawInputEl instanceof HTMLInputElement) {
+      this.plugin.registerDomEvent(rawInputEl, "input", () => {
+        this.handleSearchQuery(rawInputEl.value);
       });
-      if (searchComp.inputEl.value) {
-        this.handleSearchQuery(searchComp.inputEl.value);
+      if (rawInputEl.value) {
+        this.handleSearchQuery(rawInputEl.value);
       }
     }
 

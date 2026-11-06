@@ -30,6 +30,10 @@ function stampElement(
   // Never overwrite an element already reconciled by the 4D Spatial Tensor engine
   if (getMathJaxElementRange(el)) return false;
 
+  if (el.classList && typeof el.classList.contains === "function" && el.classList.contains("color-math-cell-padding")) {
+    return false;
+  }
+
   // 1. 2D Cell / Line Containment Gate
   const mtd = typeof el.closest === "function" ? el.closest("mjx-mtd, mjx-linebox") : null;
   const cellRange = mtd ? getMathJaxElementRange(mtd) : undefined;
@@ -111,6 +115,9 @@ function stampLeaves(
         }
         const normText = getElementText(el);
         const rawText = String(el.textContent || "").trim();
+        if (el.classList && typeof el.classList.contains === "function" && el.classList.contains("color-math-cell-padding")) {
+          return false;
+        }
         return (
           normText === expectedText ||
           rawText === expectedText ||

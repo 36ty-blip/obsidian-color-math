@@ -405,6 +405,7 @@ const OPAQUE_TEXT_COMMANDS = new Set([
   "\\htmlId",
   "\\htmlStyle",
   "\\htmlData",
+  "\\unicode",
 ]);
 
 export function readOpaqueCommand(text: string, start: number): [string, number] | null {
@@ -4044,15 +4045,7 @@ export function padMatrixEnvironment(source: string, padVectors: boolean = true)
       }
       parts.push({ content: inner.slice(lastIndex), sep: "" });
 
-      let lastNonEmptyIndex = -1;
-      for (let i = parts.length - 1; i >= 0; i--) {
-        if (parts[i].content.trim()) {
-          lastNonEmptyIndex = i;
-          break;
-        }
-      }
-
-      const padded = parts.map((part, index) => {
+      const padded = parts.map((part) => {
         let trimmed = part.content.trim();
         if (!trimmed) return part.content + part.sep;
 
@@ -4065,7 +4058,7 @@ export function padMatrixEnvironment(source: string, padVectors: boolean = true)
           trimmed = "& " + trimmed;
         }
 
-        if (index === lastNonEmptyIndex && !trimmed.endsWith("&")) {
+        if (!trimmed.endsWith("&")) {
           trimmed = trimmed + " &";
         }
 
@@ -4425,6 +4418,7 @@ const HTML_ATTR_WRAPPER_COMMANDS = new Set([
   "\\htmlId",
   "\\htmlStyle",
   "\\htmlData",
+  "\\unicode",
 ]);
 
 function maskHtmlAttributeMacros(text: string): string {
@@ -4466,7 +4460,8 @@ export function maskComments(text: string): string {
     text.includes("\\style") ||
     text.includes("\\data") ||
     text.includes("\\href") ||
-    text.includes("\\html");
+    text.includes("\\html") ||
+    text.includes("\\unicode");
   if (!text.includes("%")) {
     return hasAttrMacro ? maskHtmlAttributeMacros(text) : text;
   }

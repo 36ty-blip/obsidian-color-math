@@ -785,7 +785,7 @@ export class MathCSTParser {
             name: `\\${lowerWord}`,
             rawText: word,
             isShorthand: true,
-          } as CommandNode);
+          });
           continue;
         }
 
@@ -802,7 +802,7 @@ export class MathCSTParser {
             isGreek: true,
             isConstant: true,
             isShorthand: true,
-          } as IdentifierNode);
+          });
           continue;
         }
 
@@ -818,7 +818,7 @@ export class MathCSTParser {
             rawText: word,
             isConstant: true,
             isShorthand: true,
-          } as IdentifierNode);
+          });
           continue;
         }
 

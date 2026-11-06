@@ -1693,7 +1693,12 @@ function findUnitSpans(rawBody, options) {
     const fullMatch = match[0];
     const numPart = match[1];
     const numOffset = fullMatch.lastIndexOf(numPart);
-    const numEnd = match.index + numOffset + numPart.length;
+    const numStart = match.index + numOffset;
+    const numEnd = numStart + numPart.length;
+    const beforeNum = body.slice(0, numStart);
+    if (/\\\\[ \t]*\[[^\]]*$/.test(beforeNum)) {
+      continue;
+    }
     const rest = body.slice(numEnd);
     if (!rest || rest.length === 0)
       continue;
@@ -9033,7 +9038,7 @@ var CATALOG_TABLE = [
   { "key": "\u{1D511}", "expectedText": "\u{1D511}", "hexCode": 120081, "roleId": 9, "priority": 20, "domains": 1, "dialects": 1023, "arityNibble": 0, "canonical": "\\mfrakN", "unicode": "\u{1D511}" },
   { "key": "InverseHankelTransform", "expectedText": "InverseHankelTransform", "roleId": 0, "priority": 22, "domains": 1, "dialects": 16, "arityNibble": 0, "canonical": "\\InverseHankelTransform", "unicode": "InverseHankelTransform", "arity": 0 },
   { "key": "LogB", "expectedText": "LogB", "roleId": 0, "priority": 22, "domains": 1, "dialects": 64, "arityNibble": 0, "canonical": "\\LogB", "unicode": "LogB" },
-  { "key": "primes", "expectedText": "primes", "roleId": 7, "priority": 25, "domains": 1, "dialects": 10, "arityNibble": 0, "canonical": "\\primes", "unicode": "primes" },
+  { "key": "primes", "expectedText": "primes", "roleId": 7, "priority": 25, "domains": 1, "dialects": 10, "arityNibble": 0, "canonical": "\\operatorname{primes}", "unicode": "primes" },
   { "key": "\u{1D5E8}", "expectedText": "\u{1D5E8}", "hexCode": 120296, "roleId": 9, "priority": 20, "domains": 1, "dialects": 1023, "arityNibble": 0, "canonical": "\\mbfsansU", "unicode": "\u{1D5E8}" },
   { "key": "\\diffp", "expectedText": "diffp", "roleId": 5, "priority": 24, "domains": 2, "dialects": 1, "arityNibble": 0, "unicode": "diffp" },
   { "key": "\u21B1", "expectedText": "\u21B1", "hexCode": 8625, "roleId": 2, "priority": 30, "domains": 1, "dialects": 1023, "arityNibble": 0, "canonical": "\\Rsh", "unicode": "\u21B1" },
@@ -10685,7 +10690,7 @@ var CATALOG_TABLE = [
   { "key": "print_jscode", "expectedText": "print_jscode", "roleId": 0, "priority": 22, "domains": 1, "dialects": 16, "arityNibble": 1, "canonical": "\\print_jscode", "unicode": "print_jscode", "arity": 1 },
   { "key": "gender.stroke", "expectedText": "\u26A6", "hexCode": 9894, "roleId": 1, "priority": 15, "domains": 1, "dialects": 2, "arityNibble": 0, "unicode": "\u26A6" },
   { "key": "\u{1D7FB}", "expectedText": "\u{1D7FB}", "hexCode": 120827, "roleId": 9, "priority": 20, "domains": 1, "dialects": 1023, "arityNibble": 0, "canonical": "\\mttfive", "unicode": "\u{1D7FB}" },
-  { "key": "factorial", "expectedText": "factorial", "roleId": 1, "priority": 24, "domains": 1, "dialects": 600, "arityNibble": 0, "canonical": "\\factorial", "unicode": "factorial", "arity": 0 },
+  { "key": "factorial", "expectedText": "factorial", "roleId": 1, "priority": 24, "domains": 1, "dialects": 600, "arityNibble": 0, "canonical": "\\operatorname{factorial}", "unicode": "factorial", "arity": 0 },
   { "key": "\\mtto", "expectedText": "\u{1D698}", "hexCode": 120472, "roleId": 9, "priority": 20, "domains": 1, "dialects": 1, "arityNibble": 0, "unicode": "\u{1D698}" },
   { "key": "square.stroked", "expectedText": "\u25A1", "hexCode": 9633, "roleId": 1, "priority": 15, "domains": 1, "dialects": 2, "arityNibble": 0, "unicode": "\u25A1" },
   { "key": "bandwidth", "expectedText": "bandwidth", "roleId": 0, "priority": 22, "domains": 4, "dialects": 8, "arityNibble": 0, "canonical": "\\bandwidth", "unicode": "bandwidth" },
@@ -15291,7 +15296,7 @@ var CATALOG_TABLE = [
   { "key": "\\mitD", "expectedText": "\u{1D437}", "hexCode": 119863, "roleId": 9, "priority": 20, "domains": 1, "dialects": 1, "arityNibble": 0, "unicode": "\u{1D437}" },
   { "key": "gt.arc", "expectedText": "\u2AA7", "hexCode": 10919, "roleId": 2, "priority": 30, "domains": 1, "dialects": 2, "arityNibble": 0, "unicode": "\u2AA7" },
   { "key": "\\utilde", "expectedText": "utilde", "roleId": 7, "priority": 25, "domains": 1, "dialects": 1, "arityNibble": 1, "argType": 1, "unicode": "utilde", "arity": 1 },
-  { "key": "\u25A1", "expectedText": "\u25A1", "hexCode": 9633, "roleId": 9, "priority": 20, "domains": 1, "dialects": 1023, "arityNibble": 0, "canonical": "\\mdlgwhtsquare", "unicode": "\u25A1" },
+  { "key": "\u25A1", "expectedText": "\u25A1", "hexCode": 9633, "roleId": 9, "priority": 20, "domains": 1, "dialects": 1023, "arityNibble": 0, "canonical": "\\square", "unicode": "\u25A1" },
   { "key": "\\rule", "expectedText": "rule", "roleId": 7, "priority": 25, "domains": 1, "dialects": 1, "arityNibble": 6, "argType": 1, "unicode": "rule", "arity": 2, "hasOptionalBracket": true },
   { "key": "\\mbffraks", "expectedText": "\u{1D598}", "hexCode": 120216, "roleId": 9, "priority": 20, "domains": 1, "dialects": 1, "arityNibble": 0, "unicode": "\u{1D598}" },
   { "key": "\u2122\\vs{text}", "expectedText": "\u2122\\vs{text}", "roleId": 1, "priority": 15, "domains": 1, "dialects": 1023, "arityNibble": 0, "canonical": "trademark", "unicode": "\u2122\\vs{text}" },
@@ -16803,7 +16808,8 @@ var OPAQUE_TEXT_COMMANDS = /* @__PURE__ */ new Set([
   "\\htmlClass",
   "\\htmlId",
   "\\htmlStyle",
-  "\\htmlData"
+  "\\htmlData",
+  "\\unicode"
 ]);
 function readOpaqueCommand(text, start) {
   const cmd = matchCommand(text, start);
@@ -19787,14 +19793,7 @@ function padMatrixEnvironment(source, padVectors = true) {
         lastIndex = m.index + m[0].length;
       }
       parts.push({ content: inner.slice(lastIndex), sep: "" });
-      let lastNonEmptyIndex = -1;
-      for (let i = parts.length - 1; i >= 0; i--) {
-        if (parts[i].content.trim()) {
-          lastNonEmptyIndex = i;
-          break;
-        }
-      }
-      const padded = parts.map((part, index) => {
+      const padded = parts.map((part) => {
         let trimmed = part.content.trim();
         if (!trimmed)
           return part.content + part.sep;
@@ -19805,7 +19804,7 @@ function padMatrixEnvironment(source, padVectors = true) {
         if (!trimmed.startsWith("&")) {
           trimmed = "& " + trimmed;
         }
-        if (index === lastNonEmptyIndex && !trimmed.endsWith("&")) {
+        if (!trimmed.endsWith("&")) {
           trimmed = trimmed + " &";
         }
         return lead + trimmed + trail + part.sep;
@@ -20067,7 +20066,8 @@ var HTML_ATTR_WRAPPER_COMMANDS = /* @__PURE__ */ new Set([
   "\\htmlClass",
   "\\htmlId",
   "\\htmlStyle",
-  "\\htmlData"
+  "\\htmlData",
+  "\\unicode"
 ]);
 function maskHtmlAttributeMacros(text) {
   let result = "";
@@ -20102,7 +20102,7 @@ function maskHtmlAttributeMacros(text) {
   return result;
 }
 function maskComments(text) {
-  const hasAttrMacro = text.includes("\\class") || text.includes("\\cssId") || text.includes("\\style") || text.includes("\\data") || text.includes("\\href") || text.includes("\\html");
+  const hasAttrMacro = text.includes("\\class") || text.includes("\\cssId") || text.includes("\\style") || text.includes("\\data") || text.includes("\\href") || text.includes("\\html") || text.includes("\\unicode");
   if (!text.includes("%")) {
     return hasAttrMacro ? maskHtmlAttributeMacros(text) : text;
   }
@@ -21582,12 +21582,20 @@ function applyColorSpans(source, spans) {
       const sortedClosings = [...closeList].sort((a, b) => b.start - a.start);
       for (let i = 0; i < sortedClosings.length; i++) {
         pieces.push("}");
+        if (sortedClosings[i].needsOuterGroup) {
+          pieces.push("}");
+        }
       }
     }
     const openList = openings.get(idx);
     if (openList) {
       const sortedOpenings = [...openList].sort((a, b) => b.end - a.end);
       for (const span of sortedOpenings) {
+        const needsGroup = idx === span.start && /(?:\\dd|\\d|\\dh|\\diff)(?![a-zA-Z])(?:\s*\[[^\]]*\])?\s*$/.test(source.slice(0, idx)) && (idx === 0 || source[idx - 1] !== "{");
+        if (needsGroup) {
+          span.needsOuterGroup = true;
+          pieces.push("{");
+        }
         pieces.push(`\\textcolor{${span.color}}{`);
       }
     }
@@ -22436,10 +22444,30 @@ var OPTIONAL_BRACKET_COMMANDS = /* @__PURE__ */ new Set([
   "\\resizebox",
   "\\rotatebox",
   "\\item",
-  "\\substack"
+  "\\substack",
+  "\\dd",
+  "\\dv",
+  "\\pdv",
+  "\\var",
+  "\\eval",
+  "\\qty",
+  "\\pqty",
+  "\\bqty",
+  "\\Bqty",
+  "\\vqty",
+  "\\abs",
+  "\\norm",
+  "\\order",
+  "\\diff",
+  "\\curl",
+  "\\grad",
+  "\\div",
+  "\\laplacian",
+  "\\dh",
+  "\\ddP"
 ]);
 function isOptionalBracketCommand(cmd) {
-  return OPTIONAL_BRACKET_COMMANDS.has(cmd) || /^\\[xX][a-zA-Z]+$/.test(cmd);
+  return OPTIONAL_BRACKET_COMMANDS.has(cmd) || /^\\[a-zA-Z]+$/.test(cmd);
 }
 var COMMON_DIMENSIONLESS_SET = /* @__PURE__ */ new Set([
   "Re",
@@ -23319,14 +23347,14 @@ var DIFF_FONT_COMMANDS = "mathbf|boldsymbol|pmb|vec|hat|bar|tilde|dot|ddot|mathi
 var DIFF_GREEK_COMMANDS = "alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|varkappa|lambda|mu|nu|xi|pi|varpi|rho|varrho|sigma|varsigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega|ell";
 var DIFF_VAR_PATTERN = "(?:\\\\(?:" + DIFF_FONT_COMMANDS + ")(?:\\{[^{}]+\\}|\\s+[a-zA-Z])|\\\\(?:" + DIFF_GREEK_COMMANDS + ")(?![a-zA-Z])|[a-zA-Z]|[\\u0370-\\u03FF]|\\uD835[\\uDC00-\\uDFFF])";
 var DERIV_FRAC_REGEX = new RegExp(
-  "\\\\(?:dfrac|tfrac|frac)\\s*\\{\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|\u2202)(?:\\^\\{?\\d+\\}?)?\\s*(?:" + DIFF_VAR_PATTERN + ")?\\s*\\}\\s*\\{\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|\u2202)\\s*" + DIFF_VAR_PATTERN + "(?:\\^\\{?\\d+\\}?)?(?:\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|\u2202)\\s*" + DIFF_VAR_PATTERN + ")*\\s*\\}",
+  "\\\\(?:dfrac|tfrac|frac)\\s*\\{\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|\u2202)(?:\\^\\{?\\d+\\}?)?\\s*(?:" + DIFF_VAR_PATTERN + ")?\\s*\\}\\s*\\{\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|\u2202)\\s*" + DIFF_VAR_PATTERN + "(?:\\^\\{?\\d+\\}?)?(?:\\s*(?:\\\\dd(?![a-zA-Z])|d|\\\\partial|\\\\mathrm\\{d\\}|\u2202)\\s*" + DIFF_VAR_PATTERN + ")*\\s*\\}",
   "g"
 );
 var DIFF_REGEX = new RegExp(
-  "(?:^|[\\s+\\-=*(){}\\]]|\\[|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~)(\\s*(?:d|\\\\partial|\\\\mathrm\\{d\\}|\\\\delta|\u2202)\\s*" + DIFF_VAR_PATTERN + "(?![a-zA-Z0-9_])(?:\\^\\{?\\d+\\}?)?)",
+  "(?:^|[\\s+\\-=*(){}\\]]|\\[|\\\\,|\\\\:|\\\\;|\\\\quad|\\\\qquad|~|\\\\[a-zA-Z]+(?=\\\\dd))(\\s*(?:\\\\dd(?![a-zA-Z])|d|\\\\partial|\\\\mathrm\\{d\\}|\\\\delta|\u2202)\\s*" + DIFF_VAR_PATTERN + "(?![a-zA-Z0-9_])(?:\\^\\{?\\d+\\}?)?)",
   "g"
 );
-var D_OPERATOR_REGEX = /(?:d|\\partial|\\mathrm\{d\}|\\delta|∂)/;
+var D_OPERATOR_REGEX = /(?:\\dd(?![a-zA-Z])|d|\\partial|\\mathrm\{d\}|\\delta|∂)/;
 var BOUNDARY_DOMAIN_PATTERN = /^(?:\\partial|∂)\s*(?:\\{[^{}]+\\}|\\Omega|\\mathcal\{[A-Za-z]+\}|\\Sigma|\\Gamma|[VDMBUKS]|Ω|Σ|Γ)(?![a-z])/;
 var SUBDIFFERENTIAL_PATTERN = /^(?:\\partial|∂)\s*(?:[fgh]|\\ell|\\phi|\\psi)(?![a-zA-Z])/;
 var BOUNDARY_DOMAIN_SCANNER = new RegExp(
@@ -23405,7 +23433,7 @@ function collectDifferentialSpans(body, palette = COLORS, diffSpans, options, ha
   return filtered.map((d) => {
     if (d.kind === "differential") {
       if (options?.variableDataFlow) {
-        const targetVar = d.text.replace(/^(?:d|\\partial|\\mathrm\{d\}|\\delta|∂)\s*/, "");
+        const targetVar = d.text.replace(/^(?:\\\\dd|d|\\partial|\\mathrm\{d\}|\\delta|∂)\s*/, "");
         const varColor = hashStringToColor(targetVar, hashPalette);
         return {
           start: d.start,
@@ -25389,7 +25417,8 @@ function collectVariableSpans(body, palette = VARIABLE_HASH_PALETTE, unitSpans, 
       }
       const afterWord = body.slice(index + word.length).trimStart();
       const hasArgs = afterWord.startsWith("(") || afterWord.startsWith("\\left(");
-      if (hasArgs) {
+      const isSubOrSuper = index > 0 && (body[index - 1] === "_" || body[index - 1] === "^");
+      if (hasArgs && !isSubOrSuper) {
         if (word.length >= 4) {
           index += word.length;
           continue;
@@ -29995,6 +30024,13 @@ function getCachedOrComputedSpans(body, palette, options, fallbackFn) {
         activeMode: options?.activeMode
       });
       if (wasmSpans && wasmSpans.length > 0) {
+        const needsSemanticAugmentation = options?.variableDataFlow || options?.enableTaxonomy || options?.colorUnits || options?.colorDifferentials || options?.colorDimensionless || options?.colorQuantumOperators || options?.colorBraKet;
+        if (needsSemanticAugmentation) {
+          const legacySpans2 = fallbackFn();
+          const spans2 = flattenColorSpans(selectColorSpans(body, [...legacySpans2, ...wasmSpans]));
+          mathSpanCache.set(cacheKey, spans2);
+          return spans2;
+        }
         mathSpanCache.set(cacheKey, wasmSpans);
         return wasmSpans;
       }
@@ -30103,7 +30139,7 @@ function getMathJaxElementRange(target) {
     return direct;
   if (typeof target.getAttribute === "function") {
     const rawAttr = target.getAttribute(TENSOR_ATTR);
-    if (rawAttr) {
+    if (typeof rawAttr === "string" && rawAttr) {
       const hydrated = deserializeTensorRange(rawAttr);
       if (hydrated) {
         mathjaxRangeMap.set(target, hydrated);
@@ -30131,7 +30167,7 @@ function getMathJaxElementRange(target) {
     }
     if (typeof curr.getAttribute === "function") {
       const rawParentAttr = curr.getAttribute(TENSOR_ATTR);
-      if (rawParentAttr) {
+      if (typeof rawParentAttr === "string" && rawParentAttr) {
         const hydratedParent = deserializeTensorRange(rawParentAttr);
         if (hydratedParent) {
           if (hydratedParent.coord && hydratedParent.coord.w >= 3) {
@@ -30159,7 +30195,7 @@ function elementContains(parent, child) {
   if (!parent || !child)
     return false;
   if (typeof parent.contains === "function") {
-    return parent.contains(child);
+    return Boolean(parent.contains(child));
   }
   let curr = child.parentElement;
   while (curr) {
@@ -30206,18 +30242,26 @@ function getElementText(el) {
     const norm = typeof raw.normalize === "function" ? raw.normalize("NFKD").trim() : raw;
     return normalizeMathOperatorChars(norm);
   }
+  const domEl = el;
   const glyphEls = [];
-  if (typeof el.matches === "function" && el.matches("mjx-c")) {
-    glyphEls.push(el);
-  } else if (typeof el.querySelectorAll === "function") {
-    glyphEls.push(...Array.from(el.querySelectorAll("mjx-c")));
+  if (typeof domEl?.matches === "function" && domEl.matches("mjx-c")) {
+    glyphEls.push(domEl);
+  } else if (typeof domEl?.querySelectorAll === "function") {
+    const matched = domEl.querySelectorAll("mjx-c");
+    if (matched) {
+      for (let i = 0; i < matched.length; i++) {
+        const item = matched[i];
+        if (item)
+          glyphEls.push(item);
+      }
+    }
   }
   if (glyphEls.length > 0) {
     let decoded = "";
     for (const g of glyphEls) {
       const cls = typeof g.className === "string" ? g.className : "";
       const m = cls.match(/mjx-c([0-9A-Fa-f]+)/);
-      if (m) {
+      if (m && typeof m[1] === "string") {
         try {
           decoded += String.fromCodePoint(parseInt(m[1], 16));
         } catch {
@@ -30479,6 +30523,9 @@ function passesFinalStampGate(el, range) {
   const { start, end, kind } = range;
   if (start < 0 || end <= start)
     return false;
+  if (el.classList && typeof el.classList.contains === "function" && el.classList.contains("color-math-cell-padding")) {
+    return false;
+  }
   let curr = el.parentElement;
   while (curr) {
     if (matchesSelector(curr, "mjx-mtd, mjx-linebox")) {
@@ -32032,15 +32079,33 @@ var QuaternionSpatialReconciler = class {
       };
       const nonEmptyCstRows = cstRows.filter((r) => r.hasContent);
       const nonEmptyMtrEls = mtrEls.filter(isDomRowNonEmpty);
+      const isCellEmpty = (mtd) => getElementText(mtd).trim() === "" && mtd.querySelector("mjx-c, mjx-frac, mjx-mfrac, mjx-sqrt, mjx-mroot, mjx-mspace, mjx-mtable") === null;
+      const pairRowCells = (rowMtds, cstCells) => {
+        if (rowMtds.length > cstCells.length && cstCells.every((c) => c.nodes.length > 0)) {
+          const contentMtds = rowMtds.filter((mtd) => !isCellEmpty(mtd));
+          if (contentMtds.length === cstCells.length) {
+            for (let c = 0; c < contentMtds.length; c++) {
+              reconcilePairedCell(contentMtds[c], cstCells[c]);
+            }
+            for (const mtd of rowMtds) {
+              if (isCellEmpty(mtd)) {
+                mtd.classList.add("cm-tensor-reconciled", "color-math-cell-padding");
+              }
+            }
+            return;
+          }
+        }
+        const colCount = Math.min(rowMtds.length, cstCells.length);
+        for (let c = 0; c < colCount; c++) {
+          reconcilePairedCell(rowMtds[c], cstCells[c]);
+        }
+      };
       if ((mtrEls.length !== cstRows.length || nonEmptyCstRows.length < cstRows.length) && nonEmptyMtrEls.length === nonEmptyCstRows.length) {
         for (let r = 0; r < nonEmptyCstRows.length; r++) {
           const cstRow = nonEmptyCstRows[r];
           const mtr = nonEmptyMtrEls[r];
           const rowMtds = getDirectRowMtds(mtr);
-          const colCount = Math.min(rowMtds.length, cstRow.cells.length);
-          for (let c = 0; c < colCount; c++) {
-            reconcilePairedCell(rowMtds[c], cstRow.cells[c]);
-          }
+          pairRowCells(rowMtds, cstRow.cells);
         }
         return;
       }
@@ -32049,10 +32114,7 @@ var QuaternionSpatialReconciler = class {
         const cstRow = cstRows[r];
         const mtr = mtrEls[r];
         const rowMtds = getDirectRowMtds(mtr);
-        const colCount = Math.min(rowMtds.length, cstRow.cells.length);
-        for (let c = 0; c < colCount; c++) {
-          reconcilePairedCell(rowMtds[c], cstRow.cells[c]);
-        }
+        pairRowCells(rowMtds, cstRow.cells);
       }
       return;
     }
@@ -32605,6 +32667,7 @@ var SPACING_COMMANDS2 = /* @__PURE__ */ new Set([
   "\\hskip",
   "\\kern"
 ]);
+var BIG_OPS = /* @__PURE__ */ new Set(["\\sum", "\\prod", "\\coprod", "\\bigcup", "\\bigcap", "\\lim"]);
 var FONT_ACCENT_COMMANDS = /* @__PURE__ */ new Set([
   "\\mathbf",
   "\\boldsymbol",
@@ -32669,7 +32732,6 @@ function collectLeaves(nodes, acc = []) {
           i += 2;
           break;
         }
-        const BIG_OPS = /* @__PURE__ */ new Set(["\\sum", "\\prod", "\\coprod", "\\bigcup", "\\bigcap", "\\lim"]);
         if (BIG_OPS.has(node2.name)) {
           let s1 = null;
           let s2 = null;
@@ -33141,6 +33203,9 @@ function stampElement(el, start, end, kind = "leaf", latex) {
     return false;
   if (getMathJaxElementRange(el))
     return false;
+  if (el.classList && typeof el.classList.contains === "function" && el.classList.contains("color-math-cell-padding")) {
+    return false;
+  }
   const mtd = typeof el.closest === "function" ? el.closest("mjx-mtd, mjx-linebox") : null;
   const cellRange = mtd ? getMathJaxElementRange(mtd) : void 0;
   if (cellRange && (start < cellRange.start || end > cellRange.end)) {
@@ -33203,6 +33268,9 @@ function stampLeaves(container, leafNodes, reconciledNodes, latex) {
         }
         const normText = getElementText(el);
         const rawText = String(el.textContent || "").trim();
+        if (el.classList && typeof el.classList.contains === "function" && el.classList.contains("color-math-cell-padding")) {
+          return false;
+        }
         return normText === expectedText || rawText === expectedText || isLeafTextMatch(normText, node2, latex) || isLeafTextMatch(rawText, node2, latex);
       };
       const scoreCandidate = (candIdx) => {
@@ -33350,11 +33418,21 @@ function highlightSelectionInMathContainer(container, relFrom, relTo) {
   };
   const leafSelector = "mjx-mi, mjx-mn, mjx-mo, mjx-mtext";
   const structuralSelector = "mjx-num, mjx-den, mjx-sqrt, mjx-mroot, mjx-mtd, mjx-frac, mjx-mfrac, mjx-msub, mjx-msup, mjx-msubsup, mjx-munder, mjx-mover, mjx-munderover, mjx-script";
+  const isVisibleTarget = (el) => {
+    if (el.textContent && el.textContent.trim().length > 0)
+      return true;
+    if (typeof el.querySelector === "function") {
+      return el.querySelector("mjx-c, mjx-frac, mjx-mfrac, mjx-sqrt, mjx-mroot, mjx-mtable, mjx-stretchy-h, mjx-stretchy-v") !== null;
+    }
+    return !el.classList?.contains("color-math-cell-padding");
+  };
   if (relTo > relFrom) {
     const allCandidates = Array.from(
       container.querySelectorAll(`${structuralSelector}, ${leafSelector}`)
     );
     const exactMatches = allCandidates.filter((el) => {
+      if (!isVisibleTarget(el))
+        return false;
       const r = readRange(el);
       return r !== null && r.start === relFrom && r.end === relTo;
     });
@@ -33368,6 +33446,8 @@ function highlightSelectionInMathContainer(container, relFrom, relTo) {
     }
     const leaves = Array.from(container.querySelectorAll(leafSelector));
     for (const leaf of leaves) {
+      if (!isVisibleTarget(leaf))
+        continue;
       const r = readRange(leaf);
       if (r && Math.max(r.start, relFrom) < Math.min(r.end, relTo)) {
         leaf.classList.add("color-math-selected-target");
@@ -33379,6 +33459,8 @@ function highlightSelectionInMathContainer(container, relFrom, relTo) {
     let bestPriority = Infinity;
     let bestSpanLen = Infinity;
     for (const leaf of leaves) {
+      if (!isVisibleTarget(leaf))
+        continue;
       const r = readRange(leaf);
       if (!r || r.end <= r.start)
         continue;
@@ -33580,7 +33662,7 @@ function createInlineMathTooltipExtension(getPalette, getOptions, onNavigate, on
                     const isInterceptorActive = typeof mathJax.tex2chtml.__colorMathActive === "function" && mathJax.tex2chtml.__colorMathActive();
                     let el;
                     if (isInterceptorActive) {
-                      el = mathJax.tex2chtml(body, { display: true });
+                      el = mathJax.tex2chtml(body, { display: true, ephemeral: true });
                     } else {
                       const palette = getPalette();
                       const colored = colorLatexBody(body, palette, curOptions);
@@ -33624,8 +33706,8 @@ function createInlineMathTooltipExtension(getPalette, getOptions, onNavigate, on
                   registerSingleTooltipHost(host);
                   applyHostStyles();
                   syncTooltipSelection(view.state);
-                  if (typeof requestAnimationFrame === "function") {
-                    requestAnimationFrame(() => {
+                  if (typeof window.requestAnimationFrame === "function") {
+                    window.requestAnimationFrame(() => {
                       registerSingleTooltipHost(getHost());
                       applyHostStyles();
                       syncTooltipSelection(view.state);
@@ -34280,8 +34362,8 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
           userEvent: "select"
         });
         this.view.focus();
-        if (typeof requestAnimationFrame === "function") {
-          requestAnimationFrame(() => {
+        if (typeof window.requestAnimationFrame === "function") {
+          window.requestAnimationFrame(() => {
             if (this.lastNavigationSelection === sel) {
               const cur = this.view.state.selection.main;
               if (cur.anchor !== sel.anchor || cur.head !== sel.head) {
@@ -34440,8 +34522,8 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
             scrollIntoView: true
           });
           this.view.focus();
-          if (typeof requestAnimationFrame === "function") {
-            requestAnimationFrame(() => {
+          if (typeof window.requestAnimationFrame === "function") {
+            window.requestAnimationFrame(() => {
               if (this.lastNavigationSelection === sel) {
                 const cur = this.view.state.selection.main;
                 if (cur.anchor !== sel.anchor || cur.head !== sel.head) {
@@ -34547,8 +34629,8 @@ function createColorMathLivePlugin(getPalette, isEnabled, getOptions) {
         if (update.docChanged || update.viewportChanged || update.selectionSet) {
           this.decorations = this.buildDecorations(update.view);
           this.syncSelectionToRenderedMath(update.view);
-          if (typeof requestAnimationFrame === "function") {
-            requestAnimationFrame(() => {
+          if (typeof window.requestAnimationFrame === "function") {
+            window.requestAnimationFrame(() => {
               this.syncSelectionToRenderedMath(update.view);
             });
           }
@@ -34978,13 +35060,16 @@ function computeContentHash(text) {
 function getActiveNoteFromLayout(layout) {
   if (!layout)
     return null;
-  const activeId = layout.active;
+  const rawActive = layout.active;
+  const activeId = typeof rawActive === "string" ? rawActive : null;
   if (activeId) {
     const found = findLeafById(layout.main, activeId);
-    if (found?.state?.file)
-      return found.state.file;
-    if (found?.state?.state?.file)
-      return found.state.state.file;
+    const leafFile = found?.state?.file;
+    if (typeof leafFile === "string")
+      return leafFile;
+    const nestedFile = found?.state?.state?.file;
+    if (typeof nestedFile === "string")
+      return nestedFile;
   }
   return findFirstMarkdownFile(layout.main);
 }
@@ -35006,10 +35091,12 @@ function findFirstMarkdownFile(node2) {
   if (!node2)
     return null;
   if (node2.type === "leaf") {
-    if (typeof node2.state?.file === "string")
-      return node2.state.file;
-    if (node2.state?.type === "markdown" && typeof node2.state?.state?.file === "string") {
-      return node2.state.state.file;
+    const stateFile = node2.state?.file;
+    if (typeof stateFile === "string")
+      return stateFile;
+    const nestedFile = node2.state?.state?.file;
+    if (node2.state?.type === "markdown" && typeof nestedFile === "string") {
+      return nestedFile;
     }
   }
   if (Array.isArray(node2.children)) {
@@ -35026,8 +35113,9 @@ function getActiveNoteFromWorkspace(workspace) {
     return null;
   if (typeof workspace.getActiveFile === "function") {
     const file2 = workspace.getActiveFile();
-    if (file2?.path)
-      return file2.path;
+    const filePath = file2?.path;
+    if (typeof filePath === "string")
+      return filePath;
   }
   if (typeof workspace.getLayout === "function") {
     const layout = workspace.getLayout();
@@ -35108,6 +35196,22 @@ function pruneRenderCache(data, maxEntries = 2e3) {
     delete data.renders[sorted[i].key];
   }
 }
+function sanitizeRenderCache(data, maxEntries = 1e3) {
+  if (!data || !data.renders || typeof data.renders !== "object")
+    return;
+  for (const key of Object.keys(data.renders)) {
+    const item = data.renders[key];
+    if (!item || typeof item.html !== "string" || !item.html.trim()) {
+      delete data.renders[key];
+      continue;
+    }
+    const html = item.html;
+    if (html.includes("Color Math Error:") || html.includes("data-mjx-error") || html.includes("mjx-merror") || html.includes('class="merror"')) {
+      delete data.renders[key];
+    }
+  }
+  pruneRenderCache(data, maxEntries);
+}
 async function readRenderCache(adapter, configDir = ".obsidian", pluginId = "color-math") {
   if (!adapter || typeof adapter.read !== "function")
     return null;
@@ -35117,10 +35221,11 @@ async function readRenderCache(adapter, configDir = ".obsidian", pluginId = "col
       const exists = await adapter.exists(path);
       if (exists) {
         const raw = await adapter.read(path);
-        if (!raw)
+        if (typeof raw !== "string" || !raw)
           return null;
         const data = JSON.parse(raw);
         if (data && data.version === 2 && typeof data.renders === "object") {
+          sanitizeRenderCache(data);
           return data;
         }
       }
@@ -35130,7 +35235,7 @@ async function readRenderCache(adapter, configDir = ".obsidian", pluginId = "col
       const legacyExists = await adapter.exists(legacyPath);
       if (legacyExists) {
         const rawLegacy = await adapter.read(legacyPath);
-        if (rawLegacy) {
+        if (typeof rawLegacy === "string" && rawLegacy) {
           const v1 = JSON.parse(rawLegacy);
           if (v1 && v1.version === 1 && typeof v1.filePath === "string" && Array.isArray(v1.equations)) {
             const migrated = {
@@ -35206,6 +35311,12 @@ var MathJaxInterceptor = class {
   }
   clearCache() {
     this.renderCache.clear();
+    if (this.persistentCache && this.persistentCache.renders) {
+      this.persistentCache.renders = {};
+      if (this.onCacheDirty) {
+        this.onCacheDirty();
+      }
+    }
   }
   setPersistentCache(cache, onDirty) {
     this.persistentCache = cache;
@@ -35233,6 +35344,12 @@ var MathJaxInterceptor = class {
       o.colorBraKet ? "b1" : "b0"
     ].filter(Boolean).join("|");
   }
+  isChtmlStylesheetReady() {
+    if (typeof document === "undefined" || !document.head || typeof document.head.querySelector !== "function")
+      return true;
+    const style = document.head.querySelector("style#MJX-CHTML-styles");
+    return style !== null && (style.textContent?.length ?? 0) > 50;
+  }
   getCachedElement(hash2, latex) {
     const cached2 = this.renderCache.get(hash2);
     if (cached2) {
@@ -35251,6 +35368,9 @@ var MathJaxInterceptor = class {
       }
     }
     if (this.persistentCache && this.persistentCache.renders && this.persistentCache.renders[hash2]) {
+      if (!this.isChtmlStylesheetReady()) {
+        return null;
+      }
       const record2 = this.persistentCache.renders[hash2];
       record2.ts = Date.now();
       const hydrated = hydrateElementFromHtml(record2.html);
@@ -35370,6 +35490,7 @@ var MathJaxInterceptor = class {
         if (!this.isEnabled())
           return orig.call(mathJax, latex, options);
         const isDisplay = Boolean(options?.display);
+        const isEphemeral = Boolean(options?.ephemeral);
         const hash2 = computeMathHash(latex, this.getContextKey() + (isDisplay ? "|D" : "|I"));
         const cached2 = this.getCachedElement(hash2, latex);
         if (cached2)
@@ -35394,7 +35515,7 @@ var MathJaxInterceptor = class {
                 this.onCacheDirty();
             }
           } else {
-            this.cacheElement(hash2, finalResult, isDisplay);
+            this.cacheElement(hash2, finalResult, isDisplay, !isEphemeral);
           }
           return finalResult;
         } catch (err) {
@@ -35414,6 +35535,7 @@ var MathJaxInterceptor = class {
         if (!this.isEnabled())
           return orig.call(mathJax, latex, options);
         const isDisplay = Boolean(options?.display);
+        const isEphemeral = Boolean(options?.ephemeral);
         const hash2 = computeMathHash(latex, this.getContextKey() + (isDisplay ? "|D" : "|I"));
         const cached2 = this.getCachedElement(hash2, latex);
         if (cached2)
@@ -35444,7 +35566,7 @@ var MathJaxInterceptor = class {
                 this.onCacheDirty();
             }
           } else {
-            this.cacheElement(hash2, finalResult, isDisplay);
+            this.cacheElement(hash2, finalResult, isDisplay, !isEphemeral);
           }
           return finalResult;
         } catch (err) {
@@ -35568,6 +35690,9 @@ var MathJaxInterceptor = class {
       const errAttr = dom.getAttribute("data-mjx-error");
       if (errAttr)
         return errAttr;
+      const titleAttr = dom.getAttribute("title");
+      if (titleAttr && titleAttr.includes("Color Math Error:"))
+        return titleAttr;
     }
     let errNode = null;
     if (typeof dom.querySelector === "function") {
@@ -35580,6 +35705,11 @@ var MathJaxInterceptor = class {
       const attrTitle = typeof errNode.getAttribute === "function" ? errNode.getAttribute("title") : errNode.title;
       const textContent = errNode.textContent?.trim();
       return attrError || attrTitle || textContent || "LaTeX syntax error";
+    }
+    if ("textContent" in el && typeof el.textContent === "string") {
+      const txt = el.textContent;
+      if (txt.includes("[Color Math:"))
+        return txt;
     }
     return null;
   }
@@ -56644,7 +56774,7 @@ var ColorMathReferenceModal = class extends import_obsidian5.Modal {
     contentEl.addClass("color-math-reference-modal-content");
     const toolbarEl = contentEl.createDiv({ cls: "color-math-reference-toolbar" });
     const titleEl = toolbarEl.createDiv({ cls: "color-math-reference-title" });
-    titleEl.createEl("span", {
+    titleEl.createSpan({
       text: "\u{1F4D0} Color Math \u2014 Syntax & Operator Reference",
       cls: "color-math-reference-heading"
     });
@@ -57243,8 +57373,38 @@ var ColorMathPlugin = class extends import_obsidian6.Plugin {
   renderCacheData = null;
   renderCachePromise = null;
   renderCacheDebounceTimer = null;
+  wasAppReloaded = false;
   async onload() {
     this.isPluginUnloaded = false;
+    try {
+      if (typeof window !== "undefined" && window.sessionStorage) {
+        if (window.sessionStorage.getItem("color-math-app-reloading") === "1") {
+          this.wasAppReloaded = true;
+          window.sessionStorage.removeItem("color-math-app-reloading");
+          clearMathSpanCache();
+        }
+      }
+    } catch {
+    }
+    if (typeof window !== "undefined") {
+      const markReloading = () => {
+        try {
+          window.sessionStorage?.setItem("color-math-app-reloading", "1");
+        } catch {
+        }
+      };
+      const onKeyDown = (e) => {
+        if ((e.ctrlKey || e.metaKey) && (e.key === "r" || e.key === "R") || e.key === "F5") {
+          markReloading();
+        }
+      };
+      window.addEventListener("beforeunload", markReloading);
+      window.addEventListener("keydown", onKeyDown, true);
+      this.register(() => {
+        window.removeEventListener("beforeunload", markReloading);
+        window.removeEventListener("keydown", onKeyDown, true);
+      });
+    }
     await this.loadSettings();
     setPalette(this.settings.palette);
     syncTooltipAppearance(
@@ -57254,7 +57414,8 @@ var ColorMathPlugin = class extends import_obsidian6.Plugin {
     if (this.settings.useWebAssembly) {
       void initWasmEngine();
     }
-    this.renderCachePromise = readRenderCache(this.app.vault.adapter, this.app.vault.configDir, this.manifest.id);
+    const configDir = typeof this.app.vault.configDir === "string" ? this.app.vault.configDir : ".obsidian";
+    this.renderCachePromise = readRenderCache(this.app.vault.adapter, configDir, this.manifest.id);
     this.api = new ColorMathAPIImpl(this);
     window.ColorMathAPI = this.api;
     this.interceptor = new MathJaxInterceptor(
@@ -57427,6 +57588,21 @@ var ColorMathPlugin = class extends import_obsidian6.Plugin {
       }
     });
     this.addCommand({
+      id: "clear-mathjax-cache",
+      name: "Clear MathJax render cache & re-render",
+      callback: async () => {
+        clearMathSpanCache();
+        this.interceptor?.clearCache();
+        if (this.renderCacheData) {
+          this.renderCacheData.renders = {};
+          const configDir2 = typeof this.app.vault.configDir === "string" ? this.app.vault.configDir : ".obsidian";
+          await writeRenderCache(this.app.vault.adapter, this.renderCacheData, configDir2, this.manifest.id);
+        }
+        this.rerenderMath();
+        new import_obsidian6.Notice("Color Math: Render cache cleared. Re-rendering math formulas.");
+      }
+    });
+    this.addCommand({
       id: "convert-math-to-unicode-note",
       name: "Convert math to Unicode in active note (Declutter LaTeX)",
       checkCallback: (checking) => {
@@ -57540,7 +57716,7 @@ var ColorMathPlugin = class extends import_obsidian6.Plugin {
   onunload() {
     this.isPluginUnloaded = true;
     if (this.renderCacheDebounceTimer !== null) {
-      clearTimeout(this.renderCacheDebounceTimer);
+      window.clearTimeout(this.renderCacheDebounceTimer);
       this.renderCacheDebounceTimer = null;
     }
     if (this.idleCallbackId !== null && typeof window !== "undefined" && typeof window.cancelIdleCallback === "function") {
@@ -57548,7 +57724,7 @@ var ColorMathPlugin = class extends import_obsidian6.Plugin {
       this.idleCallbackId = null;
     }
     if (this.idleTimeoutId !== null) {
-      clearTimeout(this.idleTimeoutId);
+      window.clearTimeout(this.idleTimeoutId);
       this.idleTimeoutId = null;
     }
     delete window.ColorMathAPI;
@@ -57571,6 +57747,9 @@ var ColorMathPlugin = class extends import_obsidian6.Plugin {
       return;
     const cached2 = this.renderCachePromise ? await this.renderCachePromise : null;
     if (cached2) {
+      if (this.wasAppReloaded) {
+        cached2.renders = {};
+      }
       this.renderCacheData = cached2;
       this.interceptor?.setPersistentCache(this.renderCacheData, () => this.scheduleRenderCacheSave());
       const activeFilePath = getActiveNoteFromWorkspace(this.app.workspace);
@@ -57635,16 +57814,16 @@ var ColorMathPlugin = class extends import_obsidian6.Plugin {
     if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
       this.idleCallbackId = window.requestIdleCallback(runIdleHydration, { timeout: 1500 });
     } else {
-      this.idleTimeoutId = setTimeout(runIdleHydration, 20);
+      this.idleTimeoutId = window.setTimeout(runIdleHydration, 20);
     }
   }
   scheduleRenderCacheSave() {
     if (this.isPluginUnloaded)
       return;
     if (this.renderCacheDebounceTimer !== null) {
-      clearTimeout(this.renderCacheDebounceTimer);
+      window.clearTimeout(this.renderCacheDebounceTimer);
     }
-    this.renderCacheDebounceTimer = setTimeout(() => {
+    this.renderCacheDebounceTimer = window.setTimeout(() => {
       this.renderCacheDebounceTimer = null;
       void this.persistRenderCache();
     }, 1500);
@@ -57692,7 +57871,8 @@ var ColorMathPlugin = class extends import_obsidian6.Plugin {
       } catch {
       }
     }
-    await writeRenderCache(this.app.vault.adapter, this.renderCacheData, this.app.vault.configDir, this.manifest.id);
+    const configDir = typeof this.app.vault.configDir === "string" ? this.app.vault.configDir : ".obsidian";
+    await writeRenderCache(this.app.vault.adapter, this.renderCacheData, configDir, this.manifest.id);
   }
   setupMcpTools() {
     if (this.mcpCleanup)
@@ -58629,8 +58809,7 @@ var ColorMathSettingTab = class extends import_obsidian6.PluginSettingTab {
    * while rendering the authentic rich custom UI through a single seamless root container.
    */
   getSettingDefinitions() {
-    const obsidianPkg = require("obsidian");
-    const isModernObsidian = typeof obsidianPkg.requireApiVersion === "function" ? obsidianPkg.requireApiVersion("1.13.0") : true;
+    const isModernObsidian = typeof import_obsidian6.requireApiVersion === "function" ? (0, import_obsidian6.requireApiVersion)("1.13.0") : true;
     if (!isModernObsidian) {
       return [];
     }
@@ -58670,11 +58849,11 @@ var ColorMathSettingTab = class extends import_obsidian6.PluginSettingTab {
     const allSettingItems = this.containerEl.querySelectorAll(".setting-item");
     if (!trimmed) {
       for (const item of Array.from(allSettingItems)) {
-        item.style.display = "";
+        item.removeClass("color-math-search-hidden");
         item.removeClass("color-math-search-hit");
       }
       for (const sub of Array.from(allSubSections)) {
-        sub.style.display = "";
+        sub.removeClass("color-math-search-hidden");
         const id = sub.getAttribute("data-section-id");
         if (id) {
           const isCollapsed = this.plugin.settings.collapsedSections?.[id] ?? false;
@@ -58682,7 +58861,7 @@ var ColorMathSettingTab = class extends import_obsidian6.PluginSettingTab {
         }
       }
       for (const section of Array.from(allSections)) {
-        section.style.display = "";
+        section.removeClass("color-math-search-hidden");
         const id = section.getAttribute("data-section-id");
         if (id) {
           const isCollapsed = this.plugin.settings.collapsedSections?.[id] ?? false;
@@ -58697,23 +58876,23 @@ var ColorMathSettingTab = class extends import_obsidian6.PluginSettingTab {
       const text = item.textContent?.toLowerCase() || "";
       const aliases = item.getAttribute("data-search-aliases") || "";
       const match = text.includes(trimmed) || aliases.includes(trimmed);
-      item.style.display = match ? "" : "none";
+      item.toggleClass("color-math-search-hidden", !match);
       item.toggleClass("color-math-search-hit", match);
     }
     for (const sub of Array.from(allSubSections)) {
-      const matchingItems = sub.querySelectorAll(".setting-item:not([style*='display: none'])");
+      const matchingItems = sub.querySelectorAll(".setting-item:not(.color-math-search-hidden)");
       const subTitle = sub.querySelector("summary")?.textContent?.toLowerCase() || "";
       const subMatch = subTitle.includes(trimmed) || matchingItems.length > 0;
-      sub.style.display = subMatch ? "" : "none";
+      sub.toggleClass("color-math-search-hidden", !subMatch);
       if (subMatch) {
         sub.open = true;
       }
     }
     for (const section of Array.from(allSections)) {
-      const matchingItems = section.querySelectorAll(".setting-item:not([style*='display: none'])");
+      const matchingItems = section.querySelectorAll(".setting-item:not(.color-math-search-hidden)");
       const sectionTitle = section.querySelector("summary")?.textContent?.toLowerCase() || "";
       const sectionMatch = sectionTitle.includes(trimmed) || matchingItems.length > 0;
-      section.style.display = sectionMatch ? "" : "none";
+      section.toggleClass("color-math-search-hidden", !sectionMatch);
       if (sectionMatch) {
         section.open = true;
       }
@@ -58722,12 +58901,13 @@ var ColorMathSettingTab = class extends import_obsidian6.PluginSettingTab {
   setupSearchAutoUnfolding() {
     const settingModal = this.app.setting;
     const searchComp = settingModal?.searchComponent;
-    if (searchComp?.inputEl) {
-      this.plugin.registerDomEvent(searchComp.inputEl, "input", () => {
-        this.handleSearchQuery(searchComp.inputEl.value);
+    const rawInputEl = searchComp?.inputEl;
+    if (rawInputEl instanceof HTMLInputElement) {
+      this.plugin.registerDomEvent(rawInputEl, "input", () => {
+        this.handleSearchQuery(rawInputEl.value);
       });
-      if (searchComp.inputEl.value) {
-        this.handleSearchQuery(searchComp.inputEl.value);
+      if (rawInputEl.value) {
+        this.handleSearchQuery(rawInputEl.value);
       }
     }
     const modalEl = this.containerEl.closest(".modal") || document.querySelector(".modal.mod-settings");
