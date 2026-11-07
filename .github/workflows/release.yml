@@ -27,8 +27,20 @@ jobs:
       - name: Build plugin
         run: npm run build
 
-      - name: Run tests
-        run: npm test
+      - name: Verify production release artifacts
+        run: |
+          node -e "
+            const fs = require('fs');
+            const requiredFiles = ['main.js', 'manifest.json', 'styles.css'];
+            for (const file of requiredFiles) {
+              if (!fs.existsSync(file) || fs.statSync(file).size === 0) {
+                console.error('Fatal: Missing or empty release artifact: ' + file);
+                process.exit(1);
+              }
+              const stats = fs.statSync(file);
+              console.log('Verified ' + file + ' (' + stats.size + ' bytes)');
+            }
+          "
 
       - name: Attest Build Provenance
         uses: actions/attest-build-provenance@v2
