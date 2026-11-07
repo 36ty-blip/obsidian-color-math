@@ -184,7 +184,7 @@ async function main() {
   } else {
     console.log(`  • Running official Obsidian Community Review rules (eslint-plugin-obsidianmd)...`);
     try {
-      execSync("npx eslint src/ --cache", { cwd: rootDir, stdio: "pipe" });
+      execSync("npx eslint src/", { cwd: rootDir, stdio: "pipe" });
       console.log(`  • ${c.green}✔ Official Obsidian Linter audit passed with zero violations.${c.reset}`);
     } catch (err) {
       console.error(`\n${c.red}❌ Official Obsidian Linter audit failed!${c.reset}`);
@@ -201,6 +201,8 @@ async function main() {
     console.log(`${c.yellow}  ⚠️  Tests skipped via --skip-tests flag.${c.reset}`);
   } else {
     const testStart = Date.now();
+    console.log(`  • Generating constructor metadata...`);
+    await runCommand("node", ["scripts/generate_constructors.mjs"], rootDir);
     console.log(`  • Executing Vitest across ${c.cyan}${threadCount} worker threads${c.reset}...`);
     try {
       await runCommand(
@@ -243,6 +245,7 @@ async function main() {
   console.log(`\n${c.bold}[Phase 3: Production Bundling & Tree-Shaking]${c.reset}`);
   const buildStart = Date.now();
   try {
+    await runCommand("node", ["scripts/generate_constructors.mjs"], rootDir);
     await runCommand("node", ["esbuild.config.mjs", "production"], rootDir);
     const buildElapsed = ((Date.now() - buildStart) / 1000).toFixed(2);
     console.log(`  • ${c.green}✔ esbuild production bundle generated in ${buildElapsed}s.${c.reset}`);

@@ -112,7 +112,7 @@ export async function publishToGitHub(options = {}) {
     console.log(`${c.yellow}  ⚠️  Linter skipped via --skip-lint.${c.reset}`);
   } else {
     console.log(`  • Running official Obsidian Community Review rules (eslint-plugin-obsidianmd)...`);
-    const lintCheck = runCommandSilent("npx eslint src/ --cache", rootDir);
+    const lintCheck = runCommandSilent("npx eslint src/", rootDir);
     if (!lintCheck.success) {
       console.error(`${c.red}❌ Obsidian Linter audit found violations!${c.reset}`);
       if (lintCheck.stderr) console.error(lintCheck.stderr);
