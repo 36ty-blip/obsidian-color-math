@@ -1,0 +1,692 @@
+{
+  "timestamp": "2026-11-06T12:52:17.396Z",
+  "frameBudget120HzMs": 8.333,
+  "results": [
+    {
+      "name": "MPHF Catalog Lemire Lookup",
+      "category": "Micro-Benchmark",
+      "iterations": 50000,
+      "cpu": {
+        "userMs": 47,
+        "systemMs": 0,
+        "totalCpuMs": 47,
+        "wallMs": 37.68,
+        "cpuPercent": 124.73460721868366
+      },
+      "memory": {
+        "before": {
+          "heapUsed": 16285264,
+          "heapTotal": 21479424,
+          "rss": 86003712,
+          "external": 9877380,
+          "arrayBuffers": 146111
+        },
+        "after": {
+          "heapUsed": 20540904,
+          "heapTotal": 23658496,
+          "rss": 88686592,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "deltaHeapUsedBytes": 4255640,
+        "deltaRssBytes": 2682880,
+        "heapUsedMB": 19.59,
+        "rssMB": 84.58
+      },
+      "latency": {
+        "samples": 50000,
+        "totalTimeMs": 13.063,
+        "minUs": 0,
+        "meanUs": 0.261,
+        "medianUs": 0.2,
+        "p90Us": 0.4,
+        "p95Us": 0.5,
+        "p99Us": 0.9,
+        "maxUs": 187,
+        "stdDevUs": 1.932,
+        "opsPerSec": 3827634
+      },
+      "notes": "50k lookups (50% positive LaTeX/Typst hits, 50% negative rejections)."
+    },
+    {
+      "name": "Markdown Document Scanner",
+      "category": "Document Parsing",
+      "iterations": 500,
+      "cpu": {
+        "userMs": 328,
+        "systemMs": 78,
+        "totalCpuMs": 406,
+        "wallMs": 288.2894,
+        "cpuPercent": 140.83070692158643
+      },
+      "memory": {
+        "before": {
+          "heapUsed": 16342392,
+          "heapTotal": 24363008,
+          "rss": 91254784,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "after": {
+          "heapUsed": 20372120,
+          "heapTotal": 26722304,
+          "rss": 93396992,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "deltaHeapUsedBytes": 4029728,
+        "deltaRssBytes": 2142208,
+        "heapUsedMB": 19.43,
+        "rssMB": 89.07
+      },
+      "latency": {
+        "samples": 500,
+        "totalTimeMs": 271.381,
+        "minUs": 319.3,
+        "meanUs": 542.761,
+        "medianUs": 381.2,
+        "p90Us": 760.9,
+        "p95Us": 1145.9,
+        "p99Us": 3209.1,
+        "maxUs": 9234.7,
+        "stdDevUs": 569.735,
+        "opsPerSec": 1842
+      },
+      "notes": "500 scans of a 1,000-line document with mixed prose, code blocks, inline & display math."
+    },
+    {
+      "name": "Syntax Normalization & Typst Parsing",
+      "category": "Grammar & Normalization",
+      "iterations": 10000,
+      "cpu": {
+        "userMs": 484,
+        "systemMs": 78,
+        "totalCpuMs": 562,
+        "wallMs": 209.4674,
+        "cpuPercent": 268.2995062716203
+      },
+      "memory": {
+        "before": {
+          "heapUsed": 16599944,
+          "heapTotal": 26722304,
+          "rss": 93667328,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "after": {
+          "heapUsed": 22151928,
+          "heapTotal": 35897344,
+          "rss": 103796736,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "deltaHeapUsedBytes": 5551984,
+        "deltaRssBytes": 10129408,
+        "heapUsedMB": 21.13,
+        "rssMB": 98.99
+      },
+      "latency": {
+        "samples": 10000,
+        "totalTimeMs": 194.12,
+        "minUs": 4.7,
+        "meanUs": 19.412,
+        "medianUs": 11.7,
+        "p90Us": 31.9,
+        "p95Us": 46.6,
+        "p99Us": 129.4,
+        "maxUs": 8110.4,
+        "stdDevUs": 87.786,
+        "opsPerSec": 51515
+      },
+      "notes": "10k normalization operations handling unbraced fractions, slash division, and Typst callouts."
+    },
+    {
+      "name": "Sub-Parser: Units Parser",
+      "category": "Sub-Parser Breakdown",
+      "iterations": 5000,
+      "cpu": {
+        "userMs": 63,
+        "systemMs": 0,
+        "totalCpuMs": 63,
+        "wallMs": 25.4001,
+        "cpuPercent": 248.03051956488363
+      },
+      "memory": {
+        "before": {
+          "heapUsed": 17482592,
+          "heapTotal": 35897344,
+          "rss": 103964672,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "after": {
+          "heapUsed": 19171792,
+          "heapTotal": 35897344,
+          "rss": 103940096,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "deltaHeapUsedBytes": 1689200,
+        "deltaRssBytes": -24576,
+        "heapUsedMB": 18.28,
+        "rssMB": 99.13
+      },
+      "latency": {
+        "samples": 5000,
+        "totalTimeMs": 17.991,
+        "minUs": 2.9,
+        "meanUs": 3.598,
+        "medianUs": 3,
+        "p90Us": 5.3,
+        "p95Us": 5.5,
+        "p99Us": 6.5,
+        "maxUs": 400.1,
+        "stdDevUs": 7.4,
+        "opsPerSec": 277920
+      }
+    },
+    {
+      "name": "Sub-Parser: Differentials Parser",
+      "category": "Sub-Parser Breakdown",
+      "iterations": 5000,
+      "cpu": {
+        "userMs": 47,
+        "systemMs": 0,
+        "totalCpuMs": 47,
+        "wallMs": 25.7886,
+        "cpuPercent": 182.25107217917994
+      },
+      "memory": {
+        "before": {
+          "heapUsed": 17491336,
+          "heapTotal": 35635200,
+          "rss": 104349696,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "after": {
+          "heapUsed": 22619464,
+          "heapTotal": 35897344,
+          "rss": 107950080,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "deltaHeapUsedBytes": 5128128,
+        "deltaRssBytes": 3600384,
+        "heapUsedMB": 21.57,
+        "rssMB": 102.95
+      },
+      "latency": {
+        "samples": 5000,
+        "totalTimeMs": 14.44,
+        "minUs": 1.5,
+        "meanUs": 2.888,
+        "medianUs": 1.6,
+        "p90Us": 2.3,
+        "p95Us": 3.1,
+        "p99Us": 4.4,
+        "maxUs": 4601.4,
+        "stdDevUs": 65.163,
+        "opsPerSec": 346251
+      }
+    },
+    {
+      "name": "Sub-Parser: Dimensionless Numbers",
+      "category": "Sub-Parser Breakdown",
+      "iterations": 5000,
+      "cpu": {
+        "userMs": 46,
+        "systemMs": 15,
+        "totalCpuMs": 61,
+        "wallMs": 13.2729,
+        "cpuPercent": 459.58306022044917
+      },
+      "memory": {
+        "before": {
+          "heapUsed": 17592136,
+          "heapTotal": 35635200,
+          "rss": 107540480,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "after": {
+          "heapUsed": 19196640,
+          "heapTotal": 36159488,
+          "rss": 103936000,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "deltaHeapUsedBytes": 1604504,
+        "deltaRssBytes": -3604480,
+        "heapUsedMB": 18.31,
+        "rssMB": 99.12
+      },
+      "latency": {
+        "samples": 5000,
+        "totalTimeMs": 2.247,
+        "minUs": 0.1,
+        "meanUs": 0.449,
+        "medianUs": 0.2,
+        "p90Us": 0.3,
+        "p95Us": 0.3,
+        "p99Us": 0.8,
+        "maxUs": 663.7,
+        "stdDevUs": 9.679,
+        "opsPerSec": 2225090
+      }
+    },
+    {
+      "name": "Sub-Parser: Delimiters & Rainbow",
+      "category": "Sub-Parser Breakdown",
+      "iterations": 5000,
+      "cpu": {
+        "userMs": 188,
+        "systemMs": 0,
+        "totalCpuMs": 188,
+        "wallMs": 78.2639,
+        "cpuPercent": 240.21292064412836
+      },
+      "memory": {
+        "before": {
+          "heapUsed": 17617688,
+          "heapTotal": 35897344,
+          "rss": 104235008,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "after": {
+          "heapUsed": 26072480,
+          "heapTotal": 36159488,
+          "rss": 104062976,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "deltaHeapUsedBytes": 8454792,
+        "deltaRssBytes": -172032,
+        "heapUsedMB": 24.86,
+        "rssMB": 99.24
+      },
+      "latency": {
+        "samples": 5000,
+        "totalTimeMs": 69.258,
+        "minUs": 8.9,
+        "meanUs": 13.852,
+        "medianUs": 11.8,
+        "p90Us": 16.6,
+        "p95Us": 18.9,
+        "p99Us": 63.6,
+        "maxUs": 1570,
+        "stdDevUs": 26.659,
+        "opsPerSec": 72194
+      }
+    },
+    {
+      "name": "Sub-Parser: Taxonomy Engine",
+      "category": "Sub-Parser Breakdown",
+      "iterations": 5000,
+      "cpu": {
+        "userMs": 391,
+        "systemMs": 63,
+        "totalCpuMs": 454,
+        "wallMs": 210.2452,
+        "cpuPercent": 215.93834246869844
+      },
+      "memory": {
+        "before": {
+          "heapUsed": 17871688,
+          "heapTotal": 35897344,
+          "rss": 104284160,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "after": {
+          "heapUsed": 22789232,
+          "heapTotal": 36945920,
+          "rss": 105992192,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "deltaHeapUsedBytes": 4917544,
+        "deltaRssBytes": 1708032,
+        "heapUsedMB": 21.73,
+        "rssMB": 101.08
+      },
+      "latency": {
+        "samples": 5000,
+        "totalTimeMs": 201.255,
+        "minUs": 27.9,
+        "meanUs": 40.251,
+        "medianUs": 29.8,
+        "p90Us": 58,
+        "p95Us": 81.2,
+        "p99Us": 194.5,
+        "maxUs": 2581.8,
+        "stdDevUs": 51.955,
+        "opsPerSec": 24844
+      }
+    },
+    {
+      "name": "Sub-Parser: Variable Data-Flow Hash",
+      "category": "Sub-Parser Breakdown",
+      "iterations": 5000,
+      "cpu": {
+        "userMs": 328,
+        "systemMs": 0,
+        "totalCpuMs": 328,
+        "wallMs": 258.5893,
+        "cpuPercent": 126.84206191052763
+      },
+      "memory": {
+        "before": {
+          "heapUsed": 18255152,
+          "heapTotal": 35897344,
+          "rss": 104599552,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "after": {
+          "heapUsed": 21439048,
+          "heapTotal": 36421632,
+          "rss": 104554496,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "deltaHeapUsedBytes": 3183896,
+        "deltaRssBytes": -45056,
+        "heapUsedMB": 20.45,
+        "rssMB": 99.71
+      },
+      "latency": {
+        "samples": 5000,
+        "totalTimeMs": 245.796,
+        "minUs": 30.8,
+        "meanUs": 49.159,
+        "medianUs": 39.2,
+        "p90Us": 64.7,
+        "p95Us": 80.1,
+        "p99Us": 241.8,
+        "maxUs": 1356.3,
+        "stdDevUs": 45.083,
+        "opsPerSec": 20342
+      }
+    },
+    {
+      "name": "Equation Span Engine (Cold Cache)",
+      "category": "Pipeline Engine",
+      "iterations": 13,
+      "cpu": {
+        "userMs": 62,
+        "systemMs": 16,
+        "totalCpuMs": 78,
+        "wallMs": 42.4246,
+        "cpuPercent": 183.85559321714288
+      },
+      "memory": {
+        "before": {
+          "heapUsed": 18362248,
+          "heapTotal": 36421632,
+          "rss": 104730624,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "after": {
+          "heapUsed": 22432744,
+          "heapTotal": 37470208,
+          "rss": 105189376,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "deltaHeapUsedBytes": 4070496,
+        "deltaRssBytes": 458752,
+        "heapUsedMB": 21.39,
+        "rssMB": 100.32
+      },
+      "latency": {
+        "samples": 13,
+        "totalTimeMs": 27.777,
+        "minUs": 492.5,
+        "meanUs": 2136.708,
+        "medianUs": 1184.7,
+        "p90Us": 4733.9,
+        "p95Us": 7787.8,
+        "p99Us": 7787.8,
+        "maxUs": 7787.8,
+        "stdDevUs": 2019.262,
+        "opsPerSec": 468
+      },
+      "notes": "Full AST compilation and span generation without cache assistance."
+    },
+    {
+      "name": "Equation Span Engine (Warm Cache Hits)",
+      "category": "Pipeline Engine",
+      "iterations": 50000,
+      "cpu": {
+        "userMs": 125,
+        "systemMs": 0,
+        "totalCpuMs": 125,
+        "wallMs": 54.164,
+        "cpuPercent": 230.78059227531202
+      },
+      "memory": {
+        "before": {
+          "heapUsed": 18306648,
+          "heapTotal": 36945920,
+          "rss": 110039040,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "after": {
+          "heapUsed": 24204808,
+          "heapTotal": 39636992,
+          "rss": 108322816,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "deltaHeapUsedBytes": 5898160,
+        "deltaRssBytes": -1716224,
+        "heapUsedMB": 23.08,
+        "rssMB": 103.3
+      },
+      "latency": {
+        "samples": 50000,
+        "totalTimeMs": 35.734,
+        "minUs": 0.3,
+        "meanUs": 0.715,
+        "medianUs": 0.5,
+        "p90Us": 1.1,
+        "p95Us": 1.4,
+        "p99Us": 2.6,
+        "maxUs": 387.9,
+        "stdDevUs": 3.029,
+        "opsPerSec": 1399216
+      },
+      "notes": "Warm LRU cache hits. Speedup factor: 2988.4x over cold compile!"
+    },
+    {
+      "name": "Whole Document Bake (convertText)",
+      "category": "Document Operations",
+      "iterations": 100,
+      "cpu": {
+        "userMs": 1657,
+        "systemMs": 94,
+        "totalCpuMs": 1751,
+        "wallMs": 798.3056,
+        "cpuPercent": 219.33956119060167
+      },
+      "memory": {
+        "before": {
+          "heapUsed": 18551664,
+          "heapTotal": 36945920,
+          "rss": 107892736,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "after": {
+          "heapUsed": 23306544,
+          "heapTotal": 38518784,
+          "rss": 108650496,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "deltaHeapUsedBytes": 4754880,
+        "deltaRssBytes": 757760,
+        "heapUsedMB": 22.23,
+        "rssMB": 103.62
+      },
+      "latency": {
+        "samples": 100,
+        "totalTimeMs": 781.241,
+        "minUs": 3153.9,
+        "meanUs": 7812.412,
+        "medianUs": 7624.9,
+        "p90Us": 11577.5,
+        "p95Us": 13106.8,
+        "p99Us": 17512,
+        "maxUs": 17512,
+        "stdDevUs": 2927.295,
+        "opsPerSec": 128
+      },
+      "notes": "Single-pass StringBuilder chunk assembler baking 50 equations per pass."
+    },
+    {
+      "name": "Whole Document Undo (uncolorText)",
+      "category": "Document Operations",
+      "iterations": 500,
+      "cpu": {
+        "userMs": 437,
+        "systemMs": 16,
+        "totalCpuMs": 453,
+        "wallMs": 395.1317,
+        "cpuPercent": 114.64531952257944
+      },
+      "memory": {
+        "before": {
+          "heapUsed": 19292688,
+          "heapTotal": 37994496,
+          "rss": 108748800,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "after": {
+          "heapUsed": 25143528,
+          "heapTotal": 37994496,
+          "rss": 108953600,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "deltaHeapUsedBytes": 5850840,
+        "deltaRssBytes": 204800,
+        "heapUsedMB": 23.98,
+        "rssMB": 103.91
+      },
+      "latency": {
+        "samples": 500,
+        "totalTimeMs": 381.158,
+        "minUs": 375.7,
+        "meanUs": 762.316,
+        "medianUs": 544.5,
+        "p90Us": 1311.4,
+        "p95Us": 1583.3,
+        "p99Us": 2362,
+        "maxUs": 4701.9,
+        "stdDevUs": 475.582,
+        "opsPerSec": 1312
+      },
+      "notes": "O(N) single-pass uncolor regex cleaning 50 baked equations."
+    },
+    {
+      "name": "Live Preview Keystroke Typing",
+      "category": "Interactive Editing",
+      "iterations": 2150,
+      "cpu": {
+        "userMs": 78,
+        "systemMs": 31,
+        "totalCpuMs": 109,
+        "wallMs": 37.5098,
+        "cpuPercent": 290.5907256237037
+      },
+      "memory": {
+        "before": {
+          "heapUsed": 19327104,
+          "heapTotal": 37994496,
+          "rss": 108990464,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "after": {
+          "heapUsed": 25389568,
+          "heapTotal": 37994496,
+          "rss": 110784512,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "deltaHeapUsedBytes": 6062464,
+        "deltaRssBytes": 1794048,
+        "heapUsedMB": 24.21,
+        "rssMB": 105.65
+      },
+      "latency": {
+        "samples": 2150,
+        "totalTimeMs": 23.217,
+        "minUs": 0.3,
+        "meanUs": 10.799,
+        "medianUs": 0.8,
+        "p90Us": 1.9,
+        "p95Us": 2.4,
+        "p99Us": 279.3,
+        "maxUs": 4057.6,
+        "stdDevUs": 120.061,
+        "opsPerSec": 92605
+      },
+      "budgetUtilization120HzPct": 0.01,
+      "notes": "120 Hz Budget: 8.33 ms. Utilized: 0.010% (p50: 0.001ms), 3.35% (p99: 0.279ms)."
+    },
+    {
+      "name": "LRU Eviction & High-Capacity Churn",
+      "category": "Cache Architecture",
+      "iterations": 5000,
+      "cpu": {
+        "userMs": 31,
+        "systemMs": 0,
+        "totalCpuMs": 31,
+        "wallMs": 21.9181,
+        "cpuPercent": 141.43561713834686
+      },
+      "memory": {
+        "before": {
+          "heapUsed": 18979808,
+          "heapTotal": 37994496,
+          "rss": 110964736,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "after": {
+          "heapUsed": 20853296,
+          "heapTotal": 38518784,
+          "rss": 112369664,
+          "external": 9877384,
+          "arrayBuffers": 146111
+        },
+        "deltaHeapUsedBytes": 1873488,
+        "deltaRssBytes": 1404928,
+        "heapUsedMB": 19.89,
+        "rssMB": 107.16
+      },
+      "latency": {
+        "samples": 5000,
+        "totalTimeMs": 4.844,
+        "minUs": 0.2,
+        "meanUs": 0.969,
+        "medianUs": 0.6,
+        "p90Us": 1.9,
+        "p95Us": 2.1,
+        "p99Us": 2.5,
+        "maxUs": 156.1,
+        "stdDevUs": 3.08,
+        "opsPerSec": 1032120
+      },
+      "notes": "5,000 sets into a 1,000-capacity LRU. Bounded size strictly preserved at 1000."
+    }
+  ],
+  "anomalies": []
+}

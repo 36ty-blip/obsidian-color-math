@@ -13,6 +13,7 @@ wheelhouse/
 node_modules/
 tests/corpus/
 benchmark_results.json
+!benchmarks/benchmark_results.json
 reports/
 CHECKPOINT.md
 *_old.md

@@ -1,4 +1,6 @@
 // benchmarks/cst_engine.bench.ts
+//! Obsidian Color Math v1.0.115 - Concrete Syntax Tree (CST) Throughput & Latency Benchmarks
+//! Calibrated for 144 Hz display frame budget (< 6.94 ms / 6,944 µs)
 import { bench, describe } from "vitest";
 import { parseMathWithCST } from "../src/parsers/cst/index";
 import { DEFAULT_COLORS } from "../src/config";
