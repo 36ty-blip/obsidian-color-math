@@ -26,7 +26,7 @@ export function setupPerformanceOptimization(pCoresOnly = true) {
 }
 
 /**
- * Probe current system CPU utilization using a 3-second average sample.
+ * Probe current system CPU utilization using kernel libuv os.cpus() tick counters.
  * If average CPU <= 36.0%, allocate up to 50% CPU budget (6 worker threads).
  * If average CPU > 36.0%, scale down to 2 threads to maintain system responsiveness.
  */
@@ -40,23 +40,28 @@ export function getOptimalThreadCount(quickMode = false, requestedThreads = unde
     return { count: 6, avgCpu: null, source: "quick-mode-max-50pct" };
   }
 
-  if (process.platform === "win32") {
-    try {
-      const output = execSync(
-        `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Math]::Round(((Get-Counter '\\Processor(_Total)\\% Processor Time' -SampleInterval 1 -MaxSamples 3).CounterSamples.CookedValue | Measure-Object -Average).Average, 1)"`,
-        { encoding: "utf-8", timeout: 8000 }
-      ).trim();
-      const avgCpu = parseFloat(output);
-      if (!isNaN(avgCpu)) {
-        const count = avgCpu <= 36.0 ? 6 : 2;
-        return { count, avgCpu, source: "sampled-counter" };
-      }
-    } catch {
-      // Fallback on sampling timeout or counter error
+  try {
+    function snap() {
+      return os.cpus().reduce(
+        (acc, c) => ({
+          idle: acc.idle + c.times.idle,
+          total: acc.total + Object.values(c.times).reduce((a, b) => a + b, 0),
+        }),
+        { idle: 0, total: 0 }
+      );
     }
+    const s1 = snap();
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+    const s2 = snap();
+    const idle = s2.idle - s1.idle;
+    const total = s2.total - s1.total;
+    const pct = total > 0 ? ((1 - idle / total) * 100).toFixed(1) : "0.0";
+    const avgCpu = parseFloat(pct);
+    const count = avgCpu <= 36.0 ? 6 : 2;
+    return { count, avgCpu, source: "libuv-os-cpus" };
+  } catch {
+    return { count: 6, avgCpu: null, source: "default-50pct" };
   }
-
-  return { count: 4, avgCpu: null, source: "default-fallback" };
 }
 
 /**

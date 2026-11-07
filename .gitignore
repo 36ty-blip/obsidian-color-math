@@ -19,5 +19,7 @@ CHECKPOINT.md
 *_old.md
 tests/test_scratch*.ts
 .eslintcache
+RELEASE_NOTES.md
+checksums.txt
 target/
 wasm/target/

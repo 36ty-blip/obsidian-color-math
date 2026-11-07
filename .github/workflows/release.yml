@@ -28,19 +28,36 @@ jobs:
       - name: Build plugin
         run: npm run build
 
-      - name: Verify production release artifacts
+      - name: Mobile platform sandbox audit
+        run: node scripts/mobile_sandbox_guard.mjs
+
+      - name: Verify production release artifacts & byte budget
         run: |
           node -e "
             const fs = require('fs');
-            const requiredFiles = ['main.js', 'manifest.json', 'styles.css'];
-            for (const file of requiredFiles) {
-              if (!fs.existsSync(file) || fs.statSync(file).size === 0) {
-                console.error('Fatal: Missing or empty release artifact: ' + file);
+            const crypto = require('crypto');
+            const budgets = {
+              'main.js': { min: 500 * 1024, max: 5120 * 1024 },
+              'styles.css': { min: 1000, max: 150 * 1024 },
+              'manifest.json': { min: 100, max: 10 * 1024 }
+            };
+            const checksums = [];
+            for (const [file, budget] of Object.entries(budgets)) {
+              if (!fs.existsSync(file)) {
+                console.error('Fatal: Missing release artifact: ' + file);
                 process.exit(1);
               }
               const stats = fs.statSync(file);
-              console.log('Verified ' + file + ' (' + stats.size + ' bytes)');
+              if (stats.size < budget.min || stats.size > budget.max) {
+                console.error('Fatal: Byte budget violation for ' + file + ': ' + stats.size + ' bytes');
+                process.exit(1);
+              }
+              const hash = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex').toLowerCase();
+              checksums.push(hash + '  ' + file);
+              console.log('Verified ' + file + ' (' + stats.size + ' bytes, SHA-256: ' + hash + ')');
             }
+            fs.writeFileSync('checksums.txt', checksums.join('\n') + '\n', 'utf8');
+            console.log('Generated checksums.txt verification ledger.');
             const mainContent = fs.readFileSync('main.js', 'utf8').slice(0, 10000);
             if (!mainContent.includes('ColorMathPlugin') && !mainContent.includes('Plugin')) {
               console.error('Fatal: main.js does not contain ColorMathPlugin class definition');
@@ -54,6 +71,9 @@ jobs:
             console.log('Bit-level structural sanity & cryptographic integrity verified for release v' + manifest.version);
           "
 
+      - name: Extract structured milestone release notes
+        run: node scripts/extract_release_notes.mjs --version ${{ github.ref_name }}
+
       - name: Attest Build Provenance
         uses: actions/attest-build-provenance@v2
         with:
@@ -61,14 +81,16 @@ jobs:
             main.js
             manifest.json
             styles.css
+            checksums.txt
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
           draft: false
           prerelease: false
           files: |
             main.js
             manifest.json
             styles.css
+            checksums.txt

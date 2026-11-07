@@ -224,8 +224,21 @@ export async function publishToGitHub(options = {}) {
 
     // 4. Create GitHub Release and upload assets
     console.log(`  • Creating GitHub Release '${targetVersion}' and uploading assets...`);
-    const notesArg = options.notes ? `--notes "${options.notes}"` : `--generate-notes`;
-    execSync(`gh release create ${targetVersion} main.js manifest.json styles.css --title "${targetVersion}" ${notesArg}`, { cwd: rootDir });
+    const notesFile = path.join(rootDir, "RELEASE_NOTES.md");
+    let notesArg = "--generate-notes";
+    if (options.notes) {
+      notesArg = `--notes "${options.notes}"`;
+    } else {
+      try {
+        const stats = await fs.stat(notesFile);
+        if (stats.size > 0) {
+          notesArg = `--notes-file "${notesFile}"`;
+        }
+      } catch {
+        // Fallback to generate-notes
+      }
+    }
+    execSync(`gh release create ${targetVersion} main.js manifest.json styles.css checksums.txt --title "${targetVersion}" ${notesArg}`, { cwd: rootDir });
 
     console.log(`\n${c.green}${c.bold}🎉 SUCCESS: Release v${targetVersion} is now published on GitHub!${c.reset}`);
     console.log(`  • URL: https://github.com/36ty-blip/obsidian-color-math/releases/tag/${targetVersion}\n`);

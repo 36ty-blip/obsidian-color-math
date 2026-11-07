@@ -6,6 +6,19 @@ import process from "node:process";
 import { execSync, spawn } from "node:child_process";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
+import { fileURLToPath } from "node:url";
+
+function normalizeWindowsRoot(p) {
+  const resolved = path.resolve(p);
+  if (/^[a-z]:/.test(resolved)) {
+    return resolved[0].toUpperCase() + resolved.slice(1);
+  }
+  return resolved;
+}
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootDir = normalizeWindowsRoot(path.resolve(__dirname, ".."));
 
 import { setupPerformanceOptimization, getOptimalThreadCount, configureLibuvThreadPool } from "./cpu_probe.mjs";
 import { readCurrentVersions, bumpVersion, atomicVersionSync } from "./semver.mjs";
@@ -135,7 +148,6 @@ async function appendChecklistLedger(version, description, assetRecords, testCou
 
 async function main() {
   const startTime = Date.now();
-  const rootDir = process.cwd();
   const options = parseCliArgs();
 
   banner(`🚀 COLOR MATH AUTOMATED MULTI-CORE RELEASE PIPELINE`);
@@ -249,6 +261,9 @@ async function main() {
     await runCommand("node", ["esbuild.config.mjs", "production"], rootDir);
     const buildElapsed = ((Date.now() - buildStart) / 1000).toFixed(2);
     console.log(`  • ${c.green}✔ esbuild production bundle generated in ${buildElapsed}s.${c.reset}`);
+
+    // Mobile Sandbox Static AST Audit
+    await runCommand("node", ["scripts/mobile_sandbox_guard.mjs"], rootDir);
   } catch (err) {
     console.error(`\n${c.red}❌ Production build failed! Aborting release pipeline.${c.reset}`);
     process.exit(1);
@@ -269,6 +284,11 @@ async function main() {
     }
     console.log(`  └─────────────────┴────────────┴──────────────────────────────────────────────────────────────────┘`);
     console.log(`  • ${c.green}✔ Bit-level structural sanity & cryptographic checksums verified.${c.reset}`);
+
+    // Synthesize structured release notes
+    if (!options.dryRun) {
+      await runCommand("node", ["scripts/extract_release_notes.mjs", "--version", targetVersion], rootDir);
+    }
   } catch (err) {
     console.error(`\n${c.red}❌ Release asset verification failed: ${err.message}${c.reset}`);
     process.exit(1);
