@@ -96,8 +96,12 @@ if (!isMainThread) {
 
   (async () => {
     // 0. Initialize WebAssembly engine inside worker thread
-    const wasmPath = path.resolve(__dirname, "../wasm/target/wasm32-unknown-unknown/release/color_math_wasm.wasm");
-    if (fs.existsSync(wasmPath)) {
+    const candidatePaths = [
+      path.resolve(__dirname, "../wasm/target/wasm32-unknown-unknown/release/color_math_wasm.wasm"),
+      path.resolve(__dirname, "../wasm/wasm_pkg/color_math_wasm_bg.wasm"),
+    ];
+    const wasmPath = candidatePaths.find((p) => fs.existsSync(p));
+    if (wasmPath) {
       const bytes = fs.readFileSync(wasmPath);
       await initWasmEngine(bytes);
     }

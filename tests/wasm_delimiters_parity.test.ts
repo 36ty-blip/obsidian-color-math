@@ -21,8 +21,12 @@ import {
 
 describe("Island 2: WebAssembly Rainbow Delimiter Engine Bijective Parity", () => {
   beforeAll(async () => {
-    const wasmPath = path.resolve(__dirname, "../wasm/target/wasm32-unknown-unknown/release/color_math_wasm.wasm");
-    if (fs.existsSync(wasmPath)) {
+    const candidatePaths = [
+      path.resolve(__dirname, "../wasm/target/wasm32-unknown-unknown/release/color_math_wasm.wasm"),
+      path.resolve(__dirname, "../wasm/wasm_pkg/color_math_wasm_bg.wasm"),
+    ];
+    const wasmPath = candidatePaths.find((p) => fs.existsSync(p));
+    if (wasmPath) {
       const wasmBytes = fs.readFileSync(wasmPath);
       await initWasmCatalog(wasmBytes);
     }
