@@ -24,21 +24,22 @@ The following ledger details the 15 discrete pipeline stages profiled under Node
 <!-- BENCHMARK_TABLE_START -->
 | Benchmark Component | Category | Iterations | Median Latency ($\text{p50}$) | Mean Latency | 99th Percentile ($\text{p99}$) | Throughput | 144Hz Frame Budget ($6.94\,\text{ms}$) |
 |:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|
-| MPHF Catalog Lemire Lookup | Micro-Benchmark | 50,000 | $200\,\text{ns}$ ($0.20\,\mu\text{s}$) | $261\,\text{ns}$ ($0.26\,\mu\text{s}$) | $900\,\text{ns}$ ($0.90\,\mu\text{s}$) | $3,827,634\,\text{ops/s}$ | < 0.01% |
-| Markdown Document Scanner | Document Parsing | 500 | $381.20\,\mu\text{s}$ | $542.76\,\mu\text{s}$ | $3.21\,\text{ms}$ ($3,209\,\mu\text{s}$) | $1,842\,\text{ops/s}$ | 7.82% |
-| Syntax Normalization & Typst Parsing | Grammar & Normalization | 10,000 | $11.70\,\mu\text{s}$ | $19.41\,\mu\text{s}$ | $129.40\,\mu\text{s}$ | $51,515\,\text{ops/s}$ | 0.28% |
-| Sub-Parser: Units Parser | Sub-Parser Breakdown | 5,000 | $3.00\,\mu\text{s}$ | $3.60\,\mu\text{s}$ | $6.50\,\mu\text{s}$ | $277,920\,\text{ops/s}$ | 0.05% |
-| Sub-Parser: Differentials Parser | Sub-Parser Breakdown | 5,000 | $1.60\,\mu\text{s}$ | $2.89\,\mu\text{s}$ | $4.40\,\mu\text{s}$ | $346,251\,\text{ops/s}$ | 0.04% |
-| Sub-Parser: Dimensionless Numbers | Sub-Parser Breakdown | 5,000 | $200\,\text{ns}$ ($0.20\,\mu\text{s}$) | $449\,\text{ns}$ ($0.45\,\mu\text{s}$) | $800\,\text{ns}$ ($0.80\,\mu\text{s}$) | $2,225,090\,\text{ops/s}$ | < 0.01% |
-| Sub-Parser: Delimiters & Rainbow | Sub-Parser Breakdown | 5,000 | $11.80\,\mu\text{s}$ | $13.85\,\mu\text{s}$ | $63.60\,\mu\text{s}$ | $72,194\,\text{ops/s}$ | 0.20% |
-| Sub-Parser: Taxonomy Engine | Sub-Parser Breakdown | 5,000 | $29.80\,\mu\text{s}$ | $40.25\,\mu\text{s}$ | $194.50\,\mu\text{s}$ | $24,844\,\text{ops/s}$ | 0.58% |
-| Sub-Parser: Variable Data-Flow Hash | Sub-Parser Breakdown | 5,000 | $39.20\,\mu\text{s}$ | $49.16\,\mu\text{s}$ | $241.80\,\mu\text{s}$ | $20,342\,\text{ops/s}$ | 0.71% |
-| Equation Span Engine (Cold Cache) | Pipeline Engine | 13 | $1.18\,\text{ms}$ ($1,185\,\mu\text{s}$) | $2.14\,\text{ms}$ ($2,137\,\mu\text{s}$) | $7.79\,\text{ms}$ ($7,788\,\mu\text{s}$) | $468\,\text{ops/s}$ | 30.77% |
-| Equation Span Engine (Warm Cache Hits) | Pipeline Engine | 50,000 | $500\,\text{ns}$ ($0.50\,\mu\text{s}$) | $715\,\text{ns}$ ($0.71\,\mu\text{s}$) | $2.60\,\mu\text{s}$ | $1,399,216\,\text{ops/s}$ | 0.01% |
-| Whole Document Bake (convertText) | Document Operations | 100 | $7.62\,\text{ms}$ ($7,625\,\mu\text{s}$) | $7.81\,\text{ms}$ ($7,812\,\mu\text{s}$) | $17.51\,\text{ms}$ ($17,512\,\mu\text{s}$) | $128\,\text{ops/s}$ | One-off Batch |
-| Whole Document Undo (uncolorText) | Document Operations | 500 | $544.50\,\mu\text{s}$ | $762.32\,\mu\text{s}$ | $2.36\,\text{ms}$ ($2,362\,\mu\text{s}$) | $1,312\,\text{ops/s}$ | 10.98% |
-| **Live Preview Keystroke Typing** | Interactive Editing | 2,150 | **$800\,\text{ns}$ ($0.80\,\mu\text{s}$)** | **$10.80\,\mu\text{s}$** | **$279.30\,\mu\text{s}$** | $92,605\,\text{ops/s}$ | **< 0.15%** (p99: 4.02%) |
-| LRU Eviction & High-Capacity Churn | Cache Architecture | 5,000 | $600\,\text{ns}$ ($0.60\,\mu\text{s}$) | $969\,\text{ns}$ ($0.97\,\mu\text{s}$) | $2.50\,\mu\text{s}$ | $1,032,120\,\text{ops/s}$ | 0.01% |
+| MPHF Catalog Lemire Lookup | Micro-Benchmark | 50,000 | $100\,\text{ns}$ ($0.10\,\mu\text{s}$) | $133\,\text{ns}$ ($0.13\,\mu\text{s}$) | $500\,\text{ns}$ ($0.50\,\mu\text{s}$) | $7,491,647\,\text{ops/s}$ | < 0.01% |
+| Markdown Document Scanner | Document Parsing | 500 | $409.40\,\mu\text{s}$ | $455.32\,\mu\text{s}$ | $1.05\,\text{ms}$ ($1,051\,\mu\text{s}$) | $2,196\,\text{ops/s}$ | 6.56% |
+| Syntax Normalization & Typst Parsing | Grammar & Normalization | 10,000 | $11.40\,\mu\text{s}$ | $17.26\,\mu\text{s}$ | $93.80\,\mu\text{s}$ | $57,945\,\text{ops/s}$ | 0.25% |
+| Sub-Parser: Units Parser | Sub-Parser Breakdown | 5,000 | $3.00\,\mu\text{s}$ | $3.57\,\mu\text{s}$ | $7.80\,\mu\text{s}$ | $280,170\,\text{ops/s}$ | 0.05% |
+| Sub-Parser: Differentials Parser | Sub-Parser Breakdown | 5,000 | $2.00\,\mu\text{s}$ | $4.14\,\mu\text{s}$ | $10.60\,\mu\text{s}$ | $241,423\,\text{ops/s}$ | 0.06% |
+| Sub-Parser: Dimensionless Numbers | Sub-Parser Breakdown | 5,000 | $500\,\text{ns}$ ($0.50\,\mu\text{s}$) | $714\,\text{ns}$ ($0.71\,\mu\text{s}$) | $2.30\,\mu\text{s}$ | $1,400,678\,\text{ops/s}$ | 0.01% |
+| Sub-Parser: Delimiters & Rainbow | Sub-Parser Breakdown | 5,000 | $12.00\,\mu\text{s}$ | $17.79\,\mu\text{s}$ | $91.50\,\mu\text{s}$ | $56,212\,\text{ops/s}$ | 0.26% |
+| Sub-Parser: Taxonomy Engine | Sub-Parser Breakdown | 5,000 | $31.40\,\mu\text{s}$ | $43.69\,\mu\text{s}$ | $192.90\,\mu\text{s}$ | $22,891\,\text{ops/s}$ | 0.63% |
+| Sub-Parser: Variable Data-Flow Hash | Sub-Parser Breakdown | 5,000 | $41.50\,\mu\text{s}$ | $50.31\,\mu\text{s}$ | $188.70\,\mu\text{s}$ | $19,875\,\text{ops/s}$ | 0.72% |
+| Equation Span Engine (Cold Cache) | Pipeline Engine | 13 | $1.07\,\text{ms}$ ($1,068\,\mu\text{s}$) | $1.41\,\text{ms}$ ($1,414\,\mu\text{s}$) | $4.00\,\text{ms}$ ($4,000\,\mu\text{s}$) | $707\,\text{ops/s}$ | 20.36% |
+| Equation Span Engine (Warm Cache Hits) | Pipeline Engine | 50,000 | $500\,\text{ns}$ ($0.50\,\mu\text{s}$) | $554\,\text{ns}$ ($0.55\,\mu\text{s}$) | $1.30\,\mu\text{s}$ | $1,803,960\,\text{ops/s}$ | < 0.01% |
+| Whole Document Bake (convertText) | Document Operations | 100 | $8.50\,\text{ms}$ ($8,505\,\mu\text{s}$) | $9.15\,\text{ms}$ ($9,154\,\mu\text{s}$) | $39.99\,\text{ms}$ ($39,989\,\mu\text{s}$) | $109\,\text{ops/s}$ | One-off Batch |
+| Whole Document Undo (uncolorText) | Document Operations | 500 | $1.10\,\text{ms}$ ($1,104\,\mu\text{s}$) | $1.20\,\text{ms}$ ($1,202\,\mu\text{s}$) | $2.89\,\text{ms}$ ($2,888\,\mu\text{s}$) | $832\,\text{ops/s}$ | 17.30% |
+| **Live Preview Keystroke Typing** | Interactive Editing | 2,150 | **$1.20\,\mu\text{s}$** | **$23.94\,\mu\text{s}$** | **$862.70\,\mu\text{s}$** | $41,774\,\text{ops/s}$ | **< 0.15%** (p99: 12.42%) |
+| LRU Eviction & High-Capacity Churn | Cache Architecture | 5,000 | $1.40\,\mu\text{s}$ | $1.91\,\mu\text{s}$ | $5.40\,\mu\text{s}$ | $524,411\,\text{ops/s}$ | 0.03% |
+| 970-Document Multi-Page University Math Corpus | Real-World Stress | 970 | $11.35\,\text{ms}$ ($11,353\,\mu\text{s}$) | $17.93\,\text{ms}$ ($17,932\,\mu\text{s}$) | $107.16\,\text{ms}$ ($107,156\,\mu\text{s}$) | $56\,\text{ops/s}$ | 258.22% |
 <!-- BENCHMARK_TABLE_END -->
 
 ---
