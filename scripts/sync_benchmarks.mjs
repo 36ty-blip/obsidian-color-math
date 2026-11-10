@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
-const monorepoRoot = path.resolve(rootDir, "..");
+const monorepoRoot = path.resolve(rootDir, "../..");
 
 const FRAME_BUDGET_144HZ_US = 6944.44; // 144 Hz -> ~6.944 ms / 6,944 µs
 

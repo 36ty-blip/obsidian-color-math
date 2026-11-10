@@ -7,7 +7,7 @@ import {
 } from "../src/parsers/engine_bridge";
 import { findDelimiterScan } from "../src/parsers/delimiters";
 import { collectUnitSpans } from "../src/parsers/units";
-import { parseMathWithCST } from "../src/parsers/cst_parser";
+import { parseMathWithCST } from "../src/parsers/cst/index";
 import { DEFAULT_COLORS } from "../src/config";
 
 describe("TS vs CST Performance & Parity Benchmark", () => {

@@ -872,6 +872,20 @@ body .cm-tooltip.color-math-tooltip-host,
   display: none !important;
 }
 
+/* Indented child setting controls */
+.setting-item.color-math-child-setting {
+  margin-left: 20px;
+  border-left: 2px solid var(--background-modifier-border);
+  padding-left: 14px;
+}
+
+/* Live Preview Syntax Error Squiggly Decoration */
+.cm-editor .cm-math-error-squiggly {
+  text-decoration: underline wavy var(--text-error, #f7768e);
+  text-underline-offset: 3px;
+}
+
+
 
 
 

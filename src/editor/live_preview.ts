@@ -25,6 +25,7 @@ import {
   collectCSTContainerTokens,
   resolveOrthogonalKeyboardStep,
   findFractionPartnerInLatex,
+  CandidateTokenTarget,
 } from "./quaternion";
 
 function findSafeBlockBoundaryStart(doc: Text, initialStart: number): number {
@@ -315,8 +316,8 @@ export function createColorMathLivePlugin(
                     indexMathJaxElement(targetEl, { start: res.start, end: res.end, kind });
                   }
 
-                  const nextFrom = block.contentStart + res.start;
-                  const nextTo = block.contentStart + res.end;
+                  const nextFrom = Math.min(block.contentEnd, Math.max(block.contentStart, block.contentStart + res.start));
+                  const nextTo = Math.min(block.contentEnd, Math.max(block.contentStart, block.contentStart + res.end));
                   if (
                     !this.hoverCodeDecoration ||
                     this.hoverCodeDecoration.from !== nextFrom ||
@@ -442,17 +443,45 @@ export function createColorMathLivePlugin(
         const bodyText = block.bodyText;
         const debugParity = Boolean((options as any)?.debugNavigationParity);
 
+        let cellConstraint: { start: number; end: number } | undefined;
+
         // Method 2: In-Memory WeakMap / Clone-Proof Attribute Lookup (~20-180 ns)
-        const m2Range = getMathJaxElementRange(target);
+        let m2Range = getMathJaxElementRange(target);
+        if (m2Range) {
+          const slice = bodyText.slice(m2Range.start, m2Range.end);
+          if (m2Range.kind === "line" || slice.includes("\\\\") || slice.includes("\n")) {
+            cellConstraint = { start: m2Range.start, end: m2Range.end };
+            m2Range = undefined; // Quarantined: container span cannot pollute leaf target
+          }
+        }
 
         // Method 1: DOM Class Provenance (~1.5 µs) - short-circuited when M2 hits unless debugParity is active
-        const m1Range = (!m2Range || debugParity) && match
+        let m1Range = (!m2Range || debugParity) && match
           ? { start: parseInt(match[1], 10), end: parseInt(match[2], 10) }
           : null;
+        if (m1Range) {
+          const slice = bodyText.slice(m1Range.start, m1Range.end);
+          const isContainer = sourceEl && typeof (sourceEl as any).matches === "function" &&
+            (sourceEl as any).matches("mjx-linebox, mjx-linestack, mjx-mtable, mjx-table");
+          if (isContainer || slice.includes("\\\\") || slice.includes("\n")) {
+            if (!cellConstraint) cellConstraint = { start: m1Range.start, end: m1Range.end };
+            m1Range = null; // Quarantined: linebox cannot pollute leaf target
+          }
+        }
 
-        // Method 3: On-Demand CST Resolution (~35 µs) - short-circuited when M2 or M1 hits unless debugParity is active
+        if (!cellConstraint) {
+          const cellEl = target.closest<HTMLElement>('[class*="cm-cell-"]');
+          const cellMatch = cellEl?.className.match(/cm-cell-(\d+)-(\d+)/);
+          if (cellMatch) {
+            const cStart = parseInt(cellMatch[1], 10);
+            const cEnd = parseInt(cellMatch[2], 10);
+            if (cEnd > cStart) cellConstraint = { start: cStart, end: cEnd };
+          }
+        }
+
+        // Method 3: On-Demand CST Resolution (~35 µs) - cooperative resolution constrained by cell
         const m3Range = (!m2Range && !m1Range) || debugParity
-          ? resolveOnDemandRange(target, container, bodyText)
+          ? resolveOnDemandRange(target, container, bodyText, false, cellConstraint)
           : null;
 
         // Tri-Parity Shadow Verification Log (when debugNavigationParity is active)
@@ -484,23 +513,37 @@ export function createColorMathLivePlugin(
           let startRel = resolved.start;
           let endRel = resolved.end;
 
-          // Multi-Scale W-Plane Expansion:
-          // If Alt is held or repeated click (double-click / triple-click), expand scale hierarchy
+          // Multi-Scale W-Plane Hierarchy Expansion:
+          // Single-click stays strictly on atomic leaf/cell token.
+          // Alt-click expands to the full enclosing matrix.
+          // Double-click (detail === 2) expands to baseline cell/slot.
+          // Triple-click (detail >= 3) expands to row/molecule.
           const scales = (resolved as any).scales;
           if (scales) {
-            if (event.detail >= 3) {
-              // W=3: Structural Molecule (e.g. entire fraction or root)
-              startRel = scales.molecule.start;
-              endRel = scales.molecule.end;
-            } else if (event.detail === 2 || event.altKey) {
-              // W=2: Baseline Slot (e.g. whole numerator or whole denominator)
-              startRel = scales.slot.start;
-              endRel = scales.slot.end;
+            if (event.altKey) {
+              startRel = scales.enclosure?.start ?? scales.molecule?.start ?? resolved.start;
+              endRel = scales.enclosure?.end ?? scales.molecule?.end ?? resolved.end;
+            } else if (event.detail >= 3) {
+              startRel = scales.molecule?.start ?? resolved.start;
+              endRel = scales.molecule?.end ?? resolved.end;
+            } else if (event.detail === 2) {
+              startRel = scales.slot?.start ?? resolved.start;
+              endRel = scales.slot?.end ?? resolved.end;
             }
           }
 
-          const targetAnchor = bodyStart + startRel;
-          const targetHead = bodyStart + endRel;
+          // Strict Mathematical Block Containment Invariant:
+          // A selection dispatched from this equation can mathematically NEVER leak into adjacent equations.
+          const targetAnchor = Math.min(block.contentEnd, Math.max(block.contentStart, bodyStart + startRel));
+          let targetHead = Math.min(block.contentEnd, Math.max(block.contentStart, bodyStart + endRel));
+
+          // Dual-System Click Architecture:
+          // System B (Caret Mode): Single click (detail === 1) places collapsed caret at targetAnchor unless configured for select mode.
+          // System A (Select Mode): Double click (detail >= 2), Alt-click, or mathClickMode === "select" highlights the range [targetAnchor, targetHead].
+          const clickMode = options?.mathClickMode ?? "caret";
+          if (startRel === endRel || (clickMode === "caret" && event.detail === 1 && !event.altKey)) {
+            targetHead = targetAnchor;
+          }
 
           // Prevent Obsidian's default full-block / inline-widget collapse
           event.preventDefault();
@@ -545,7 +588,7 @@ export function createColorMathLivePlugin(
           }
 
           if (gapOffset >= 0) {
-            const targetPos = bodyStart + gapOffset;
+            const targetPos = Math.min(block.contentEnd, Math.max(block.contentStart, bodyStart + gapOffset));
             event.preventDefault();
             event.stopPropagation();
 
@@ -593,9 +636,14 @@ export function createColorMathLivePlugin(
       }
 
       private onClick(event: MouseEvent) {
-        const target = event.target as HTMLElement | null;
-        const isMath = target?.closest<HTMLElement>(".MathJax, mjx-container, .color-math-hover-target");
-        if (this.suppressNextClick || isMath) {
+        const options = getOptions ? getOptions() : undefined;
+        if (options?.targetedMathNavigation === false) {
+          this.suppressNextClick = false;
+          this.lastNavigationSelection = null;
+          return;
+        }
+
+        if (this.suppressNextClick || this.lastNavigationSelection) {
           this.suppressNextClick = false;
           // Suppress Obsidian widget's default click handler from resetting selection
           event.preventDefault();
@@ -1008,134 +1056,91 @@ export function createColorMathLivePlugin(
  * Intercepts ArrowUp / ArrowDown inside vertical slots (such as fractions and scripts)
  * to hop between numerators and denominators without cursor trapping.
  */
+function findTargetContainerForBlock(view: EditorView, block: { start: number; end: number }): Element | null {
+  const containers = Array.from(view.dom.querySelectorAll(".MathJax, mjx-container"));
+  for (const c of containers) {
+    try {
+      const pos = view.posAtDOM(c);
+      if (pos >= block.start && pos <= block.end) {
+        return c;
+      }
+    } catch {
+      // Ignore detached elements
+    }
+  }
+  return null;
+}
+
+function resolveSpatialCandidates(
+  view: EditorView,
+  block: { start: number; end: number; bodyText: string }
+): CandidateTokenTarget[] {
+  const targetContainer = findTargetContainerForBlock(view, block);
+  let candidates = targetContainer ? collectContainerTokens(targetContainer) : [];
+  if (candidates.length === 0) {
+    candidates = collectCSTContainerTokens(block.bodyText);
+  }
+  return candidates;
+}
+
+function handleVerticalSpatialStep(
+  view: EditorView,
+  dir: "up" | "down",
+  getOptions?: () => ColorMathOptions | undefined
+): boolean {
+  const options = getOptions ? getOptions() : undefined;
+  if (options?.enable2dMathNavigation === false) return false;
+
+  const cursor = view.state.selection.main.head;
+  const block = findMathBlockAtPos(view.state.doc, cursor, true);
+  if (!block) return false;
+
+  const bodyRel = cursor - block.contentStart;
+  const bodyText = block.bodyText;
+
+  // Fast Path 1: Direct LaTeX fraction brace jump {x-2} <-> {y-3}
+  const directPartner = findFractionPartnerInLatex(bodyText, bodyRel, dir);
+  if (directPartner !== null) {
+    const nextPos = block.contentStart + directPartner;
+    view.dispatch({
+      selection: { anchor: nextPos, head: nextPos },
+      scrollIntoView: true,
+      userEvent: "select",
+    });
+    return true;
+  }
+
+  // Fast Path 2: Rendered DOM MathJax container spatial resolution, with pure-CST fallback for unmounted inline math
+  const candidates = resolveSpatialCandidates(view, block);
+  const currentCandidate = candidates.find(
+    (c) => bodyRel >= c.range.start && bodyRel <= c.range.end
+  );
+  if (!currentCandidate || !currentCandidate.range.coord) return false;
+
+  const next = resolveOrthogonalKeyboardStep(dir, currentCandidate.range.coord, candidates);
+  if (next) {
+    const nextPos = block.contentStart + next.range.start;
+    view.dispatch({
+      selection: { anchor: nextPos, head: nextPos },
+      scrollIntoView: true,
+      userEvent: "select",
+    });
+    return true;
+  }
+  return false;
+}
+
 export function createMathSpatialKeymapExtension(
   getOptions?: () => ColorMathOptions | undefined
 ) {
   return keymap.of([
     {
       key: "ArrowUp",
-      run(view: EditorView) {
-        const options = getOptions ? getOptions() : undefined;
-        if (options?.enable2dMathNavigation === false) return false;
-
-        const cursor = view.state.selection.main.head;
-        const block = findMathBlockAtPos(view.state.doc, cursor, true);
-        if (!block) return false;
-
-        const bodyRel = cursor - block.contentStart;
-        const bodyText = block.bodyText;
-
-        // Fast Path 1: Direct LaTeX fraction brace jump {x-2} <-> {y-3}
-        const directPartner = findFractionPartnerInLatex(bodyText, bodyRel, "up");
-        if (directPartner !== null) {
-          const nextPos = block.contentStart + directPartner;
-          view.dispatch({
-            selection: { anchor: nextPos, head: nextPos },
-            scrollIntoView: true,
-            userEvent: "select",
-          });
-          return true;
-        }
-
-        // Fast Path 2: Rendered DOM MathJax container spatial resolution, with pure-CST fallback for unmounted inline math
-        const cmDom = view.dom;
-        const containers = Array.from(cmDom.querySelectorAll(".MathJax, mjx-container"));
-        let targetContainer: Element | null = null;
-        for (const c of containers) {
-          try {
-            const pos = view.posAtDOM(c);
-            if (pos >= block.start && pos <= block.end) {
-              targetContainer = c;
-              break;
-            }
-          } catch {
-            // Ignore detached elements
-          }
-        }
-
-        let candidates = targetContainer ? collectContainerTokens(targetContainer) : [];
-        if (candidates.length === 0) {
-          candidates = collectCSTContainerTokens(bodyText);
-        }
-        const currentCandidate = candidates.find(
-          (c) => bodyRel >= c.range.start && bodyRel <= c.range.end
-        );
-        if (!currentCandidate || !currentCandidate.range.coord) return false;
-
-        const next = resolveOrthogonalKeyboardStep("up", currentCandidate.range.coord, candidates);
-        if (next) {
-          const nextPos = block.contentStart + next.range.start;
-          view.dispatch({
-            selection: { anchor: nextPos, head: nextPos },
-            scrollIntoView: true,
-            userEvent: "select",
-          });
-          return true;
-        }
-        return false;
-      },
+      run: (view) => handleVerticalSpatialStep(view, "up", getOptions),
     },
     {
       key: "ArrowDown",
-      run(view: EditorView) {
-        const options = getOptions ? getOptions() : undefined;
-        if (options?.enable2dMathNavigation === false) return false;
-
-        const cursor = view.state.selection.main.head;
-        const block = findMathBlockAtPos(view.state.doc, cursor, true);
-        if (!block) return false;
-
-        const bodyRel = cursor - block.contentStart;
-        const bodyText = block.bodyText;
-
-        // Fast Path 1: Direct LaTeX fraction brace jump {x-2} <-> {y-3}
-        const directPartner = findFractionPartnerInLatex(bodyText, bodyRel, "down");
-        if (directPartner !== null) {
-          const nextPos = block.contentStart + directPartner;
-          view.dispatch({
-            selection: { anchor: nextPos, head: nextPos },
-            scrollIntoView: true,
-            userEvent: "select",
-          });
-          return true;
-        }
-
-        const cmDom = view.dom;
-        const containers = Array.from(cmDom.querySelectorAll(".MathJax, mjx-container"));
-        let targetContainer: Element | null = null;
-        for (const c of containers) {
-          try {
-            const pos = view.posAtDOM(c);
-            if (pos >= block.start && pos <= block.end) {
-              targetContainer = c;
-              break;
-            }
-          } catch {
-            // Ignore detached
-          }
-        }
-
-        let candidates = targetContainer ? collectContainerTokens(targetContainer) : [];
-        if (candidates.length === 0) {
-          candidates = collectCSTContainerTokens(bodyText);
-        }
-        const currentCandidate = candidates.find(
-          (c) => bodyRel >= c.range.start && bodyRel <= c.range.end
-        );
-        if (!currentCandidate || !currentCandidate.range.coord) return false;
-
-        const next = resolveOrthogonalKeyboardStep("down", currentCandidate.range.coord, candidates);
-        if (next) {
-          const nextPos = block.contentStart + next.range.start;
-          view.dispatch({
-            selection: { anchor: nextPos, head: nextPos },
-            scrollIntoView: true,
-            userEvent: "select",
-          });
-          return true;
-        }
-        return false;
-      },
+      run: (view) => handleVerticalSpatialStep(view, "down", getOptions),
     },
     {
       key: "Alt-ArrowUp",
@@ -1149,25 +1154,7 @@ export function createMathSpatialKeymapExtension(
         if (!block) return false;
 
         const bodyRel = cursor - block.contentStart;
-        const cmDom = view.dom;
-        const containers = Array.from(cmDom.querySelectorAll(".MathJax, mjx-container"));
-        let targetContainer: Element | null = null;
-        for (const c of containers) {
-          try {
-            const pos = view.posAtDOM(c);
-            if (pos >= block.start && pos <= block.end) {
-              targetContainer = c;
-              break;
-            }
-          } catch {
-            // Ignore
-          }
-        }
-
-        let candidates = targetContainer ? collectContainerTokens(targetContainer) : [];
-        if (candidates.length === 0) {
-          candidates = collectCSTContainerTokens(block.bodyText);
-        }
+        const candidates = resolveSpatialCandidates(view, block);
         const currentCandidate = candidates.find(
           (c) => bodyRel >= c.range.start && bodyRel <= c.range.end
         );

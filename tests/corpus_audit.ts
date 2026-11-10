@@ -15,6 +15,7 @@ import { computeSemanticMathSpans, colorLatexBody } from "../src/converters/gene
 import { selectColorSpans, flattenColorSpans } from "../src/utils/spans";
 import { DEFAULT_COLORS, DEFAULT_OPTIONS, ColorMathOptions, ColorPalette } from "../src/config";
 import { detectNoteField } from "../src/parsers/frontmatter";
+import { initWasmEngine } from "../src/parsers/engine_bridge";
 
 // Full-spectrum audit palette: activates all 16 semantic roles (zero "none" colors)
 // so corpus audit catches any LaTeX/MathJax wrapping regression across every role.
@@ -86,7 +87,7 @@ const MAX_STRESS_OPTIONS: ColorMathOptions = {
 };
 
 export interface Anomaly {
-  type: "CRITICAL_REGRESSION" | "PRE_EXISTING_NOTE_TYPO" | "PARSER_CRASH" | "ROUNDTRIP_MISMATCH" | "CM6_SORT_VIOLATION" | "COLOR_PARITY_MISMATCH";
+  type: "CRITICAL_REGRESSION" | "PRE_EXISTING_NOTE_TYPO" | "PARSER_CRASH" | "ROUNDTRIP_MISMATCH" | "CM6_SORT_VIOLATION" | "COLOR_PARITY_MISMATCH" | "SEMANTIC_ORACLE_VIOLATION";
   file: string;
   line: number;
   col: number;
@@ -105,6 +106,7 @@ export interface WorkerResult {
   crashes: Anomaly[];
   cm6Violations: Anomaly[];
   colorParityMismatches: Anomaly[];
+  semanticOracleViolations: Anomaly[];
 }
 
 /**
@@ -159,9 +161,14 @@ function generateCodeFrame(lines: string[], lineNum: number, colNum: number): st
  * Worker thread execution logic
  */
 if (!isMainThread) {
-  const { files, corpusRoot } = workerData as { files: string[]; corpusRoot: string };
+  (async () => {
+    const { files, corpusRoot, useWasm } = workerData as { files: string[]; corpusRoot: string; useWasm?: boolean };
 
-  const result: WorkerResult = {
+    if (useWasm) {
+      await initWasmEngine();
+    }
+
+    const result: WorkerResult = {
     filesProcessed: 0,
     equationsScanned: 0,
     equationsValidated: 0,
@@ -171,6 +178,7 @@ if (!isMainThread) {
     crashes: [],
     cm6Violations: [],
     colorParityMismatches: [],
+    semanticOracleViolations: [],
   };
 
   for (const filePath of files) {
@@ -216,6 +224,7 @@ if (!isMainThread) {
     const activeMode = detection.field || MAX_STRESS_OPTIONS.activeMode;
     const options: ColorMathOptions = {
       ...MAX_STRESS_OPTIONS,
+      useWebAssembly: Boolean(useWasm),
       activeMode,
       field: activeMode,
     };
@@ -259,17 +268,18 @@ if (!isMainThread) {
         continue;
       }
 
+      const isMarkdownArtifact =
+        /^\s*#{1,6}\s+/m.test(origEq) ||
+        /^\s*>\s*#{1,6}/m.test(origEq) ||
+        /^\s*Cor:\*/m.test(origEq) ||
+        /^\s*>\s*for any/m.test(origEq) ||
+        origEq.includes("[[");
+
       // 1. MathJax 4 Native Syntax Validation (Zero KaTeX, Exact 1:1 Equation Alignment)
       const mjxRes = validateLatexWithMathJax(coloredEq);
       if (!mjxRes.valid) {
         // Check if original equation also failed in MathJax or was an unclosed markdown artifact
         let origFailed = false;
-        const isMarkdownArtifact =
-          /^\s*#{1,6}\s+/m.test(origEq) ||
-          /^\s*>\s*#{1,6}/m.test(origEq) ||
-          /^\s*Cor:\*/m.test(origEq) ||
-          /^\s*>\s*for any/m.test(origEq) ||
-          origEq.includes("[[");
 
         if (isMarkdownArtifact) {
           origFailed = true;
@@ -322,8 +332,9 @@ if (!isMainThread) {
         builder.finish();
         result.cm6DecorationsValidated++;
 
-        // 3. In-Editor Color Parity Comparator
+        // 3. In-Editor Color Parity & Token-Level Alignment Comparator
         // Ensure that any distinct color assigned to tokens in CM6 editor is also emitted in the rendered MathJax LaTeX output
+        let equationMismatchCount = 0;
         for (const span of cmSpans) {
           if (!span.color) continue;
           const c = span.color.trim().toLowerCase();
@@ -332,9 +343,12 @@ if (!isMainThread) {
           const tokenText = origEq.slice(span.start, span.end).trim();
           if (
             !tokenText ||
-            /^(&|\\\\|\^|_|[{}[\]()|.]+)$/.test(tokenText) ||
-            /^(?:\\(?:quad|qquad|left|right|middle|(?:Bigg|bigg|Big|big)[lrm]?|{|}|[;,! ]|\s))+$/.test(tokenText) ||
-            /^\\(?:frac|dfrac|cfrac|tfrac|sqrt|mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat|cases)$/.test(tokenText)
+            span.role === "delimiter" ||
+            span.role === "structural" ||
+            /^([&^_{}[\]()|.]|\\\\)+$/.test(tokenText) ||
+            /^(?:\\(?:quad|qquad|left|right|middle|(?:Bigg|bigg|Big|big)[lrm]?|{|}|[;,! ()[\]|]|\s))+$/.test(tokenText) ||
+            /^\\(?:frac|dfrac|cfrac|tfrac|sqrt|mat|pmat|bmat|Bmat|vmat|Vmat|dmat|cmat|nmat|cases|Bbb|mathbb)$/.test(tokenText) ||
+            /^\\(?:left|right|middle|(?:Bigg|bigg|Big|big)[lrm]?).*$/.test(tokenText)
           ) {
             continue;
           }
@@ -351,7 +365,56 @@ if (!isMainThread) {
               errorMessage: `Token '${tokenText}' assigned CM6 color ${span.color} (${span.role || "unknown"}) but color hex missing in rendered MathJax output`,
               codeFrame: generateCodeFrame(fileLines, line, col),
             });
-            break;
+            equationMismatchCount++;
+            if (equationMismatchCount >= 5) break;
+          }
+        }
+
+        // 4. Ground-Truth Semantic Oracle Invariant Checks
+        // 4. Ground-Truth Semantic Oracle Invariant Checks
+        if (isMarkdownArtifact) continue;
+
+        // 4.1. Differential & Coordinate Variable Monolithic Fusion Check
+        // If an equation contains infinitesimal differentials (e.g. dx, dy, dt, \partial y, ∂y),
+        // ensure the coordinate variable is not swallowed into a monolithic operator span
+        const diffRegex = /(?:\\partial|∂|d|\\delta|δ)\s*([a-zA-Z])/g;
+        let diffMatch: RegExpExecArray | null;
+        let equationOracleCount = 0;
+        while ((diffMatch = diffRegex.exec(origEq)) !== null) {
+          const fullToken = diffMatch[0];
+          const varChar = diffMatch[1];
+          // Check if coloredEq wrapped the whole token in a single \textcolor{...}{fullToken}
+          const monoRegex = new RegExp(`\\\\textcolor\\{[^}]+\\}\\{${fullToken.replace(/\\/g, "\\\\")}\\}`);
+          if (monoRegex.test(coloredEq)) {
+            const { line, col } = getLineCol(lineStarts, oBlock.contentStart + diffMatch.index);
+            result.semanticOracleViolations.push({
+              type: "SEMANTIC_ORACLE_VIOLATION",
+              file: relPath,
+              line,
+              col,
+              equationSnippet: origEq.slice(Math.max(0, diffMatch.index - 10), Math.min(origEq.length, diffMatch.index + fullToken.length + 10)),
+              errorMessage: `Differential '${fullToken}' fused into monolithic span: coordinate variable '${varChar}' swallowed without independent variable data-flow role`,
+              codeFrame: generateCodeFrame(fileLines, line, col),
+            });
+            equationOracleCount++;
+            if (equationOracleCount >= 5) break;
+          }
+        }
+
+        // 4.2. Bare Typst Keyword Normalization Check (e.g. bare 'partial' remaining unnormalized)
+        if (/(?:^|[^A-Za-z0-9_\\])partial(?![a-zA-Z])/.test(origEq)) {
+          if (/(?:^|[^A-Za-z0-9_\\])partial(?![a-zA-Z])/.test(coloredEq.replace(/\\textcolor\{[^}]+\}/g, ""))) {
+            const matchIdx = origEq.search(/(?:^|[^A-Za-z0-9_\\])partial(?![a-zA-Z])/);
+            const { line, col } = getLineCol(lineStarts, oBlock.contentStart + Math.max(0, matchIdx));
+            result.semanticOracleViolations.push({
+              type: "SEMANTIC_ORACLE_VIOLATION",
+              file: relPath,
+              line,
+              col,
+              equationSnippet: origEq.slice(Math.max(0, matchIdx - 10), Math.min(origEq.length, matchIdx + 20)),
+              errorMessage: `Bare keyword 'partial' not normalized to '\\partial' in MathJax output (renders as 7 italic variables)`,
+              codeFrame: generateCodeFrame(fileLines, line, col),
+            });
           }
         }
       } catch (cmErr: any) {
@@ -370,6 +433,10 @@ if (!isMainThread) {
   }
 
   parentPort?.postMessage(result);
+  })().catch((err) => {
+    console.error("Worker thread unhandled error:", err);
+    process.exit(1);
+  });
 } else {
   // Main Thread: Master Coordinator
   async function runAudit() {
@@ -397,13 +464,15 @@ if (!isMainThread) {
     const totalCpus = os.cpus().length;
     // User constraint: Use 50% of CPU cores (6 threads on 12-thread CPU)
     const numThreads = threadArg ? parseInt(threadArg, 10) : Math.max(1, Math.floor(totalCpus / 2));
+    const wasmArg = args.includes("--wasm") || args.includes("--engine=wasm");
+    const engineMode = wasmArg ? "WebAssembly Accelerated Engine (Rust WASM)" : "Pure TypeScript + JS (V8 Core Engine)";
 
     console.log(`Corpus Root:   ${corpusRoot}`);
     console.log(`Hardware:      ${os.cpus()[0].model} (${totalCpus} logical cores)`);
     console.log(`Worker Pool:   ${numThreads} threads allocated (50% CPU limit, keeping laptop responsive)`);
+    console.log(`Engine Mode:   ${engineMode}`);
     if (corpusArg) console.log(`Filter:        Restricted to folder "${corpusArg}"`);
-    console.log(`Filter Mode:   ${regressionsOnly ? "Regressions only (ignoring pre-existing note typos)" : "All errors"}`);
-    console.log(`Engine Mode:   Pure Lemire MPHF Direct Resolution (Zero Static Sets Fallback)\n`);
+    console.log(`Filter Mode:   ${regressionsOnly ? "Regressions only (ignoring pre-existing note typos)" : "All errors"}\n`);
 
     // Collect all .md files
     function getAllMdFiles(dir: string): string[] {
@@ -461,6 +530,7 @@ if (!isMainThread) {
           workerData: {
             files: chunk,
             corpusRoot,
+            useWasm: wasmArg,
           },
         });
 
@@ -485,6 +555,7 @@ if (!isMainThread) {
     const allCrashes: Anomaly[] = [];
     const allCm6Violations: Anomaly[] = [];
     const allParityMismatches: Anomaly[] = [];
+    const allSemanticViolations: Anomaly[] = [];
 
     for (const r of results) {
       totalFiles += r.filesProcessed;
@@ -496,6 +567,7 @@ if (!isMainThread) {
       allCrashes.push(...r.crashes);
       allCm6Violations.push(...(r.cm6Violations || []));
       allParityMismatches.push(...(r.colorParityMismatches || []));
+      allSemanticViolations.push(...(r.semanticOracleViolations || []));
     }
 
     console.log(`\n══════════════════════════════════════════════════════════════════════════`);
@@ -511,6 +583,7 @@ if (!isMainThread) {
     console.log(`MathJax 4 Regressions:       ${allRegressions.length === 0 ? "0 (100% CLEAN ✅)" : allRegressions.length + " ❌"}`);
     console.log(`CM6 Monotonicity Violations: ${allCm6Violations.length === 0 ? "0 (100% MONOTONIC ✅)" : allCm6Violations.length + " ❌"}`);
     console.log(`Token Color Parity Mismatch: ${allParityMismatches.length === 0 ? "0 (100% PARITY ✅)" : allParityMismatches.length + " ❌"}`);
+    console.log(`Semantic Oracle Violations:  ${allSemanticViolations.length === 0 ? "0 (100% SOUND ✅)" : allSemanticViolations.length + " ❌"}`);
     console.log(`Pre-Existing Author Typos:   ${allTypos.length}`);
     console.log(`Parser Crashes:              ${allCrashes.length}`);
     console.log(`══════════════════════════════════════════════════════════════════════════\n`);
@@ -544,32 +617,35 @@ if (!isMainThread) {
     // Save report to disk
     const reportsDir = path.resolve(process.cwd(), "reports");
     if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
-    const reportPath = path.join(reportsDir, "corpus_audit_report.json");
-    fs.writeFileSync(
-      reportPath,
-      JSON.stringify(
-        {
-          timestamp: new Date().toISOString(),
-          totalFiles,
-          totalScanned,
-          totalValidated,
-          totalCm6Validated,
-          durationSec,
-          throughput: Math.round(totalValidated / durationSec),
-          regressionsCount: allRegressions.length,
-          cm6ViolationsCount: allCm6Violations.length,
-          colorParityMismatchesCount: allParityMismatches.length,
-          preExistingTyposCount: allTypos.length,
-          crashesCount: allCrashes.length,
-          regressions: allRegressions,
-          cm6Violations: allCm6Violations,
-          colorParityMismatches: allParityMismatches,
-        },
-        null,
-        2
-      )
-    );
-    console.log(`Full structured report written to: ${reportPath}`);
+    const reportSuffix = wasmArg ? "_wasm" : "_ts";
+    const specificReportPath = path.join(reportsDir, `corpus_audit_report${reportSuffix}.json`);
+    const defaultReportPath = path.join(reportsDir, "corpus_audit_report.json");
+
+    const reportPayload = {
+      timestamp: new Date().toISOString(),
+      engine: wasmArg ? "WebAssembly" : "TypeScript",
+      totalFiles,
+      totalScanned,
+      totalValidated,
+      totalCm6Validated,
+      durationSec,
+      throughput: Math.round(totalValidated / durationSec),
+      regressionsCount: allRegressions.length,
+      cm6ViolationsCount: allCm6Violations.length,
+      colorParityMismatchesCount: allParityMismatches.length,
+      semanticOracleViolationsCount: allSemanticViolations.length,
+      preExistingTyposCount: allTypos.length,
+      crashesCount: allCrashes.length,
+      regressions: allRegressions,
+      cm6Violations: allCm6Violations,
+      colorParityMismatches: allParityMismatches,
+      semanticOracleViolations: allSemanticViolations,
+    };
+
+    fs.writeFileSync(specificReportPath, JSON.stringify(reportPayload, null, 2));
+    fs.writeFileSync(defaultReportPath, JSON.stringify(reportPayload, null, 2));
+    console.log(`Structured engine report written to:  ${specificReportPath}`);
+    console.log(`Full structured report written to:    ${defaultReportPath}`);
 
     if (allRegressions.length > 0 || allCm6Violations.length > 0) {
       process.exit(1);

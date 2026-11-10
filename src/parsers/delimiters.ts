@@ -2,7 +2,14 @@
 
 import { RAINBOW_DELIMITER_COLORS } from "../config";
 import { ColorSpan } from "../utils/spans";
-import { skipEnvironmentHead, readColorCommand, skipMacroDefinition, readVerbEnd, readOpaqueCommand } from "../utils/latex_helpers";
+import {
+  skipEnvironmentHead,
+  readColorCommand,
+  skipMacroDefinition,
+  readVerbEnd,
+  readOpaqueCommand,
+  readCommentEnd as skipComment,
+} from "../utils/latex_helpers";
 
 export interface DelimiterItem {
   type: string;
@@ -41,16 +48,6 @@ function skipWhitespace(text: string, start: number): number {
   return start;
 }
 
-function skipComment(text: string, start: number): number {
-  let index = start + 1;
-  while (index < text.length && text[index] !== "\r" && text[index] !== "\n") {
-    index++;
-  }
-  if (index < text.length && text[index] === "\r" && index + 1 < text.length && text[index + 1] === "\n") {
-    return index + 2;
-  }
-  return Math.min(index + 1, text.length);
-}
 
 /**
  * Checks if a substring contains a top-level comma (depth 0 of any nested brackets/braces),

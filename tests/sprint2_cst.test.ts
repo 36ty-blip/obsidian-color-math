@@ -10,7 +10,7 @@ import {
   ScriptNode,
   IdentifierNode,
   OperatorNode,
-} from "../src/parsers/cst_parser";
+} from "../src/parsers/cst/index";
 import { findDifferentialSpans } from "../src/parsers/differentials";
 import { DEFAULT_COLORS } from "../src/config";
 

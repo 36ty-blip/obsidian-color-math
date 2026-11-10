@@ -4,9 +4,11 @@ import { colorLatexBody, computeSemanticMathSpans } from "../src/converters/gene
 import { COLORS, DEFAULT_OPTIONS } from "../src/config";
 import { renderRealMathJaxDOM } from "./spatial_tensor_bijective.test";
 import { stampMathJaxDOM } from "../src/editor/dom_stamper";
-import { getMathJaxElementRange } from "../src/editor/weakmap_index";
+import { getMathJaxElementRange, getDirectMathJaxElementRange } from "../src/editor/weakmap_index";
 import { MathCSTParser } from "../src/parsers/cst/parser";
 import { selectColorSpans, flattenColorSpans } from "../src/utils/spans";
+import { DesugarSourceMap } from "../src/parsers/sugar/source_map";
+import { desugarMathForStamping } from "../src/utils/latex_helpers";
 
 describe("Real-World Vault Acceptance Tests", () => {
   it("Fourier.md: converts informal lecture math without breaking or blob-coloring", () => {
@@ -186,7 +188,14 @@ b_n = \\cfrac{n(1-(-1)^{n}e^{a pi})}{pi(a^2+n^2)}`;
       const r = getMathJaxElementRange(el as any);
       expect(r).toBeDefined();
       const slice = rawBlock.slice(r!.start, r!.end);
-      // Every leaf must map to an atomic token (e.g. "b", "n", "pi", "\int", "sin", "cos", '"or"'), never a whole-group or whole-line fallback
+      if (slice.length > 4) {
+        console.log(`[FAULTY LEAF] text="${text}" slice="${slice}" tag=<${el.tagName}> range=[${r!.start}, ${r!.end}]`);
+        let p = el.parentElement;
+        while (p) {
+          console.log(`  parent: <${p.tagName}> class="${p.className}" range=`, getDirectMathJaxElementRange(p as any));
+          p = p.parentElement;
+        }
+      }
       expect(slice.length).toBeLessThanOrEqual(4);
     }
   });

@@ -16,12 +16,12 @@ describe("Domain Boundary Isolation 0.4 (Option A)", () => {
     
     // Each boundary operator ∂ is styled with \textcolor{#9ece6a}{∂}, and each target has its own variable color
     expect(coloredUnicode).toContain("\\textcolor{#9ece6a}{∂}");
-    expect(coloredUnicode).toContain("\\textcolor{#7aa2f7}{V}");
-    expect(coloredUnicode).toContain("\\textcolor{#e0af68}{D}");
-    expect(coloredUnicode).toContain("\\textcolor{#9ece6a}{M}");
-    expect(coloredUnicode).toContain("\\textcolor{#f7768e}{Σ}");
-    expect(coloredUnicode).toContain("\\textcolor{#9ece6a}{U}");
-    expect(coloredUnicode).toContain("\\textcolor{#bb9af7}{B}");
+    expect(coloredUnicode).toContain("\\textcolor{#51c9ff}{V}");
+    expect(coloredUnicode).toContain("\\textcolor{#c6bc33}{D}");
+    expect(coloredUnicode).toContain("\\textcolor{#d8a2ff}{M}");
+    expect(coloredUnicode).toContain("\\textcolor{#ff929e}{Σ}");
+    expect(coloredUnicode).toContain("\\textcolor{#9cc958}{U}");
+    expect(coloredUnicode).toContain("\\textcolor{#fc9e47}{B}");
   });
 
   it("colors LaTeX boundary operator \\partial in palette.chain (#9ece6a) and preserves individual variable colors", () => {
@@ -35,12 +35,12 @@ describe("Domain Boundary Isolation 0.4 (Option A)", () => {
     console.log("Colored LaTeX:", coloredLatex);
 
     expect(coloredLatex).toContain("\\textcolor{#9ece6a}{\\partial}");
-    expect(coloredLatex).toContain("\\textcolor{#7aa2f7}{V}");
-    expect(coloredLatex).toContain("\\textcolor{#e0af68}{D}");
-    expect(coloredLatex).toContain("\\textcolor{#9ece6a}{M}");
-    expect(coloredLatex).toContain("\\textcolor{#7aa2f7}{\\Sigma}");
-    expect(coloredLatex).toContain("\\textcolor{#9ece6a}{U}");
-    expect(coloredLatex).toContain("\\textcolor{#bb9af7}{B}");
+    expect(coloredLatex).toContain("\\textcolor{#51c9ff}{V}");
+    expect(coloredLatex).toContain("\\textcolor{#c6bc33}{D}");
+    expect(coloredLatex).toContain("\\textcolor{#d8a2ff}{M}");
+    expect(coloredLatex).toContain("\\textcolor{#ff929e}{\\Sigma}");
+    expect(coloredLatex).toContain("\\textcolor{#9cc958}{U}");
+    expect(coloredLatex).toContain("\\textcolor{#fc9e47}{B}");
   });
 
   it("emits boundary operator spans in live preview CST parsing", () => {

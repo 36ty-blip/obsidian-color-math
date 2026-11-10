@@ -3,6 +3,7 @@ import { colorLatexBody } from "../src/converters/generic";
 import { collectDelimiterSpans } from "../src/parsers/delimiters";
 import { findBoundarySpans } from "../src/parsers/differentials";
 import { hashStringToColor, COLORS } from "../src/config";
+import { lookupCatalog } from "../src/parsers/catalog";
 
 describe("Tier 1 Bugfixes Verification", () => {
   describe("Item 1: Sized Delimiters KaTeX Safety & Scope Color Flooding Elimination", () => {
@@ -46,11 +47,11 @@ describe("Tier 1 Bugfixes Verification", () => {
         enableTaxonomy: true,
       });
 
-      const colorOmega = hashStringToColor("Ω");
+      const colorOmega = hashStringToColor(lookupCatalog("Ω")?.canonical || "Ω");
       const colorV = hashStringToColor("V");
       const colorD = hashStringToColor("D");
       const colorM = hashStringToColor("M");
-      const colorSigma = hashStringToColor("Σ");
+      const colorSigma = hashStringToColor(lookupCatalog("Σ")?.canonical || "Σ");
       const colorU = hashStringToColor("U");
       const colorB = hashStringToColor("B");
 

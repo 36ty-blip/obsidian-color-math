@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "repository": "36ty-blip/obsidian-color-math",
-  "lastUpdatedIST": "6/11/2026, 16:21:57",
+  "lastUpdatedIST": "10/11/2026, 14:47:28",
   "dailyTraffic": {
     "views": {
       "2026-10-02": {
@@ -142,6 +142,22 @@
       },
       "2026-11-05": {
         "count": 2,
+        "uniques": 1
+      },
+      "2026-11-06": {
+        "count": 14,
+        "uniques": 1
+      },
+      "2026-11-07": {
+        "count": 7,
+        "uniques": 1
+      },
+      "2026-11-08": {
+        "count": 5,
+        "uniques": 2
+      },
+      "2026-11-09": {
+        "count": 1,
         "uniques": 1
       }
     },
@@ -285,6 +301,22 @@
       "2026-11-05": {
         "count": 11,
         "uniques": 6
+      },
+      "2026-11-06": {
+        "count": 44,
+        "uniques": 16
+      },
+      "2026-11-07": {
+        "count": 56,
+        "uniques": 25
+      },
+      "2026-11-08": {
+        "count": 11,
+        "uniques": 7
+      },
+      "2026-11-09": {
+        "count": 4,
+        "uniques": 2
       }
     }
   },
@@ -292,9 +324,9 @@
     "github.com": {
       "maxCount": 28,
       "maxUniques": 3,
-      "latestCount": 12,
-      "latestUniques": 3,
-      "lastSeen": "2026-11-06"
+      "latestCount": 19,
+      "latestUniques": 2,
+      "lastSeen": "2026-11-10"
     }
   },
   "pathsArchive": {
@@ -302,25 +334,25 @@
       "title": "Overview",
       "maxCount": 44,
       "maxUniques": 6,
-      "latestCount": 26,
+      "latestCount": 35,
       "latestUniques": 6,
-      "lastSeen": "2026-11-06"
+      "lastSeen": "2026-11-10"
     },
     "/36ty-blip/obsidian-color-math/issues": {
       "title": "/issues",
-      "maxCount": 9,
+      "maxCount": 10,
       "maxUniques": 1,
-      "latestCount": 7,
+      "latestCount": 10,
       "latestUniques": 1,
-      "lastSeen": "2026-11-06"
+      "lastSeen": "2026-11-10"
     },
     "/36ty-blip/obsidian-color-math/releases": {
       "title": "/releases",
       "maxCount": 4,
-      "maxUniques": 1,
-      "latestCount": 1,
-      "latestUniques": 1,
-      "lastSeen": "2026-11-01"
+      "maxUniques": 2,
+      "latestCount": 3,
+      "latestUniques": 2,
+      "lastSeen": "2026-11-10"
     },
     "/36ty-blip/obsidian-color-math/issues/2": {
       "title": "/issues/2",
@@ -328,15 +360,15 @@
       "maxUniques": 1,
       "latestCount": 3,
       "latestUniques": 1,
-      "lastSeen": "2026-11-06"
+      "lastSeen": "2026-11-10"
     },
     "/36ty-blip/obsidian-color-math/issues/4": {
       "title": "/issues/4",
-      "maxCount": 3,
+      "maxCount": 4,
       "maxUniques": 1,
-      "latestCount": 2,
+      "latestCount": 4,
       "latestUniques": 1,
-      "lastSeen": "2026-11-06"
+      "lastSeen": "2026-11-10"
     },
     "/36ty-blip/obsidian-color-math/releases/tag/1.0.58": {
       "title": "/releases/tag/1.0.58",
@@ -414,9 +446,9 @@
       "title": "/actions/runs/39961171970/job/120439238502",
       "maxCount": 2,
       "maxUniques": 1,
-      "latestCount": 2,
+      "latestCount": 1,
       "latestUniques": 1,
-      "lastSeen": "2026-11-06"
+      "lastSeen": "2026-11-10"
     },
     "/36ty-blip/obsidian-color-math/tree/main/color_math": {
       "title": "/tree/main/color_math",
@@ -432,7 +464,7 @@
       "maxUniques": 1,
       "latestCount": 4,
       "latestUniques": 1,
-      "lastSeen": "2026-11-06"
+      "lastSeen": "2026-11-10"
     },
     "/36ty-blip/obsidian-color-math/discussions/categories/announcements": {
       "title": "/discussions/categories/announcements",
@@ -440,7 +472,7 @@
       "maxUniques": 1,
       "latestCount": 2,
       "latestUniques": 1,
-      "lastSeen": "2026-11-06"
+      "lastSeen": "2026-11-10"
     },
     "/36ty-blip/obsidian-color-math/discussions/new": {
       "title": "/discussions/new",
@@ -448,7 +480,7 @@
       "maxUniques": 1,
       "latestCount": 2,
       "latestUniques": 1,
-      "lastSeen": "2026-11-06"
+      "lastSeen": "2026-11-10"
     },
     "/36ty-blip/obsidian-color-math/commits/main": {
       "title": "/commits/main",
@@ -456,7 +488,7 @@
       "maxUniques": 1,
       "latestCount": 1,
       "latestUniques": 1,
-      "lastSeen": "2026-11-06"
+      "lastSeen": "2026-11-07"
     },
     "/36ty-blip/obsidian-color-math/discussions": {
       "title": "/discussions",
@@ -472,7 +504,15 @@
       "maxUniques": 1,
       "latestCount": 1,
       "latestUniques": 1,
-      "lastSeen": "2026-11-06"
+      "lastSeen": "2026-11-07"
+    },
+    "/36ty-blip/obsidian-color-math/edit/main/README.md": {
+      "title": "/edit/main/README.md",
+      "maxCount": 7,
+      "maxUniques": 1,
+      "latestCount": 7,
+      "latestUniques": 1,
+      "lastSeen": "2026-11-10"
     }
   },
   "releasesHighWaterMark": {
@@ -775,6 +815,16 @@
       "styles": 5,
       "totalAssets": 16,
       "uniqueInstalls": 6
+    },
+    "1.0.115": {
+      "tag": "1.0.115",
+      "publishedAt": "2026-11-07",
+      "timestamp": 1794037302000,
+      "mainJs": 28,
+      "manifest": 34,
+      "styles": 25,
+      "totalAssets": 87,
+      "uniqueInstalls": 34
     }
   },
   "releaseDailySnapshots": {
@@ -1533,7 +1583,154 @@
         "1.0.0": 18,
         "0.1.0": 18
       }
+    },
+    "2026-11-07": {
+      "totalAssets": 3834,
+      "uniqueInstalls": 2879,
+      "byTag": {
+        "1.0.111": 16,
+        "1.0.81": 239,
+        "1.0.79": 52,
+        "1.0.66": 347,
+        "1.0.64": 151,
+        "1.0.63": 120,
+        "1.0.60": 182,
+        "1.0.59": 126,
+        "1.0.58": 132,
+        "1.0.33": 537,
+        "1.0.30": 219,
+        "1.0.29": 261,
+        "1.0.28": 178,
+        "1.0.27": 111,
+        "1.0.25": 219,
+        "1.0.24": 114,
+        "1.0.23": 121,
+        "1.0.11": 188,
+        "1.0.10": 113,
+        "1.0.9": 55,
+        "1.0.8": 41,
+        "1.0.7": 78,
+        "1.0.6": 20,
+        "1.0.5": 108,
+        "1.0.4": 21,
+        "1.0.3": 18,
+        "1.0.2": 19,
+        "1.0.1": 12,
+        "1.0.0": 18,
+        "0.1.0": 18
+      }
+    },
+    "2026-11-08": {
+      "totalAssets": 3859,
+      "uniqueInstalls": 2888,
+      "byTag": {
+        "1.0.115": 25,
+        "1.0.111": 16,
+        "1.0.81": 239,
+        "1.0.79": 52,
+        "1.0.66": 347,
+        "1.0.64": 151,
+        "1.0.63": 120,
+        "1.0.60": 182,
+        "1.0.59": 126,
+        "1.0.58": 132,
+        "1.0.33": 537,
+        "1.0.30": 219,
+        "1.0.29": 261,
+        "1.0.28": 178,
+        "1.0.27": 111,
+        "1.0.25": 219,
+        "1.0.24": 114,
+        "1.0.23": 121,
+        "1.0.11": 188,
+        "1.0.10": 113,
+        "1.0.9": 55,
+        "1.0.8": 41,
+        "1.0.7": 78,
+        "1.0.6": 20,
+        "1.0.5": 108,
+        "1.0.4": 21,
+        "1.0.3": 18,
+        "1.0.2": 19,
+        "1.0.1": 12,
+        "1.0.0": 18,
+        "0.1.0": 18
+      }
+    },
+    "2026-11-09": {
+      "totalAssets": 3902,
+      "uniqueInstalls": 2905,
+      "byTag": {
+        "1.0.115": 68,
+        "1.0.111": 16,
+        "1.0.81": 239,
+        "1.0.79": 52,
+        "1.0.66": 347,
+        "1.0.64": 151,
+        "1.0.63": 120,
+        "1.0.60": 182,
+        "1.0.59": 126,
+        "1.0.58": 132,
+        "1.0.33": 537,
+        "1.0.30": 219,
+        "1.0.29": 261,
+        "1.0.28": 178,
+        "1.0.27": 111,
+        "1.0.25": 219,
+        "1.0.24": 114,
+        "1.0.23": 121,
+        "1.0.11": 188,
+        "1.0.10": 113,
+        "1.0.9": 55,
+        "1.0.8": 41,
+        "1.0.7": 78,
+        "1.0.6": 20,
+        "1.0.5": 108,
+        "1.0.4": 21,
+        "1.0.3": 18,
+        "1.0.2": 19,
+        "1.0.1": 12,
+        "1.0.0": 18,
+        "0.1.0": 18
+      }
+    },
+    "2026-11-10": {
+      "totalAssets": 3921,
+      "uniqueInstalls": 2913,
+      "byTag": {
+        "1.0.115": 87,
+        "1.0.111": 16,
+        "1.0.81": 239,
+        "1.0.79": 52,
+        "1.0.66": 347,
+        "1.0.64": 151,
+        "1.0.63": 120,
+        "1.0.60": 182,
+        "1.0.59": 126,
+        "1.0.58": 132,
+        "1.0.33": 537,
+        "1.0.30": 219,
+        "1.0.29": 261,
+        "1.0.28": 178,
+        "1.0.27": 111,
+        "1.0.25": 219,
+        "1.0.24": 114,
+        "1.0.23": 121,
+        "1.0.11": 188,
+        "1.0.10": 113,
+        "1.0.9": 55,
+        "1.0.8": 41,
+        "1.0.7": 78,
+        "1.0.6": 20,
+        "1.0.5": 108,
+        "1.0.4": 21,
+        "1.0.3": 18,
+        "1.0.2": 19,
+        "1.0.1": 12,
+        "1.0.0": 18,
+        "0.1.0": 18
+      }
     }
   },
-  "lastUpdatedDate": "2026-11-06"
+  "lastUpdatedDate": "2026-11-10"
 }

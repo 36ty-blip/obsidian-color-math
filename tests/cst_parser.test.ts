@@ -6,7 +6,7 @@ import {
   parseMathWithCST,
   GroupNode,
   ScriptNode,
-} from "../src/parsers/cst_parser";
+} from "../src/parsers/cst/index";
 import { DEFAULT_COLORS, RAINBOW_DELIMITER_COLORS } from "../src/config";
 import { colorLatexBody } from "../src/converters/generic";
 

@@ -2680,7 +2680,7 @@ export const CATALOG_TABLE: CatalogEntry[] = [
   {"key":"𝔑","expectedText":"𝔑","hexCode":120081,"roleId":9,"priority":20,"domains":1,"dialects":1023,"arityNibble":0,"canonical":"\\mfrakN","unicode":"𝔑"},
   {"key":"InverseHankelTransform","expectedText":"InverseHankelTransform","roleId":0,"priority":22,"domains":1,"dialects":16,"arityNibble":0,"canonical":"\\InverseHankelTransform","unicode":"InverseHankelTransform","arity":0},
   {"key":"LogB","expectedText":"LogB","roleId":0,"priority":22,"domains":1,"dialects":64,"arityNibble":0,"canonical":"\\LogB","unicode":"LogB"},
-  {"key":"primes","expectedText":"primes","roleId":7,"priority":25,"domains":1,"dialects":10,"arityNibble":0,"canonical":"\\operatorname{primes}","unicode":"primes"},
+  {"key":"primes","expectedText":"primes","roleId":7,"priority":25,"domains":1,"dialects":10,"arityNibble":0,"canonical":"\\mathbb{P}","unicode":"primes"},
   {"key":"𝗨","expectedText":"𝗨","hexCode":120296,"roleId":9,"priority":20,"domains":1,"dialects":1023,"arityNibble":0,"canonical":"\\mbfsansU","unicode":"𝗨"},
   {"key":"\\diffp","expectedText":"diffp","roleId":5,"priority":24,"domains":2,"dialects":1,"arityNibble":0,"unicode":"diffp"},
   {"key":"↱","expectedText":"↱","hexCode":8625,"roleId":2,"priority":30,"domains":1,"dialects":1023,"arityNibble":0,"canonical":"\\Rsh","unicode":"↱"},

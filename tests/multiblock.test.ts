@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { convertText, scanMarkdown } from "../src/index";
+import { hashStringToColor } from "../src/config";
 
 describe("multiblock test", () => {
   const input = `
@@ -38,8 +39,8 @@ sin(x) & adj(A) & 3\\\\
 $$`;
     const options = { variableDataFlow: true, enableTaxonomy: true };
     const baked = convertText(matrixBlock, undefined, options);
-    // Ensure A is hashed to cyan (#7dcfff)
-    expect(baked).toContain("\\textcolor{#7dcfff}{A}");
+    const colorA = hashStringToColor("A");
+    expect(baked).toContain(`\\textcolor{${colorA}}{A}`);
     // Ensure sin and adj are recognized as functions
     expect(baked).toContain("\\textcolor{#7aa2f7}{\\sin}");
     expect(baked).toContain("\\textcolor{#7aa2f7}{adj}");

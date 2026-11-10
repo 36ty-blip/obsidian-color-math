@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { findDelimiterPairs, collectDelimiterSpans, findDelimiterScan } from "../src/parsers/delimiters";
 import { colorLatexBody } from "../src/converters/generic";
 import { autoSealUnclosedDelimiters, normalizeAutoScaledDelimiters, normalizeTypstFontShortcuts, normalizeBracketMatrices, normalizeMathSyntax } from "../src/utils/latex_helpers";
-import { RAINBOW_DELIMITER_COLORS } from "../src/config";
+import { RAINBOW_DELIMITER_COLORS, hashStringToColor } from "../src/config";
 
 describe("Rainbow Delimiters Parser", () => {
   it("parses single bracket pair at depth 0", () => {
@@ -231,8 +231,10 @@ describe("Rainbow Delimiters Parser", () => {
       rainbowDelimiters: true,
       variableDataFlow: true,
     });
+    const colA = hashStringToColor("a");
+    const colB = hashStringToColor("b");
     expect(res1).toBe(
-      `\\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{[}\\textcolor{#bb9af7}{a},\\textcolor{#f7768e}{b}\\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{]} , \\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{[}\\textcolor{#bb9af7}{a},\\textcolor{#f7768e}{b}\\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{)}`
+      `\\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{[}\\textcolor{${colA}}{a},\\textcolor{${colB}}{b}\\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{]} , \\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{[}\\textcolor{${colA}}{a},\\textcolor{${colB}}{b}\\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{)}`
     );
 
     const res2 = colorLatexBody("(a,b]", undefined, {
@@ -240,7 +242,7 @@ describe("Rainbow Delimiters Parser", () => {
       variableDataFlow: true,
     });
     expect(res2).toBe(
-      `\\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{(}\\textcolor{#bb9af7}{a},\\textcolor{#f7768e}{b}\\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{]}`
+      `\\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{(}\\textcolor{${colA}}{a},\\textcolor{${colB}}{b}\\textcolor{${RAINBOW_DELIMITER_COLORS[0]}}{]}`
     );
   });
 

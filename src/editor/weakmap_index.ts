@@ -96,6 +96,23 @@ export function indexMathJaxElement(el: Element, range: ResolvedRange): void {
 }
 
 /**
+ * Retrieves ONLY the direct source code range stamped specifically on this element,
+ * without resolving upwards to parent matrix cells or structural containers.
+ */
+export function getDirectMathJaxElementRange(target: Element): ResolvedRange | undefined {
+  if (!target) return undefined;
+  const direct = mathjaxRangeMap.get(target);
+  if (direct) return direct;
+  if (typeof (target as any).getAttribute === "function") {
+    const rawAttr = (target as any).getAttribute(TENSOR_ATTR);
+    if (typeof rawAttr === "string" && rawAttr) {
+      return deserializeTensorRange(rawAttr);
+    }
+  }
+  return undefined;
+}
+
+/**
  * Retrieves the source code range for a MathJax CHTML element via direct pointer lookup (~20 ns),
  * or hydrates from `data-cm-tensor` (~180 ns) if the element was cloned via `cloneNode(true)`.
  */
@@ -122,7 +139,7 @@ export function getMathJaxElementRange(target: Element): ResolvedRange | undefin
   let curr: Element | null = target.parentElement;
   while (curr) {
     if (typeof (curr as any).matches === "function") {
-      if ((curr as any).matches(".MathJax, mjx-container")) {
+      if ((curr as any).matches(".MathJax, mjx-container, mjx-linebox, mjx-linestack")) {
         break;
       }
       // Boundary Isolation: Stop at structural molecule boundaries (W=3); never leak whole-molecule spans onto child glyphs
@@ -132,7 +149,7 @@ export function getMathJaxElementRange(target: Element): ResolvedRange | undefin
     }
     const parentRange = mathjaxRangeMap.get(curr);
     if (parentRange) {
-      if (parentRange.coord && parentRange.coord.w >= 3) {
+      if ((parentRange.coord && parentRange.coord.w >= 3) || parentRange.kind === "matrix_cell") {
         break;
       }
       // Backfill target for future direct hits

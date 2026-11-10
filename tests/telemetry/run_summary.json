@@ -1,50 +1,58 @@
 {
-  "timestamp": 1793012958335,
-  "date": "2026-10-26T11:09:18.335Z",
+  "timestamp": 1794125039212,
+  "date": "2026-11-08T08:03:59.212Z",
   "hardware": {
     "cpuModel": "13th Gen Intel(R) Core(TM) i5-13420H",
     "threadsAllocated": 6,
     "totalCpus": 12
   },
   "metrics": {
-    "durationSec": 66.07,
-    "throughputEquationsPerSec": 3455,
+    "durationSec": 479.25,
+    "throughputEquationsPerSec": 476,
     "documentsAudited": 10511,
     "equationsScanned": 228264,
-    "equationsValidated": 228047,
-    "mathematicalTokensTested": 1409529,
-    "triParityConsensusCount": 1354851,
-    "consensusRate": 96.12,
-    "disagreementCount": 64035,
-    "disagreementRate": 4.54,
-    "semanticOraclePassCount": 1345494,
-    "oraclePassRate": 95.46,
+    "equationsValidated": 227993,
+    "mathematicalTokensTested": 1408787,
+    "triParityConsensusCount": 1404824,
+    "consensusRate": 99.72,
+    "disagreementCount": 3976,
+    "disagreementRate": 0.28,
+    "semanticOraclePassCount": 1404811,
+    "oraclePassRate": 99.72,
     "compliance144Hz": true
+  },
+  "classificationBreakdown": {
+    "M1_M2_SWAPPED_M3_CORRECT": 683,
+    "M1_M2_CORRECT_M3_WRONG": 2194,
+    "COMMON_MODE_ORACLE_FAILURE": 13,
+    "UNSTAMPED_M1_M2": 1060,
+    "UNRESOLVED_M3": 14,
+    "ALL_WRONG": 12
   },
   "latencies": {
     "m2_weakmap_ns": {
-      "avg": 539.7103355822147,
+      "avg": 1669.523781748461,
       "min": 0,
-      "max": 14528800.000000047,
-      "p50": 200.00000222353265,
-      "p90": 1099.9999994965037,
-      "p99": 2799.999998387648
+      "max": 7120400.000000245,
+      "p50": 899.9999990919605,
+      "p90": 2699.9999972758815,
+      "p99": 6499.9999885912985
     },
     "m1_dom_class_us": {
-      "avg": 4.119529155286566,
-      "min": 0.5000000019208528,
-      "max": 57931.000000000495,
-      "p50": 2.4000000003070454,
-      "p90": 6.399999998393469,
-      "p99": 23.299999999835563
+      "avg": 6.89716433060107,
+      "min": 0.3999999971711077,
+      "max": 13481.899999999769,
+      "p50": 4.199999995762482,
+      "p90": 8.900000000721775,
+      "p99": 19.59999999962747
     },
     "m3_ondemand_us": {
-      "avg": 83.63114155384281,
-      "min": 2.099999997881241,
-      "max": 93739.59999999897,
-      "p50": 24.79999999923166,
-      "p90": 122.69999999989523,
-      "p99": 835.5000000001382
+      "avg": 895.5941639010078,
+      "min": 6.500000003143214,
+      "max": 335820.3999999969,
+      "p50": 237.8000000026077,
+      "p90": 1694.599999987986,
+      "p99": 11013.500000000931
     }
   }
 }

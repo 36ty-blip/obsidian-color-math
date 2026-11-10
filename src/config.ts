@@ -346,6 +346,8 @@ export const FONT_STYLE_MACROS = new Set([
   "\\mathbf",
   "\\mathcal",
   "\\mathbb",
+  "\\Bbb",
+  "\\cal",
   "\\mathfrak",
   "\\mathsf",
   "\\mathtt",
@@ -643,71 +645,139 @@ export const RAINBOW_DELIMITER_COLORS: string[] = [
   "#2ac3de", // Tier 6: Teal
 ];
 
-export const VARIABLE_HASH_PALETTE: string[] = [
-  "#7aa2f7", // 0: Tokyo Blue
-  "#7dcfff", // 1: Tokyo Cyan
-  "#bb9af7", // 2: Tokyo Purple
-  "#f7768e", // 3: Tokyo Pink
-  "#e0af68", // 4: Tokyo Orange/Gold
-  "#9ece6a", // 5: Tokyo Green
-  "#2ac3de", // 6: Light Cyan/Teal
-  "#ff9e64", // 7: Peach
+export const DARK_VARIABLE_HASH_PALETTE: string[] = [
+  "#ff929e", // Slot  0 ( 15.0 deg): Crimson / Ruby
+  "#ff9975", // Slot  1 ( 37.5 deg): Coral / Vermilion
+  "#fc9e47", // Slot  2 ( 60.0 deg): Amber / Tangerine
+  "#e6ad29", // Slot  3 ( 82.5 deg): Warm Gold / Honey
+  "#c6bc33", // Slot  4 (105.0 deg): Chartreuse / Olive
+  "#9cc958", // Slot  5 (127.5 deg): Lime Green
+  "#6ed889", // Slot  6 (150.0 deg): Emerald / Kelly
+  "#1fdcb4", // Slot  7 (172.5 deg): Spring / Mint
+  "#00dbdb", // Slot  8 (195.0 deg): Aqua / Teal
+  "#00d4fd", // Slot  9 (217.5 deg): Cyan / Sky Cyan
+  "#51c9ff", // Slot 10 (240.0 deg): Cerulean / Azure
+  "#89bcff", // Slot 11 (262.5 deg): Cobalt / Royal Blue
+  "#b4aeff", // Slot 12 (285.0 deg): Indigo / Iris
+  "#d8a2ff", // Slot 13 (307.5 deg): Purple / Violet
+  "#f398eb", // Slot 14 (330.0 deg): Magenta / Orchid
+  "#ff93c7", // Slot 15 (352.5 deg): Rose / Hot Pink
 ];
 
+export const LIGHT_VARIABLE_HASH_PALETTE: string[] = [
+  "#9a1c37", // Slot  0 ( 15.0 deg): Crimson / Ruby
+  "#9a2400", // Slot  1 ( 37.5 deg): Coral / Vermilion
+  "#812500", // Slot  2 ( 60.0 deg): Amber / Tangerine
+  "#703800", // Slot  3 ( 82.5 deg): Warm Gold / Honey
+  "#574800", // Slot  4 (105.0 deg): Chartreuse / Olive
+  "#2e5500", // Slot  5 (127.5 deg): Lime Green
+  "#006c1a", // Slot  6 (150.0 deg): Emerald / Kelly
+  "#006f4c", // Slot  7 (172.5 deg): Spring / Mint
+  "#006d71", // Slot  8 (195.0 deg): Aqua / Teal
+  "#00668e", // Slot  9 (217.5 deg): Cyan / Sky Cyan
+  "#005ba3", // Slot 10 (240.0 deg): Cerulean / Azure
+  "#204eac", // Slot 11 (262.5 deg): Cobalt / Royal Blue
+  "#5040a8", // Slot 12 (285.0 deg): Indigo / Iris
+  "#6d3498", // Slot 13 (307.5 deg): Purple / Violet
+  "#83297e", // Slot 14 (330.0 deg): Magenta / Orchid
+  "#921f5e", // Slot 15 (352.5 deg): Rose / Hot Pink
+];
+
+export const VARIABLE_HASH_PALETTE: string[] = DARK_VARIABLE_HASH_PALETTE;
+
 export const CANONICAL_VARIABLE_SLOTS: Record<string, number> = {
-  // 1. Spatial 3D Cartesian coordinates & Random Variables: guaranteed maximum pairwise separation
-  x: 0, // Tokyo Blue
-  y: 4, // Tokyo Gold
-  z: 5, // Tokyo Green
-  X: 0, // Tokyo Blue (Random Variable)
-  Y: 4, // Tokyo Gold (Random Variable)
-  Z: 5, // Tokyo Green (Random Variable)
-  E: 1, // Tokyo Cyan (Expectation / Energy)
+  // 1. Spatial 3D Cartesian coordinates & Random Variables: Triad (120 deg: 112.5, 112.5, 135.0)
+  x: 11, // Cobalt / Royal Blue (262.5 deg)
+  y: 0,  // Crimson / Ruby (15.0 deg)
+  z: 5,  // Lime Green (127.5 deg)
+  X: 11, // Cobalt / Royal Blue
+  Y: 0,  // Crimson / Ruby
+  Z: 5,  // Lime Green
+  E: 9,  // Sky Cyan (Expectation / Energy)
 
-  // 2. Coefficients: high-contrast against (x, y, z) and within the group
-  a: 2, // Tokyo Purple
-  b: 3, // Tokyo Pink
-  c: 6, // Light Cyan/Teal
-  d: 7, // Peach
+  // 2. Coefficients: Orthogonal Tetrad (90 deg: 2, 6, 10, 14)
+  a: 2,  // Amber / Tangerine (60.0 deg)
+  b: 6,  // Emerald / Kelly (150.0 deg)
+  c: 10, // Cerulean / Azure (240.0 deg)
+  d: 14, // Magenta / Orchid (330.0 deg)
 
-  // 3. Parameters / Velocity / Substitutions
-  u: 1, // Tokyo Cyan
-  v: 2, // Tokyo Purple
-  w: 4, // Tokyo Gold
+  // 3. Parameters / Velocity / Substitutions: Triad (120 deg: 135, 112.5, 112.5)
+  u: 1,  // Coral / Vermilion (37.5 deg)
+  v: 7,  // Spring / Mint (172.5 deg)
+  w: 12, // Indigo / Iris (285.0 deg)
 
-  // 4. Discrete summation & matrix indices
-  i: 4, // Tokyo Gold
-  j: 0, // Tokyo Blue
-  k: 3, // Tokyo Pink
-  l: 5, // Tokyo Green
-  m: 2, // Tokyo Purple
-  n: 6, // Light Cyan/Teal
+  // 4. Discrete summation & matrix indices: Triad (120 deg: 135, 135, 90)
+  i: 3,  // Warm Gold / Honey (82.5 deg)
+  j: 9,  // Sky Cyan (217.5 deg)
+  k: 15, // Rose / Hot Pink (352.5 deg)
+  l: 6,  // Emerald / Kelly
+  m: 8,  // Aqua / Teal
+  n: 13, // Purple / Violet
 
-  // 5. Calculus & Analysis duals
-  s: 3, // Tokyo Pink
-  t: 1, // Tokyo Cyan
-  p: 0, // Tokyo Blue
-  q: 7, // Peach
+  // 5. Calculus & Analysis duals (180 deg / 135 deg)
+  f: 8,  // Aqua / Teal (195.0 deg)
+  g: 13, // Purple / Violet (307.5 deg)
+  h: 1,  // Coral / Vermilion (37.5 deg)
+  F: 8,  // Aqua / Teal (Force / Antiderivative)
+  G: 13, // Purple / Violet
+  s: 14, // Magenta / Orchid (330.0 deg)
+  t: 4,  // Chartreuse / Olive (105.0 deg)
+  p: 10, // Cerulean / Azure (240.0 deg)
+  q: 2,  // Amber / Tangerine (60.0 deg)
 
   // 6. Thermodynamics & State
-  P: 3, // Tokyo Pink
-  V: 0, // Tokyo Blue
-  T: 4, // Tokyo Gold
+  P: 14, // Magenta / Orchid (Pressure)
+  V: 10, // Cerulean / Azure (Volume)
+  T: 2,  // Amber / Tangerine (Temperature)
+  W: 12, // Indigo / Iris (Work)
 
-  // 7. Greek letters & canonical duals
+  // 7. Canonical State Qualifiers (The 4 Families)
+  // Family 1: Extrema & Variational Bounds
+  max: 4,  // Chartreuse / Olive
+  min: 2,  // Amber / Tangerine
+  sup: 14, // Magenta / Orchid
+  inf: 1,  // Coral / Vermilion
+  opt: 3,  // Warm Gold / Honey
+  lim: 0,  // Crimson / Ruby
+
+  // Family 2: Signal Metrics & Effective States
+  rms: 8,   // Aqua / Teal
+  avg: 2,   // Amber / Tangerine
+  mean: 5,  // Lime Green
+  peak: 15, // Rose / Hot Pink
+  eff: 5,   // Lime Green
+
+  // Family 3: Critical, Equilibrium & Phase Regimes
+  eq: 12,   // Indigo / Iris
+  crit: 8,  // Aqua / Teal
+  sat: 6,   // Emerald / Kelly
+  ss: 0,    // Crimson / Ruby
+  th: 4,    // Chartreuse / Olive
+  nom: 12,  // Indigo / Iris
+
+  // Family 4: Boundary, Resultant & Directional States
+  init: 3,  // Warm Gold / Honey
+  fin: 15,  // Rose / Hot Pink
+  ref: 3,   // Warm Gold / Honey
+  net: 13,  // Purple / Violet
+  tot: 9,   // Sky Cyan
+  ext: 1,   // Coral / Vermilion
+  int: 15,  // Rose / Hot Pink
+
+  // 8. Greek letters & canonical duals
   "\\theta": 4, "θ": 4, "𝜗": 4, "ϑ": 4,
-  "\\phi": 2, "\\varphi": 2, "ϕ": 2, "φ": 2, "𝜙": 2, "𝜑": 2,
-  "\\psi": 2, "ψ": 2, "𝜓": 2,
+  "\\phi": 14, "\\varphi": 14, "ϕ": 14, "φ": 14, "𝜙": 14, "𝜑": 14,
+  "\\psi": 14, "ψ": 14, "𝜓": 14,
   "\\epsilon": 2, "\\varepsilon": 2, "ε": 2, "𝜀": 2,
   "\\delta": 5, "δ": 5, "𝛿": 5,
   "\\alpha": 2, "α": 2, "𝛼": 2,
-  "\\beta": 3, "β": 3, "𝛽": 3,
+  "\\beta": 6, "β": 6, "𝛽": 6,
   "\\gamma": 5, "γ": 5, "𝛾": 5,
-  "\\omega": 7, "ω": 7, "𝜔": 7,
-  "\\lambda": 6, "λ": 6, "𝜆": 6,
+  "\\omega": 1, "ω": 1, "𝜔": 1,
+  "\\lambda": 7, "λ": 7, "𝜆": 7,
 };
 
-export function hashStringToSlot(str: string, numSlots: number = 8): number {
+export function hashStringToSlot(str: string, numSlots: number = 16): number {
   if (Object.prototype.hasOwnProperty.call(CANONICAL_VARIABLE_SLOTS, str)) {
     return CANONICAL_VARIABLE_SLOTS[str] % numSlots;
   }
@@ -820,6 +890,7 @@ export interface ColorMathOptions {
   inlineMathFloatingTooltipOpaque?: boolean;
   enable2dMathNavigation?: boolean;
   targetedMathNavigation?: boolean;
+  mathClickMode?: "caret" | "select";
   defaultMode?: ActiveMathMode;
   useCST?: boolean;
   strictBracketWarnings?: boolean;
@@ -834,7 +905,8 @@ export interface ColorMathOptions {
 }
 
 export const DEFAULT_OPTIONS: ColorMathOptions = {
-  enable2dMathNavigation: true,
+  enable2dMathNavigation: false,
+  mathClickMode: "caret",
   enableTaxonomy: true,
   taxonomyFunctions: true,
   taxonomyParameters: true,

@@ -33,23 +33,19 @@ import {
   ROLE_ARITHMETIC,
 } from "./catalog";
 import { readOperand, OPAQUE_MACROS } from "./latex_spans";
-import { readBraced, readColorCommand, skipEnvironmentHead, matchCommand } from "../utils/latex_helpers";
+import {
+  readBraced,
+  readColorCommand,
+  skipEnvironmentHead,
+  matchCommand,
+  readCommentEnd as skipComment,
+} from "../utils/latex_helpers";
 import { ColorSpan } from "../utils/spans";
 import { findDifferentialSpans, DifferentialSpan } from "./differentials";
 import { findDimensionlessSpans, DimensionlessSpan } from "./dimensionless";
 import { findUnitSpans, UnitSpan } from "./units";
 import { SUGAR_CONSTRUCTOR_STICKY_RE } from "../config/constructors.generated";
 
-function skipComment(text: string, start: number): number {
-  let index = start + 1;
-  while (index < text.length && text[index] !== "\r" && text[index] !== "\n") {
-    index++;
-  }
-  if (index < text.length && text[index] === "\r" && index + 1 < text.length && text[index + 1] === "\n") {
-    return index + 2;
-  }
-  return Math.min(index + 1, text.length);
-}
 
 const INDEX_PATTERN =
   /(\\(?:sum|prod|coprod|bigcup|bigcap|lim|inf|sup))_\{?\s*([A-Za-z])\s*(?:=|\to|\\to)/g;
@@ -592,6 +588,30 @@ export function collectTaxonomySpans(
       const bareSymbol = matchBareSymbol(body, index);
       if (bareSymbol) {
         const entry = bareSymbol.entry;
+        const isBareDiff =
+          bareSymbol.length === 2 &&
+          (bareSymbol.entry.key.startsWith("d") || bareSymbol.entry.key.startsWith("∂") || bareSymbol.entry.key.startsWith("δ")) &&
+          /^[a-zA-Z]$/.test(body[index + 1]);
+
+        if (isBareDiff && (options?.colorDifferentials !== false || options?.variableDataFlow)) {
+          spans.push({
+            start: index,
+            end: index + 1,
+            color: paletteArray[ROLE_DERIVATIVE],
+            role: "derivative",
+            priority: 24,
+          });
+          spans.push({
+            start: index + 1,
+            end: index + 2,
+            color: paletteArray[ROLE_VARIABLE] || paletteArray[ROLE_PARAMETER],
+            role: "variable",
+            priority: 26,
+          });
+          index += bareSymbol.length;
+          continue;
+        }
+
         if (entry.roleId === ROLE_CONSTANT && options?.taxonomyConstants !== false) {
           spans.push({
             start: index,

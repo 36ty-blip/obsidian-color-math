@@ -82,6 +82,25 @@ describe("Variable Data-Flow Hashing", () => {
     expect(result).toContain(`\\textcolor{${colorZ}}{z}`);
   });
 
+  it("shields canonical Greek letters and constants from variable shattering before parentheses (pi(x), mu(x), phi(x))", () => {
+    const rawSpansPi = collectVariableSpans("pi(x)");
+    // 'pi' is a constant, so collectVariableSpans does NOT shatter it into 'p' and 'i'
+    expect(rawSpansPi.some(s => s.start === 0 && s.end === 1)).toBe(false);
+    expect(rawSpansPi.some(s => s.start === 1 && s.end === 2)).toBe(false);
+
+    // 'mu' is a parameter, so it hashes atomically as '\mu' across [0, 2]
+    const rawSpansMu = collectVariableSpans("mu(x)");
+    const muSpan = rawSpansMu.find(s => s.start === 0 && s.end === 2);
+    expect(muSpan).toBeDefined();
+    expect(muSpan?.color).toBe(hashStringToColor("\\mu"));
+
+    // 'phi' is a parameter, so it hashes atomically as '\phi' across [0, 3]
+    const rawSpansPhi = collectVariableSpans("phi(x)");
+    const phiSpan = rawSpansPhi.find(s => s.start === 0 && s.end === 3);
+    expect(phiSpan).toBeDefined();
+    expect(phiSpan?.color).toBe(hashStringToColor("\\phi"));
+  });
+
   it("does not shred \\operatorname{rank}(A) arguments into variables", () => {
     const input = "\\operatorname{rank}(A)";
     const result = colorLatexBody(input, undefined, { variableDataFlow: true, enableTaxonomy: true });
@@ -185,25 +204,64 @@ describe("Variable Data-Flow Hashing", () => {
 
   it("supports user-customized variableHashPalette in options", () => {
     const customPalette = [
-      "#111111", // slot 0 (x)
-      "#222222", // slot 1
-      "#333333", // slot 2 (a)
-      "#444444", // slot 3
-      "#555555", // slot 4
-      "#666666", // slot 5
-      "#777777", // slot 6
-      "#888888", // slot 7 (d)
+      "#000000", "#111111", "#222222", "#333333",
+      "#444444", "#555555", "#666666", "#777777",
+      "#888888", "#999999", "#aaaaaa", "#bbbbbb",
+      "#cccccc", "#dddddd", "#eeeeee", "#ffffff",
     ];
     const result = colorLatexBody("x + a + d", undefined, {
       variableDataFlow: true,
       variableHashPalette: customPalette,
     });
-    // x is slot 0 -> #111111
-    expect(result).toContain("\\textcolor{#111111}{x}");
-    // a is slot 2 -> #333333
-    expect(result).toContain("\\textcolor{#333333}{a}");
-    // d is slot 7 -> #888888
-    expect(result).toContain("\\textcolor{#888888}{d}");
+    // x is slot 11 -> #bbbbbb
+    expect(result).toContain("\\textcolor{#bbbbbb}{x}");
+    // a is slot 2 -> #222222
+    expect(result).toContain("\\textcolor{#222222}{a}");
+    // d is slot 14 -> #eeeeee
+    expect(result).toContain("\\textcolor{#eeeeee}{d}");
+  });
+
+  describe("Option A: Atomic State Qualifier Normalization & Data Flow Hashing", () => {
+    it("atomically hashes state qualifier 'max' in A_{max} without shattering", () => {
+      const spans = collectVariableSpans("A_{max}");
+      expect(spans.length).toBe(2);
+      expect(spans[0].color).toBe(hashStringToColor("A"));
+      expect(spans[1].color).toBe(hashStringToColor("max"));
+      expect(spans[1].end - spans[1].start).toBe(3); // Entire 'max' token atomically hashed
+    });
+
+    it("atomically hashes subscript state qualifier in A_{\\max} and A_{\\mathrm{rms}}", () => {
+      const spansMax = collectVariableSpans("A_{\\max}");
+      expect(spansMax.length).toBe(2);
+      expect(spansMax[0].color).toBe(hashStringToColor("A"));
+      expect(spansMax[1].color).toBe(hashStringToColor("max"));
+
+      const spansRms = collectVariableSpans("V_{\\mathrm{rms}}");
+      expect(spansRms.length).toBe(2);
+      expect(spansRms[0].color).toBe(hashStringToColor("V"));
+      expect(spansRms[1].color).toBe(hashStringToColor("rms"));
+    });
+
+    it("treats max(A) as function call: skips variable hash on max, hashes argument A", () => {
+      const spans = collectVariableSpans("max(A)");
+      expect(spans.length).toBe(1);
+      expect(spans[0].color).toBe(hashStringToColor("A"));
+    });
+
+    it("atomically hashes all 4 canonical state qualifier families without collisions", () => {
+      const expr = "W_{net} = P (V_{fin} - V_{init}) + T_{sat} + P_{crit}";
+      const spans = collectVariableSpans(expr);
+      const spanTexts = spans.map((s) => expr.slice(s.start, s.end));
+      expect(spanTexts).toContain("W");
+      expect(spanTexts).toContain("net");
+      expect(spanTexts).toContain("P");
+      expect(spanTexts).toContain("V");
+      expect(spanTexts).toContain("fin");
+      expect(spanTexts).toContain("init");
+      expect(spanTexts).toContain("T");
+      expect(spanTexts).toContain("sat");
+      expect(spanTexts).toContain("crit");
+    });
   });
 });
 

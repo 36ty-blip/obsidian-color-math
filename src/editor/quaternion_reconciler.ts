@@ -10,9 +10,27 @@
 //! Eliminates flat 1D array cascades, immunizes against limit authoring order, and isolates subtrees.
 
 import { CSTNode, FractionNode, GroupNode, ScriptNode, SpatialCoordinate4D, UnderOverNode } from "../parsers/cst/types";
-import { MultiScaleRange, ResolvedRange, SPACING_COMMANDS, FONT_ACCENT_COMMANDS } from "./lazy_navigation";
+import { DesugarSourceMap } from "../parsers/sugar/source_map";
+import {
+  matchesSelector,
+  elementContains,
+  isInsideStretchy,
+  getNodeListSpan,
+  normalizeMathOperatorChars,
+  MultiScaleRange,
+  ResolvedRange,
+  SPACING_COMMANDS,
+  FONT_ACCENT_COMMANDS,
+  ASCII_OPERATOR_UNICODE_MAP,
+  DELIMITER_BRACKET_MAP,
+  ACCENT_DOM_MAP,
+  tryExtractBinomFraction,
+  analyzeFontAccentGroup,
+  extractDomTableGrid,
+} from "./navigation_primitives";
 import { indexMathJaxElement, getMathJaxElementRange } from "./weakmap_index";
 import { MathCSTParser } from "../parsers/cst/parser";
+import { MACRO_DICTIONARY } from "../parsers/macro_dictionary";
 import {
   lookupCatalog,
   getExpectedChildTag,
@@ -53,54 +71,7 @@ interface MultiScaleContext {
   enclosure: { start: number; end: number };
 }
 
-function matchesSelector(el: Element, sel: string): boolean {
-  if (typeof (el as any).matches === "function") {
-    return el.matches(sel);
-  }
-  return false;
-}
 
-function elementContains(parent: Element | null, child: Element): boolean {
-  if (!parent || !child) return false;
-  if (typeof (parent as any).contains === "function") {
-    return Boolean((parent as any).contains(child));
-  }
-  let curr: Element | null = child.parentElement;
-  while (curr) {
-    if (curr === parent) return true;
-    curr = curr.parentElement;
-  }
-  return false;
-}
-
-/**
- * Checks if an element is an internal building block of a stretchy horizontal/vertical delimiter.
- */
-function isInsideStretchy(el: Element): boolean {
-  if (typeof (el as any).closest === "function") {
-    return !!(el as any).closest("mjx-stretchy-h, mjx-stretchy-v");
-  }
-  let curr: Element | null = el.parentElement;
-  while (curr) {
-    if (matchesSelector(curr, "mjx-stretchy-h, mjx-stretchy-v")) return true;
-    curr = curr.parentElement;
-  }
-  return false;
-}
-
-/**
- * Safely extracts normalized text content from native elements, LiteNodes, or mock elements.
- * In live MathJax 4 CHTML, glyph characters are rendered via CSS `mjx-c.mjx-cHEX::before`
- * pseudo-elements and `textContent` is empty (`""`). When `textContent` is empty, this
- * function decodes all child `<mjx-c class="mjx-cHEX">` hexadecimal codepoints in O(k) time.
- */
-function normalizeMathOperatorChars(s: string): string {
-  return s
-    .replace(/\u2212/g, "-")
-    .replace(/\u2217/g, "*")
-    .replace(/\u2236/g, ":")
-    .replace(/\u2032/g, "'");
-}
 
 export function getElementText(el: any): string {
   if (!el) return "";
@@ -164,6 +135,26 @@ export function getElementText(el: any): string {
   return "";
 }
 
+export const COMMAND_TO_UNICODE: Record<string, string> = {
+  "\\neq": "≠", "\\ne": "≠",
+  "\\le": "≤", "\\leq": "≤",
+  "\\ge": "≥", "\\geq": "≥",
+  "\\cdot": "⋅", "\\cdotp": "⋅",
+  "\\times": "×",
+  "\\div": "÷",
+  "\\pm": "±", "\\mp": "∓",
+  "\\approx": "≈", "\\equiv": "≡", "\\sim": "∼", "\\simeq": "≃", "\\cong": "≅",
+  "\\propto": "∝", "\\in": "∈", "\\notin": "∉", "\\subset": "⊂", "\\subseteq": "⊆",
+  "\\supset": "⊃", "\\supseteq": "⊇", "\\cup": "∪", "\\cap": "∩",
+  "\\land": "∧", "\\lor": "∨", "\\oplus": "⊕", "\\otimes": "⊗",
+  "\\infty": "∞",
+  "\\implies": "⟹", "\\iff": "⟺",
+  "\\to": "→", "\\rightarrow": "→", "\\leftarrow": "←", "\\gets": "←",
+  "\\forall": "∀", "\\exists": "∃", "\\nabla": "∇", "\\partial": "∂",
+  "\\int": "∫", "\\sum": "∑", "\\prod": "∏", "\\coprod": "∐",
+  "\\dots": "…", "\\ldots": "…", "\\cdots": "⋯", "\\vdots": "⋮", "\\ddots": "⋱",
+};
+
 /**
  * Resolves the canonical normalized Unicode text expected for an AST leaf node.
  * Shared across Engine A (`QuaternionReconciler`), Engine B (`dom_stamper`), and `lazy_navigation`.
@@ -174,11 +165,32 @@ export function getExpectedLeafNodeText(n?: CSTNode, latex?: string): string {
     case "identifier":
     case "operator": {
       const txt = n.text || "";
+      if (COMMAND_TO_UNICODE[txt]) return COMMAND_TO_UNICODE[txt];
+      const accentMatch = txt.match(/^(?:\\)?[a-zA-Z]+\{([^{}]+)\}$/);
+      if (accentMatch) {
+        return accentMatch[1].trim();
+      }
+      // Strip nested font/accent command wrappers to extract the core symbol: e.g. \mathbf{\mathcal{F}} -> F, \mathcal{F} -> F
+      const strippedFont = txt
+        .replace(/\\(?:mathbf|boldsymbol|pmb|vec|bm|hat|widehat|tilde|widetilde|bar|overline|underline|dot|ddot|mathbb|Bbb|mathcal|mathscr|mathfrak|mathrm|mathit|mathsf|mathtt|text|rm|sf|tt|bold|bb|cal|frak|scr)/g, "")
+        .replace(/[{}\s]/g, "");
+      if (strippedFont.length > 0) {
+        if (COMMAND_TO_UNICODE[strippedFont]) return COMMAND_TO_UNICODE[strippedFont];
+        if (COMMAND_TO_UNICODE[`\\${strippedFont}`]) return COMMAND_TO_UNICODE[`\\${strippedFont}`];
+        if (strippedFont.length === 1) return strippedFont;
+      }
+      const entry = lookupCatalog(txt) || (txt.startsWith("\\") ? lookupCatalog(txt.slice(1)) : lookupCatalog(`\\${txt}`));
+      if (entry?.expectedText !== undefined) return entry.expectedText;
+      if (entry?.unicode) return entry.unicode;
+      if (txt === "=>") return "⟹";
+      if (txt === "->" || txt === "-->") return "→";
+      if (txt === "<=") return "≤";
+      if (txt === ">=") return "≥";
+      if (txt === "!=") return "≠";
+      if (txt === "+-") return "±";
+      if (txt === ":=") return "≔";
+      if (txt === "\\pi" || txt === "pi") return "π";
       if (txt.startsWith("\\")) {
-        const entry = lookupCatalog(txt) || lookupCatalog(txt.slice(1));
-        if (entry?.expectedText !== undefined) return entry.expectedText;
-        if (entry?.unicode) return entry.unicode;
-        if (txt === "\\pi") return "π";
         return txt.slice(1);
       }
       return txt;
@@ -190,6 +202,7 @@ export function getExpectedLeafNodeText(n?: CSTNode, latex?: string): string {
     case "punctuation":
       return n.char;
     case "command": {
+      if (COMMAND_TO_UNICODE[n.name]) return COMMAND_TO_UNICODE[n.name];
       const entry = lookupCatalog(n.name);
       if (entry?.expectedText !== undefined) return entry.expectedText;
       if (n.name === "\\pi" || n.name === "pi") return "π";
@@ -207,13 +220,92 @@ export function getExpectedLeafNodeText(n?: CSTNode, latex?: string): string {
 export function isLeafTextMatch(domText: string, n?: CSTNode, latex?: string): boolean {
   if (!n) return false;
   if (!domText) return true;
+
+  const nodeStr = n.kind === "identifier"
+    ? (n.text || "")
+    : n.kind === "command"
+    ? (n.name || "")
+    : n.kind === "operator"
+    ? ((n as any).rawText || n.text || "")
+    : "";
+
+  // Accent & Operator symbol matching
+  if (domText === "⟹" || domText === "==>" || domText === "=>" || domText === "⇒" || domText === "\\implies") {
+    if (nodeStr === "=>" || nodeStr === "==>" || nodeStr === "\\implies" || nodeStr === "\\Longrightarrow") return true;
+  }
+  if (domText === "→" || domText === "⟶" || domText === "->" || domText === "-->" || domText === "\\rightarrow") {
+    if (nodeStr === "->" || nodeStr === "-->" || nodeStr === "\\to" || nodeStr === "\\rightarrow" || nodeStr === "\\longrightarrow") return true;
+  }
+  if (domText === "≤" || domText === "\\le") {
+    if (nodeStr === "<=" || nodeStr === "\\le" || nodeStr === "\\leq") return true;
+  }
+  if (domText === "≥" || domText === "\\ge") {
+    if (nodeStr === ">=" || nodeStr === "\\ge" || nodeStr === "\\geq") return true;
+  }
+  if (domText === "≠" || domText === "\\ne") {
+    if (nodeStr === "!=" || nodeStr === "\\ne" || nodeStr === "\\neq") return true;
+  }
+  if (domText === "±" || domText === "\\pm") {
+    if (nodeStr === "+-" || nodeStr === "\\pm") return true;
+  }
+  if (domText === "≔" || domText === "\\coloneqq") {
+    if (nodeStr === ":=" || nodeStr === "\\coloneqq") return true;
+  }
+  if (domText === "⃗" || domText === "→" || domText === "\u20D7") {
+    if (nodeStr.startsWith("\\vec") || nodeStr.startsWith("vec")) return true;
+    if (n.kind === "command" && n.name === "\\vec") return true;
+  }
+  if (domText === "^" || domText === "ˆ" || domText === "\u0302") {
+    if (nodeStr.startsWith("\\hat") || nodeStr.startsWith("hat")) return true;
+    if (n.kind === "command" && n.name === "\\hat") return true;
+  }
+  if (domText === "¯" || domText === "\u0304") {
+    if (nodeStr.startsWith("\\bar") || nodeStr.startsWith("bar")) return true;
+    if (n.kind === "command" && n.name === "\\bar") return true;
+  }
+  if (domText === "˙" || domText === "\u0307") {
+    if (nodeStr.startsWith("\\dot") || nodeStr.startsWith("dot")) return true;
+    if (n.kind === "command" && n.name === "\\dot") return true;
+  }
+  if (domText === "˜" || domText === "~" || domText === "\u0303") {
+    if (nodeStr.startsWith("\\tilde") || nodeStr.startsWith("tilde")) return true;
+    if (n.kind === "command" && n.name === "\\tilde") return true;
+  }
+  if (domText === "ˇ" || domText === "\u030C") {
+    if (nodeStr.startsWith("\\check") || nodeStr.startsWith("check")) return true;
+    if (n.kind === "command" && n.name === "\\check") return true;
+  }
+
+  // Synthetic delimiters: ( and ) generated by \binom or pmat
+  if (domText === "(" || domText === ")") {
+    if (n.kind === "command" && (n.name === "\\binom" || n.name === "\\dbinom" || n.name === "\\tbinom" || n.name === "binom")) {
+      return true;
+    }
+  }
+
   const expected = getExpectedLeafNodeText(n, latex);
-  if (!expected) return true;
+  if (!expected) {
+    if (latex) {
+      const rawSlice = latex.slice(n.start, n.end).trim();
+      if (rawSlice && (domText === rawSlice || domText === rawSlice.replace(/^\\/, "") || isSliceTextCompatible(domText, rawSlice))) return true;
+    }
+    return false;
+  }
   if (domText === expected) return true;
-  const fusedMatch = expected.match(/^\\[a-zA-Z]+\{([\s\S]*)\}$/);
+  if ((domText === "..." || domText === "…" || domText === "⋯") && (expected === "..." || expected === "…" || expected === "⋯")) return true;
+  const normDom = typeof domText.normalize === "function" ? domText.normalize("NFKD") : domText;
+  if (normDom === expected) return true;
+  const strippedNormDom = normDom.replace(/[\u0300-\u036f]/g, "");
+  if (strippedNormDom === expected) return true;
+  const fusedMatch = expected.match(/^(?:\\)?[a-zA-Z]+\{([\s\S]*)\}$/);
   if (fusedMatch) {
     const innerExp = fusedMatch[1].trim();
-    if (domText === innerExp || (innerExp.length > 0 && domText.includes(innerExp))) return true;
+    if (domText === innerExp || normDom === innerExp) return true;
+  }
+  const typstMatch = expected.match(/^[a-zA-Z]+\(([\s\S]*)\)$/);
+  if (typstMatch) {
+    const innerExp = typstMatch[1].trim();
+    if (domText === innerExp || normDom === innerExp) return true;
   }
   if (n.kind === "command") {
     const rawCmd = n.name;
@@ -222,7 +314,7 @@ export function isLeafTextMatch(domText: string, n?: CSTNode, latex?: string): b
   }
   if (latex) {
     const rawSlice = latex.slice(n.start, n.end).trim();
-    if (rawSlice && (domText === rawSlice || domText === rawSlice.replace(/^\\/, ""))) return true;
+    if (rawSlice && (domText === rawSlice || domText === rawSlice.replace(/^\\/, "") || isSliceTextCompatible(domText, rawSlice))) return true;
   }
   return false;
 }
@@ -249,21 +341,62 @@ function isElementInvisible(el: Element): boolean {
  * and is not sequestered inside a nested slot (mjx-script, mjx-num, mjx-under, etc.).
  * Chained scripts whose parent is an outer script container (mjx-msup/msub/msubsup) are in scope.
  */
-function isScriptInSlotScope(el: Element, slotEl: Element): boolean {
-  const elTagId = getTagIdFromNodeName(el.tagName);
-  if (tagMatchesMask(elTagId, MASK_STRETCHY_FRAGMENTS) || isInsideStretchy(el) || isElementInvisible(el)) {
-    return false;
-  }
+/**
+ * Unified slot-scope checker: validates whether an element belongs to the active slot
+ * according to the designated structural barrier mode.
+ */
+function checkSlotScope(
+  el: Element,
+  slotEl: Element,
+  mode: "script" | "item" | "element" | "baseline"
+): boolean {
+  if (isInsideStretchy(el) || isElementInvisible(el)) return false;
+  if (mode === "script" && tagMatchesMask(getTagIdFromNodeName(el.tagName), MASK_STRETCHY_FRAGMENTS)) return false;
+  if (typeof el.parentElement === "undefined") return true;
+
   let curr = el.parentElement;
   while (curr && curr !== slotEl) {
-    const currTagId = getTagIdFromNodeName(curr.tagName);
-    if (tagMatchesMask(currTagId, MASK_SLOT_CONTAINERS | ChtmlTagMask.MROW)) {
-      return false;
+    if (mode === "baseline") {
+      if (matchesSelector(curr, "mjx-script, mjx-under, mjx-over, mjx-mfrac, mjx-frac, mjx-sqrt, mjx-mroot, mjx-mtable, mjx-table, mjx-itable, mjx-mtd, mjx-linestack, mjx-linebox")) {
+        return false;
+      }
+      if (matchesSelector(curr, "mjx-box")) {
+        const boxParent = curr.parentElement;
+        if (!boxParent || !matchesSelector(boxParent, "mjx-munderover")) return false;
+      }
+      if (matchesSelector(curr, "mjx-mrow")) {
+        const mrowMos = Array.from(curr.children).filter((c) => matchesSelector(c, "mjx-mo"));
+        const isOuterFence = mrowMos.length > 0 && (curr.firstElementChild === el || curr.lastElementChild === el);
+        if (mrowMos.length > 0 && !isOuterFence) return false;
+      }
+    } else if (mode === "element") {
+      if (matchesSelector(curr, "mjx-mfrac, mjx-frac, mjx-sqrt, mjx-mroot, mjx-box, mjx-munder, mjx-mover, mjx-munderover, mjx-mtable, mjx-table, mjx-itable, mjx-mtd, mjx-linestack, mjx-linebox, mjx-msub, mjx-msup, mjx-msubsup, mjx-script")) {
+        return false;
+      }
+      if (matchesSelector(curr, "mjx-mrow")) {
+        const hasNonMoChild = Array.from(curr.children).some((c) => !matchesSelector(c, "mjx-mo"));
+        const moCount = Array.from(curr.children).filter((c) => matchesSelector(c, "mjx-mo")).length;
+        if (hasNonMoChild || moCount >= 2) return false;
+      }
+    } else if (mode === "script") {
+      if (matchesSelector(curr, "mjx-mfrac, mjx-frac, mjx-sqrt, mjx-mroot, mjx-box, mjx-munder, mjx-mover, mjx-munderover, mjx-mtable, mjx-table, mjx-itable, mjx-mtd, mjx-linestack, mjx-linebox, mjx-script, mjx-num, mjx-den, mjx-under, mjx-over, mjx-mrow")) {
+        return false;
+      }
+    } else {
+      // mode === "item"
+      if (matchesSelector(curr, "mjx-mfrac, mjx-frac, mjx-sqrt, mjx-mroot, mjx-box, mjx-munder, mjx-mover, mjx-munderover, mjx-mtable, mjx-table, mjx-itable, mjx-mtd, mjx-linestack, mjx-linebox, mjx-msub, mjx-msup, mjx-msubsup, mjx-script, mjx-num, mjx-den, mjx-under, mjx-over, mjx-mrow")) {
+        return false;
+      }
     }
     curr = curr.parentElement;
   }
   return curr === slotEl;
 }
+
+const isScriptInSlotScope = (el: Element, slotEl: Element): boolean => checkSlotScope(el, slotEl, "script");
+const isItemInSlotScope = (el: Element, slotEl: Element): boolean => checkSlotScope(el, slotEl, "item");
+const isElementInSlotScope = (el: Element, slotEl: Element): boolean => checkSlotScope(el, slotEl, "element");
+const isBaselineLeafInSlotScope = (el: Element, slotEl: Element): boolean => checkSlotScope(el, slotEl, "baseline");
 
 /**
  * Finds the direct base element (<mjx-base> or firstElementChild) of a script/limit container
@@ -290,6 +423,32 @@ function findDirectScriptBase(container: Element): Element | null {
 }
 
 /**
+ * Resolves the direct script base leaf/row, unpeeling through transparent <mjx-base>.
+ */
+function unwrapScriptBase(rawBase: Element | null): Element | null {
+  if (!rawBase) return null;
+  if (matchesSelector(rawBase, "mjx-base") && rawBase.firstElementChild) {
+    return rawBase.firstElementChild;
+  }
+  return rawBase;
+}
+
+/**
+ * Resolves the under/over base, unpeeling to an inner <mjx-mrow> container only when multi-token.
+ */
+function unwrapUnderOverBase(rawBase: Element | null): Element | null {
+  if (!rawBase) return null;
+  if (
+    matchesSelector(rawBase, "mjx-base") &&
+    rawBase.firstElementChild &&
+    matchesSelector(rawBase.firstElementChild, "mjx-mrow")
+  ) {
+    return rawBase.firstElementChild;
+  }
+  return rawBase;
+}
+
+/**
  * Returns the next unreconciled element in document order within the current slot scope.
  */
 function getNextSlotItem(slotEl: Element, excludeSet?: ReadonlySet<Element>): Element | null {
@@ -301,39 +460,16 @@ function getNextSlotItem(slotEl: Element, excludeSet?: ReadonlySet<Element>): El
   for (const el of all) {
     if (el.classList.contains("cm-tensor-reconciled")) continue;
     if (excludeSet && excludeSet.has(el)) continue;
-    if (!isScriptInSlotScope(el, slotEl)) continue;
+    if (!isItemInSlotScope(el, slotEl)) continue;
     return el;
   }
   return null;
 }
 
-function isElementInSlotScope(el: Element, slotEl: Element): boolean {
-  if (isInsideStretchy(el) || isElementInvisible(el)) {
-    return false;
-  }
-  if (typeof el.parentElement === "undefined") {
-    return true;
-  }
-  let curr = el.parentElement;
-  while (curr && curr !== slotEl) {
-    if (matchesSelector(curr, "mjx-mfrac, mjx-frac, mjx-sqrt, mjx-mroot, mjx-box, mjx-munder, mjx-mover, mjx-munderover, mjx-mtable, mjx-table, mjx-itable, mjx-mtd, mjx-linestack, mjx-linebox, mjx-msub, mjx-msup, mjx-msubsup, mjx-script")) {
-      return false;
-    }
-    curr = curr.parentElement;
-  }
-  return curr === slotEl;
-}
 
 /**
  * Computes the aggregate start and end span of a list of CST nodes.
  */
-function getNodeListSpan(nodes: CSTNode[]): { start: number; end: number } | null {
-  if (!nodes || nodes.length === 0) return null;
-  return {
-    start: nodes[0].start,
-    end: nodes[nodes.length - 1].end,
-  };
-}
 
 let activeReconcilerLatex = "";
 
@@ -355,61 +491,95 @@ export function isSliceTextCompatible(domText: string, rawSlice: string): boolea
     return true;
   }
 
-  // Common delimiter, ASCII operator shorthand & symbol equivalences
-  if ((strippedFence === "\\{" || strippedFence === "\\lbrace") && cleanDom === "{") return true;
-  if ((strippedFence === "\\}" || strippedFence === "\\rbrace") && cleanDom === "}") return true;
-  if (strippedFence === "\\lbrack" && cleanDom === "[") return true;
-  if (strippedFence === "\\rbrack" && cleanDom === "]") return true;
-  if (strippedFence === "\\langle" && (cleanDom === "⟨" || cleanDom === "<")) return true;
-  if (strippedFence === "\\rangle" && (cleanDom === "⟩" || cleanDom === ">")) return true;
-  if ((strippedFence === "|" || strippedFence === "\\vert") && (cleanDom === "|" || cleanDom === "∣")) return true;
-  if ((strippedFence === "\\|" || strippedFence === "\\Vert") && (cleanDom === "‖" || cleanDom === "∥" || cleanDom === "||")) return true;
-  if ((strippedFence === "\\pi" || strippedFence === "pi") && cleanDom === "π") return true;
-  if ((strippedFence === "=>" || strippedFence === "==>") && (cleanDom === "⟹" || cleanDom === "⇒")) return true;
-  if ((strippedFence === "->" || strippedFence === "-->") && (cleanDom === "→" || cleanDom === "⟶")) return true;
-  if ((strippedFence === "<->" || strippedFence === "<-->") && (cleanDom === "↔" || cleanDom === "⟷")) return true;
-  if ((strippedFence === "<=>" || strippedFence === "<==>") && (cleanDom === "⟺" || cleanDom === "⇔")) return true;
-  if (strippedFence === "|->" && (cleanDom === "↦" || cleanDom === "⟼")) return true;
-  if (strippedFence === "<=" && cleanDom === "≤") return true;
-  if (strippedFence === ">=" && cleanDom === "≥") return true;
-  if (strippedFence === "!=" && cleanDom === "≠") return true;
-  if (strippedFence === ":=" && (cleanDom === "≔" || cleanDom === ":=")) return true;
-  if (strippedFence === "+-" && cleanDom === "±") return true;
-  if (strippedFence === "-+" && cleanDom === "∓") return true;
-  if (strippedFence === "~=" && cleanDom === "≈") return true;
-  if (strippedFence === "<<" && cleanDom === "≪") return true;
-  if (strippedFence === ">>" && cleanDom === "≫") return true;
-  if (/^\.{3,}$/.test(strippedFence) && (cleanDom === "⋯" || cleanDom === "…")) return true;
+  // 1. Declarative Delimiter Bracket Map
+  const delimTarget = DELIMITER_BRACKET_MAP[strippedFence];
+  if (delimTarget) {
+    if (typeof delimTarget === "string" && cleanDom === delimTarget) return true;
+    if (Array.isArray(delimTarget) && delimTarget.includes(cleanDom)) return true;
+  }
+
+  // 2. Declarative ASCII Operator / Shorthand Map
+  const asciiTarget = ASCII_OPERATOR_UNICODE_MAP[strippedFence];
+  if (asciiTarget) {
+    if (typeof asciiTarget === "string" && cleanDom === asciiTarget) return true;
+    if (Array.isArray(asciiTarget) && asciiTarget.includes(cleanDom)) return true;
+  }
+
+  // 3. O(1) Lemire MPHF Catalog Lookup (Exact Unicode & Expected Text)
+  const bare = strippedFence.replace(/^\\/, "");
+  const cat = lookupCatalog(strippedFence) || lookupCatalog("\\" + bare) || lookupCatalog(bare);
+  if (cat) {
+    const normExpected = cat.expectedText ? normalizeMathOperatorChars(cat.expectedText) : "";
+    const normUni = cat.unicode ? normalizeMathOperatorChars(cat.unicode) : "";
+    if (
+      (cat.expectedText && (cleanDom === cat.expectedText || cleanDom === normExpected)) ||
+      (cat.unicode && (cleanDom === cat.unicode || cleanDom === normUni))
+    ) {
+      return true;
+    }
+  }
+
+  // 4. Synthetic macro fences, brackets, and generative accents
+  if ((cleanDom === "(" || cleanDom === ")") && (strippedFence.startsWith("\\binom") || strippedFence.startsWith("binom") || strippedFence === "p" || strippedFence.startsWith("pmat") || strippedFence.startsWith("\\begin{pmatrix}") || strippedFence.startsWith("\\end{pmatrix}"))) return true;
+  if ((cleanDom === "[" || cleanDom === "]") && (strippedFence === "b" || strippedFence.startsWith("bmat") || strippedFence.startsWith("\\begin{bmatrix}") || strippedFence.startsWith("\\end{bmatrix}"))) return true;
+  if ((cleanDom === "|" || cleanDom === "‖") && (strippedFence === "v" || strippedFence === "V" || strippedFence.startsWith("vmat") || strippedFence.startsWith("Vmat") || strippedFence.includes("matrix"))) return true;
+  if (cleanDom === "⏟" && strippedFence.startsWith("\\underbrace")) return true;
+  if (cleanDom === "⏞" && strippedFence.startsWith("\\overbrace")) return true;
+  if (cleanDom === "√" && (strippedFence.startsWith("\\sqrt") || strippedFence.startsWith("sqrt"))) return true;
+  if ((strippedFence === "\\degree" || strippedFence === "^\\circ" || strippedFence === "°") && cleanDom === "°") return true;
+  if ((strippedFence === "\\dots" || strippedFence === "\\ldots" || strippedFence === "\\cdots" || /^\.{3,}$/.test(strippedFence)) && (cleanDom === "⋯" || cleanDom === "…" || cleanDom === "...")) return true;
+  if (strippedFence === "\\vdots" && cleanDom === "⋮") return true;
+  if (strippedFence === "\\ddots" && cleanDom === "⋱") return true;
+
+  // 5. Declarative Accent DOM Map
+  for (const [accentCmd, domChars] of Object.entries(ACCENT_DOM_MAP)) {
+    if ((cleanSlice.startsWith(accentCmd) || strippedFence.startsWith(accentCmd.slice(1))) && domChars.includes(cleanDom)) {
+      return true;
+    }
+  }
 
   // Matrix environment fence headers (\begin{cases} -> {, \begin{pmatrix} -> (, \end{pmatrix} -> ), etc.)
   if (/^\\(?:begin|end)\s*\{(?:cases|dcases|rcases|pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix|matrix|array)\}/.test(cleanSlice)) {
     return true;
   }
 
-  // Extensible over/under braces and arrows
-  if (/^\\(?:under|over)(?:brace|line|rightarrow|leftarrow|leftrightarrow)/.test(cleanSlice)) {
+  // Extensible over/under braces and arrows (only match when cleanSlice is just the command, not a fused expression)
+  if (/^\\(?:under|over)(?:brace|line|rightarrow|leftarrow|leftrightarrow)$/.test(cleanSlice)) {
     return true;
   }
 
-  // Catalog lookup (both with and without leading backslash)
-  const bare = strippedFence.replace(/^\\/, "");
-  const cat = lookupCatalog(strippedFence) || lookupCatalog("\\" + bare) || lookupCatalog(bare);
-  if (cat) {
-    if (
-      (cat.expectedText && (cleanDom === cat.expectedText || cleanDom.includes(cat.expectedText))) ||
-      (cat.unicode && (cleanDom === cat.unicode || cleanDom.includes(cat.unicode)))
-    ) {
+  // Fused macro or accent/font wrapper (e.g. \vec{V}, \mathbf{M}, \text{or}, "or", \pmb\alpha, \overline{\sigma_x^2})
+  const unquoted = cleanSlice.replace(/^"(.*)"$/, "$1").trim();
+  if (unquoted && cleanDom === unquoted) return true;
+  if (cleanSlice.startsWith("\\")) {
+    const braceMatch = cleanSlice.match(/^\\[a-zA-Z]+\s*\{([^{}]+)\}$/);
+    if (braceMatch) {
+      const inner = normalizeMathOperatorChars(braceMatch[1].trim());
+      if (inner && cleanDom === inner) {
+        return true;
+      }
+    }
+  }
+  const outerMacroMatch = cleanSlice.match(/^\\(?:pmb|boldsymbol|mathbf|mathrm|mathit|mathbb|mathcal|mathfrak|mathsf|mathtt|Bbb|text|mbox|hbox|textrm|textbf|textit|textsf|texttt|operatorname|overline|underline|bar|hat|vec|tilde|dot|ddot|widehat|widetilde|phantom|hphantom|vphantom|ket|bra|braket|dd|va|vb|vu|abs|norm|cancel|bcancel|xcancel|sout)\b\s*([\s\S]+)$/);
+  if (outerMacroMatch) {
+    let innerBody = outerMacroMatch[1].trim();
+    if (innerBody.startsWith("{") && innerBody.endsWith("}")) {
+      innerBody = innerBody.slice(1, -1).trim();
+    }
+    if (innerBody && innerBody !== cleanSlice && isSliceTextCompatible(cleanDom, innerBody)) {
+      return true;
+    }
+    if (innerBody && cleanDom === innerBody) {
       return true;
     }
   }
 
-  // Fused macro or accent/font wrapper (e.g. \vec{V}, \mathbf{M}, \text{or}, "or")
-  const unquoted = cleanSlice.replace(/^"(.*)"$/, "$1").trim();
-  if (unquoted && cleanDom === unquoted) return true;
-  const braceMatch = cleanSlice.match(/\{([^{}]+)\}/);
-  if (braceMatch) {
-    const inner = normalizeMathOperatorChars(braceMatch[1].trim());
-    if (inner && (cleanDom === inner || cleanDom.includes(inner) || inner.includes(cleanDom))) {
+  const typstFontMatch = cleanSlice.match(/^(?:bb|bold|frak|scr|cal)\(([^()]+)\)$/);
+  if (typstFontMatch) {
+    const inner = normalizeMathOperatorChars(typstFontMatch[1].trim());
+    const nfkdInner = typeof inner.normalize === "function" ? inner.normalize("NFKD") : inner;
+    const nfkdDom = typeof cleanDom.normalize === "function" ? cleanDom.normalize("NFKD") : cleanDom;
+    if (inner === cleanDom || nfkdInner === nfkdDom || inner.replace(/\\/g, "") === cleanDom) {
       return true;
     }
   }
@@ -427,19 +597,31 @@ export function isSliceTextCompatible(domText: string, rawSlice: string): boolea
  * 1. Enforces 2D cell/line containment (<mjx-mtd>, <mjx-linebox>).
  * 2. Enforces Unicode identity between the DOM leaf and the LaTeX slice [start, end].
  */
-function passesFinalStampGate(el: Element, range: QuaternionResolvedRange): boolean {
+function passesFinalStampGate(
+  el: Element,
+  range: QuaternionResolvedRange,
+  sourceMap?: DesugarSourceMap
+): boolean {
   const { start, end, kind } = range;
-  if (start < 0 || end <= start) return false;
+  if (start < 0 || end < start) return false;
   if (el.classList && typeof el.classList.contains === "function" && el.classList.contains("color-math-cell-padding")) {
     return false;
   }
 
-  // 1. 2D Cell / Line Containment Check
+  let finalStart = start;
+  let finalEnd = end;
+  if (sourceMap && !sourceMap.isEmpty()) {
+    const rawRange = sourceMap.projectRangeToRaw(start, end);
+    finalStart = rawRange.start;
+    finalEnd = rawRange.end;
+  }
+
+  // 1. 2D Cell / Line Containment Check (comparing in unified raw markdown space)
   let curr = el.parentElement;
   while (curr) {
     if (matchesSelector(curr, "mjx-mtd, mjx-linebox")) {
       const cellRange = getMathJaxElementRange(curr);
-      if (cellRange && (start < cellRange.start || end > cellRange.end)) {
+      if (cellRange && (finalStart < cellRange.start || finalEnd > cellRange.end)) {
         return false;
       }
       break;
@@ -447,9 +629,10 @@ function passesFinalStampGate(el: Element, range: QuaternionResolvedRange): bool
     curr = curr.parentElement;
   }
 
-  // 2. Unicode Identity Check for atomic leaf tags
+  // 2. Unicode Identity Check for atomic leaf tags (skipping zero-width insertion sentinels)
   if (
     activeReconcilerLatex &&
+    start < end &&
     (kind === "leaf" || kind === "text") &&
     matchesSelector(el, "mjx-mi, mjx-mn, mjx-mo, mjx-mtext") &&
     !el.querySelector("mjx-stretchy-h, mjx-stretchy-v")
@@ -467,23 +650,45 @@ function passesFinalStampGate(el: Element, range: QuaternionResolvedRange): bool
 /**
  * Attaches a cm-src-<start>-<end> class (Method 1) and indexes into WeakMap (Method 2)
  * with full 4D spatial coordinate quaternion and multi-scale hierarchy metadata.
+ * Container lineboxes (<mjx-linebox>) receive cm-cell- rather than cm-src- to prevent line hijacking.
  */
 function stampQuaternionElement(
   el: Element,
-  range: QuaternionResolvedRange
+  range: QuaternionResolvedRange,
+  sourceMap?: DesugarSourceMap
 ): boolean {
-  if (!passesFinalStampGate(el, range)) {
+  if (!passesFinalStampGate(el, range, sourceMap)) {
     return false;
   }
-  const { start, end, kind, coord, scales } = range;
-  if (start >= 0 && end > start) {
-    el.classList.add(`cm-src-${start}-${end}`);
+  let { start, end, kind, coord, scales } = range;
+  if (sourceMap && !sourceMap.isEmpty() && start >= 0 && end > start) {
+    const rawRange = sourceMap.projectRangeToRaw(start, end);
+    start = rawRange.start;
+    end = rawRange.end;
+  }
+  let mappedScales = scales;
+  if (sourceMap && !sourceMap.isEmpty() && scales) {
+    mappedScales = {
+      glyph: sourceMap.projectRangeToRaw(scales.glyph.start, scales.glyph.end),
+      atom: sourceMap.projectRangeToRaw(scales.atom.start, scales.atom.end),
+      slot: sourceMap.projectRangeToRaw(scales.slot.start, scales.slot.end),
+      molecule: sourceMap.projectRangeToRaw(scales.molecule.start, scales.molecule.end),
+      enclosure: sourceMap.projectRangeToRaw(scales.enclosure.start, scales.enclosure.end),
+    };
+  }
+  if (start >= 0 && end >= start) {
+    const isLineContainer = typeof (el as any).matches === "function" && (el as any).matches("mjx-linebox, mjx-linestack");
+    if (isLineContainer) {
+      el.classList.add(`cm-cell-${start}-${end}`);
+    } else {
+      el.classList.add(`cm-src-${start}-${end}`);
+    }
     indexMathJaxElement(el, {
       start,
       end,
-      kind,
+      kind: isLineContainer ? "line" : kind,
       coord,
-      scales,
+      scales: mappedScales,
     });
     return true;
   }
@@ -493,7 +698,7 @@ function stampQuaternionElement(
 /**
  * Propagates stamp classes and coordinate metadata down to leaf glyph elements (<mjx-c>).
  */
-function stampChildGlyphs(el: Element, range: QuaternionResolvedRange): void {
+function stampChildGlyphs(el: Element, range: QuaternionResolvedRange, sourceMap?: DesugarSourceMap): void {
   // Never propagate to child glyphs if the parent leaf failed the Final Verification Gate
   const parentRange = getMathJaxElementRange(el);
   if (!parentRange || parentRange.start !== range.start || parentRange.end !== range.end) {
@@ -508,21 +713,27 @@ function stampChildGlyphs(el: Element, range: QuaternionResolvedRange): void {
     stampQuaternionElement(glyph, {
       ...range,
       coord: glyphCoord,
-    });
+    }, sourceMap);
   }
 }
 
 export class QuaternionSpatialReconciler {
   private readonly latex: string;
+  private readonly sourceMap?: DesugarSourceMap;
   private readonly formulaSpan: { start: number; end: number };
   private moleculeCounter = 0;
   private readonly basePlaneMap = new Map<CSTNode, number>();
   /** Tracks every CSTNode consumed and bound by Engine A so Engine B never re-consumes it onto later DOM leaves. */
   public readonly reconciledNodes = new Set<CSTNode>();
 
-  constructor(latex: string) {
+  constructor(latex: string, sourceMap?: DesugarSourceMap) {
     this.latex = latex;
+    this.sourceMap = sourceMap;
     this.formulaSpan = { start: 0, end: latex.length };
+  }
+
+  private stampElement(el: Element, range: QuaternionResolvedRange): boolean {
+    return stampQuaternionElement(el, range, this.sourceMap);
   }
 
   /**
@@ -674,21 +885,29 @@ export class QuaternionSpatialReconciler {
 
       switch (node.kind) {
         case "fraction": {
-          this.reconcileFraction(slotEl, node, activeZ, activeY, sequenceX, slotContext);
+          this.reconcileFraction(slotEl, node, activeZ, activeY, sequenceX, slotContext, excludeSet);
           sequenceX++;
           break;
         }
 
         case "underover": {
-          this.reconcileUnderOver(slotEl, node, activeZ, activeY, sequenceX, slotContext);
+          this.reconcileUnderOver(slotEl, node, activeZ, activeY, sequenceX, slotContext, excludeSet);
           sequenceX++;
           break;
         }
 
         case "command": {
           if (node.name === "\\sqrt") {
-            const consumed = this.reconcileRoot(slotEl, node, nodes, i, activeZ, activeY, sequenceX, slotContext);
+            const consumed = this.reconcileRoot(slotEl, node, nodes, i, activeZ, activeY, sequenceX, slotContext, excludeSet);
             i += consumed;
+            sequenceX++;
+          } else if (tryExtractBinomFraction(nodes, i)) {
+            const binom = tryExtractBinomFraction(nodes, i)!;
+            this.reconciledNodes.add(node);
+            this.reconciledNodes.add(nodes[i + 1]);
+            this.reconciledNodes.add(nodes[i + 2]);
+            this.reconcileFraction(slotEl, binom.fracNode, activeZ, activeY, sequenceX, slotContext, excludeSet);
+            i += binom.consumed;
             sequenceX++;
           } else if (
             SPACING_COMMANDS.has(node.name) ||
@@ -712,14 +931,20 @@ export class QuaternionSpatialReconciler {
               break;
             }
             // Spacing commands generate <mjx-mspace> or are purely layout whitespace
-            const spaceEls = Array.from(slotEl.querySelectorAll("mjx-mspace")).filter(
-              (el) => !el.classList.contains("cm-tensor-reconciled") && isElementInSlotScope(el, slotEl) && (!excludeSet || !excludeSet.has(el))
-            );
-            if (spaceEls.length > 0) {
-              const sEl = spaceEls[0];
+            const nextSpaceCand = getNextSlotItem(slotEl, excludeSet);
+            const sEl =
+              nextSpaceCand && matchesSelector(nextSpaceCand, "mjx-mspace")
+                ? nextSpaceCand
+                : Array.from(slotEl.querySelectorAll("mjx-mspace")).find(
+                    (el) =>
+                      !el.classList.contains("cm-tensor-reconciled") &&
+                      isElementInSlotScope(el, slotEl) &&
+                      (!excludeSet || !excludeSet.has(el))
+                  );
+            if (sEl) {
               sEl.classList.add("cm-tensor-reconciled");
               this.reconciledNodes.add(node);
-              stampQuaternionElement(sEl, {
+              this.stampElement(sEl, {
                 start: node.start,
                 end: node.end,
                 kind: "leaf",
@@ -735,32 +960,58 @@ export class QuaternionSpatialReconciler {
             }
           } else {
             // Leaf command symbol (\alpha, \sin, \sum, \int, etc.)
-            // If font command followed by argument group, fuse into single leaf
-            if (FONT_ACCENT_COMMANDS.has(node.name) && i + 1 < nodes.length && nodes[i + 1].kind === "group") {
+            // If font command followed by bare_brace argument group, fuse into single leaf
+            if (
+              FONT_ACCENT_COMMANDS.has(node.name) &&
+              i + 1 < nodes.length &&
+              nodes[i + 1].kind === "group" &&
+              (nodes[i + 1] as GroupNode).delimType === "bare_brace"
+            ) {
               const groupArg = nodes[i + 1] as GroupNode;
-              const fusedText = this.latex
-                ? this.latex.slice(node.start, groupArg.end)
-                : `${node.name}{}`;
-              const fusedNode: CSTNode = {
-                kind: node.name === "\\text" ? "text" : "identifier",
-                start: node.start,
-                end: groupArg.end,
-                text: fusedText,
-              };
-              this.reconciledNodes.add(node);
-              this.reconciledNodes.add(groupArg);
-              for (const gc of groupArg.children) {
-                this.reconciledNodes.add(gc);
-              }
-              if (i + 2 < nodes.length && nodes[i + 2].kind === "script" && (nodes[i + 2] as ScriptNode).base === groupArg) {
-                (nodes[i + 2] as ScriptNode).base = fusedNode;
-                i++; // skip groupArg; next iteration reconciles ScriptNode with fusedNode as base
+              const { hasStructuralChild: shouldReconcileChildren, isCompoundAccent } =
+                analyzeFontAccentGroup(node.name, groupArg);
+              if (shouldReconcileChildren) {
+                const mstyleEl = Array.from(slotEl.children).find(
+                  (c) => (matchesSelector(c, "mjx-texatom") || matchesSelector(c, "mjx-mstyle") || matchesSelector(c, "mjx-mrow")) && !c.classList.contains("cm-tensor-reconciled")
+                ) || Array.from(slotEl.querySelectorAll("mjx-texatom, mjx-mstyle, mjx-mrow")).find(
+                  (c) => !c.classList.contains("cm-tensor-reconciled") && isElementInSlotScope(c, slotEl)
+                );
+                const targetContainer = mstyleEl || slotEl;
+                if (mstyleEl) mstyleEl.classList.add("cm-tensor-reconciled");
+                this.reconciledNodes.add(node);
+                this.reconciledNodes.add(groupArg);
+                this.reconcileSlot(targetContainer, groupArg.children, activeZ, activeY, slotContext, sequenceX, excludeSet);
+                i++;
+                sequenceX += Math.max(1, groupArg.children.length);
                 break;
               }
-              this.stampMatchingLeaf(slotEl, fusedNode, activeZ, activeY, sequenceX, slotSpan, slotContext, excludeSet);
-              sequenceX++;
-              i++; // will increment once more at loop end => advances by 2
-              break;
+              if (!isCompoundAccent) {
+                const fusedText = this.latex
+                  ? this.latex.slice(node.start, groupArg.end)
+                  : `${node.name}{}`;
+                const fusedNode: CSTNode = {
+                  kind: node.name === "\\text" ? "text" : "identifier",
+                  start: node.start,
+                  end: groupArg.end,
+                  text: fusedText,
+                  prevLeaf: node.prevLeaf,
+                  nextLeaf: groupArg.children.length > 0 ? groupArg.children[groupArg.children.length - 1].nextLeaf : node.nextLeaf,
+                };
+                this.reconciledNodes.add(node);
+                this.reconciledNodes.add(groupArg);
+                for (const gc of groupArg.children) {
+                  this.reconciledNodes.add(gc);
+                }
+                if (i + 2 < nodes.length && nodes[i + 2].kind === "script" && (nodes[i + 2] as ScriptNode).base === groupArg) {
+                  (nodes[i + 2] as ScriptNode).base = fusedNode;
+                  i++; // skip groupArg; next iteration reconciles ScriptNode with fusedNode as base
+                  break;
+                }
+                this.stampMatchingLeaf(slotEl, fusedNode, activeZ, activeY, sequenceX, slotSpan, slotContext, excludeSet);
+                sequenceX++;
+                i++; // will increment once more at loop end => advances by 2
+                break;
+              }
             }
 
             // If this node is the base of an immediately following script, defer to reconcileScript
@@ -774,24 +1025,56 @@ export class QuaternionSpatialReconciler {
         }
 
         case "script": {
-          this.reconcileScript(slotEl, node, activeZ, activeY, sequenceX, slotContext);
+          this.reconcileScript(slotEl, node, activeZ, activeY, sequenceX, slotContext, excludeSet);
           sequenceX++;
           break;
         }
 
         case "group": {
-          // Defer to reconcileScript ONLY if the DOM actually wraps this group in an <mjx-mrow> inside the next script container
-          if (i + 1 < nodes.length && nodes[i + 1].kind === "script" && (nodes[i + 1] as ScriptNode).base === node) {
+          // Typst-style font shortcuts: bb(bb), bold(bold), cal(...), frak(...), scr(...)
+          // fuse into a single atomic leaf if they contain no 2D structural children
+          if (node.rawPrefix && FONT_ACCENT_COMMANDS.has(node.rawPrefix)) {
+            const { hasStructuralChild: shouldReconcileChildren } = analyzeFontAccentGroup(node.rawPrefix, node);
+            if (!shouldReconcileChildren) {
+              const fusedNode: CSTNode = {
+                kind: node.rawPrefix === "\\text" ? "text" : "identifier",
+                start: node.start,
+                end: node.end,
+                text: this.latex ? this.latex.slice(node.start, node.end) : node.rawPrefix,
+                prevLeaf: node.prevLeaf,
+                nextLeaf: node.nextLeaf,
+              };
+              this.reconciledNodes.add(node);
+              for (const gc of node.children) {
+                this.reconciledNodes.add(gc);
+              }
+              this.stampMatchingLeaf(slotEl, fusedNode, activeZ, activeY, sequenceX, slotSpan, slotContext, excludeSet);
+              sequenceX++;
+              break;
+            }
+          }
+
+          // Defer to reconcileScript ONLY if this group does not already own internal evaluation/norm limits
+          // and the DOM actually wraps this group in an <mjx-mrow> inside the next script container
+          const hasInternalGroupLimits =
+            (Array.isArray((node as any).normLimits) && (node as any).normLimits.length > 0) ||
+            (Array.isArray((node as any).evaluationLimits) && (node as any).evaluationLimits.length > 0);
+          if (
+            !hasInternalGroupLimits &&
+            i + 1 < nodes.length &&
+            nodes[i + 1].kind === "script" &&
+            (nodes[i + 1] as ScriptNode).base === node
+          ) {
             const nextItem = getNextSlotItem(slotEl, excludeSet);
             if (nextItem && matchesSelector(nextItem, "mjx-msup, mjx-msub, mjx-msubsup, mjx-munderover, mjx-munder, mjx-mover")) {
-              const rawB = findDirectScriptBase(nextItem);
-              const bEl = rawB && matchesSelector(rawB, "mjx-base") && rawB.firstElementChild ? rawB.firstElementChild : rawB;
+              const bEl = unwrapScriptBase(findDirectScriptBase(nextItem));
               if (bEl && matchesSelector(bEl, "mjx-mrow")) {
                 break;
               }
             }
           }
-          this.reconcileGroup(slotEl, node, activeZ, activeY, sequenceX, slotContext);
+          this.reconciledNodes.add(node);
+          this.reconcileGroup(slotEl, node, activeZ, activeY, sequenceX, slotContext, excludeSet);
           sequenceX++;
           break;
         }
@@ -802,6 +1085,37 @@ export class QuaternionSpatialReconciler {
         case "operator":
         case "punctuation":
         case "boundary": {
+          // Fuse three consecutive periods '...' into a single horizontal ellipsis leaf '…' (U+2026)
+          const isPeriod = (n: CSTNode | undefined): boolean => {
+            if (!n) return false;
+            return (
+              (n.kind === "punctuation" && (n as any).char === ".") ||
+              (n.kind === "identifier" && (n as any).text === ".") ||
+              (n.kind === "operator" && (n as any).text === ".")
+            );
+          };
+
+          if (isPeriod(node) && i + 2 < nodes.length && isPeriod(nodes[i + 1]) && isPeriod(nodes[i + 2])) {
+            let lastPeriodIdx = i + 2;
+            while (lastPeriodIdx + 1 < nodes.length && isPeriod(nodes[lastPeriodIdx + 1])) {
+              lastPeriodIdx++;
+            }
+            const fusedEllipsis: CSTNode = {
+              kind: "operator",
+              operatorType: "binary",
+              start: node.start,
+              end: nodes[lastPeriodIdx].end,
+              text: "...",
+            };
+            for (let pIdx = i; pIdx <= lastPeriodIdx; pIdx++) {
+              this.reconciledNodes.add(nodes[pIdx]);
+            }
+            this.stampMatchingLeaf(slotEl, fusedEllipsis, activeZ, activeY, sequenceX, slotSpan, slotContext, excludeSet);
+            sequenceX++;
+            i = lastPeriodIdx;
+            break;
+          }
+
           // Layout alignment delimiters (&) produce zero DOM leaf elements in MathJax CHTML
           if (
             (node.kind === "punctuation" && (node as any).char === "&") ||
@@ -837,7 +1151,8 @@ export class QuaternionSpatialReconciler {
     z: number,
     parentY: number,
     parentX: number,
-    context: MultiScaleContext
+    context: MultiScaleContext,
+    excludeSet?: ReadonlySet<Element>
   ): void {
     // In TeX/MathJax CHTML, `{num}/{den}` (node.isInfixSlash === true) renders inline on the baseline
     // (`num`, `<mjx-mo>/</mjx-mo>`, `den`) when unnormalized, or inside `<mjx-frac>`/`<mjx-mfrac>` when normalized to `\frac{num}{den}`.
@@ -846,13 +1161,14 @@ export class QuaternionSpatialReconciler {
         parentEl.querySelectorAll("mjx-frac, mjx-mfrac, mjx-mo")
       ).filter((el) => {
         if (el.classList.contains("cm-tensor-reconciled")) return false;
+        if (excludeSet && excludeSet.has(el)) return false;
         if (!isElementInSlotScope(el, parentEl)) return false;
         if (matchesSelector(el, "mjx-frac, mjx-mfrac")) return true;
         return getElementText(el) === "/";
       });
       const firstCand = fracOrSlashCandidates[0];
       if (!firstCand || matchesSelector(firstCand, "mjx-mo")) {
-        this.reconcileSlot(parentEl, node.numerator, z, parentY, context, parentX);
+        this.reconcileSlot(parentEl, node.numerator, z, parentY, context, parentX, excludeSet);
         const numEnd = node.numerator.length > 0 ? node.numerator[node.numerator.length - 1].end : node.start;
         const denStart = node.denominator.length > 0 ? node.denominator[0].start : node.end;
         const betweenSlice = this.latex ? this.latex.slice(numEnd, denStart) : "/";
@@ -864,31 +1180,109 @@ export class QuaternionSpatialReconciler {
           end: slashStart + 1,
           text: "/",
         };
-        this.stampMatchingLeaf(parentEl, slashNode, z, parentY, parentX + 1, context.slot, context);
-        this.reconcileSlot(parentEl, node.denominator, z, parentY, context, parentX + 2);
+        this.stampMatchingLeaf(parentEl, slashNode, z, parentY, parentX + 1, context.slot, context, excludeSet);
+        this.reconcileSlot(parentEl, node.denominator, z, parentY, context, parentX + 2, excludeSet);
         return;
       }
     }
 
-    // Locate the corresponding <mjx-frac> (or <mjx-mfrac> fallback) in this parent
-    let fracEls = Array.from(parentEl.querySelectorAll("mjx-frac")).filter(
-      (el) => !el.classList.contains("cm-tensor-reconciled")
+    const isBinom = Boolean(
+      node.command &&
+      (node.command === "\\binom" || node.command === "\\dbinom" || node.command === "\\tbinom" || node.command === "binom")
     );
-    if (fracEls.length === 0) {
-      fracEls = Array.from(parentEl.querySelectorAll("mjx-mfrac")).filter(
-        (el) => !el.classList.contains("cm-tensor-reconciled")
-      );
-    }
-    if (fracEls.length === 0) return;
 
-    const fracEl = fracEls[0];
+    // Locate the corresponding <mjx-frac> (or <mjx-mfrac> fallback) in this parent
+    const isFracInSlotScope = (el: Element): boolean => {
+      if (el.classList.contains("cm-tensor-reconciled") || (excludeSet && excludeSet.has(el))) return false;
+      let curr = el.parentElement;
+      while (curr && curr !== parentEl) {
+        if (matchesSelector(curr, "mjx-mfrac, mjx-frac, mjx-num, mjx-den")) {
+          return false;
+        }
+        if (tagMatchesMask(getTagIdFromNodeName(curr.tagName), MASK_SLOT_CONTAINERS)) {
+          return false;
+        }
+        curr = curr.parentElement;
+      }
+      return curr === parentEl;
+    };
+    const allFracs = Array.from(parentEl.querySelectorAll("mjx-mfrac, mjx-frac")).filter((el) => {
+      if (el.classList.contains("cm-tensor-reconciled") || (excludeSet && excludeSet.has(el))) return false;
+      // Keep only top-level fraction containers (avoid duplicate mjx-frac inside mjx-mfrac)
+      if (matchesSelector(el, "mjx-frac") && el.parentElement && matchesSelector(el.parentElement, "mjx-mfrac")) {
+        return false;
+      }
+      return isFracInSlotScope(el);
+    });
+
+    const isAtop = (el: Element): boolean => {
+      const frac = matchesSelector(el, "mjx-frac") ? el : el.querySelector("mjx-frac");
+      if (!frac) return false;
+      const getAttr = (target: any, name: string): string | null => {
+        if (!target) return null;
+        if (typeof target.getAttribute === "function") {
+          const val: unknown = target.getAttribute(name);
+          return typeof val === "string" ? val : null;
+        }
+        if (target.attributes && target.attributes[name]) {
+          const val: unknown = target.attributes[name];
+          return typeof val === "string" ? val : null;
+        }
+        return null;
+      };
+      return (
+        getAttr(frac, "atop") === "true" ||
+        (frac.classList && typeof frac.classList.contains === "function" && frac.classList.contains("mjx-atop")) ||
+        getAttr(el, "atop") === "true"
+      );
+    };
+
+    // Score candidates based on binom/atop status, text compatibility, and position
+    const numExpected = node.numerator.map((n) => getExpectedLeafNodeText(n, this.latex)).join("");
+    const denExpected = node.denominator.map((n) => getExpectedLeafNodeText(n, this.latex)).join("");
+
+    const scoreFrac = (el: Element, idx: number): number => {
+      let score = 50 - idx; // Sequential order preference
+      const elAtop = isAtop(el);
+      if (isBinom) {
+        if (elAtop) score += 40;
+        else score -= 30;
+      } else {
+        if (!elAtop) score += 40;
+        else score -= 40;
+      }
+
+      const numEl = el.querySelector("mjx-num");
+      const denEl = el.querySelector("mjx-den");
+      if (numEl && numExpected) {
+        const numText = getElementText(numEl);
+        if (numText && (numText.includes(numExpected) || numExpected.includes(numText))) {
+          score += 25;
+        }
+      }
+      if (denEl && denExpected) {
+        const denText = getElementText(denEl);
+        if (denText && (denText.includes(denExpected) || denExpected.includes(denText))) {
+          score += 25;
+        }
+      }
+      return score;
+    };
+
+    const scoredFracs = allFracs.map((el, idx) => ({ el, score: scoreFrac(el, idx) }));
+    scoredFracs.sort((a, b) => b.score - a.score);
+    const fracEl = scoredFracs.length > 0 ? scoredFracs[0].el : null;
+    if (!fracEl) return;
+
     fracEl.classList.add("cm-tensor-reconciled");
     if (fracEl.parentElement && matchesSelector(fracEl.parentElement, "mjx-mfrac")) {
       fracEl.parentElement.classList.add("cm-tensor-reconciled");
     }
-    const innerFrac = fracEl.querySelector("mjx-frac");
-    if (innerFrac) {
-      innerFrac.classList.add("cm-tensor-reconciled");
+    if (matchesSelector(fracEl, "mjx-mfrac")) {
+      const directChildFrac = Array.from(fracEl.children).find((c) => matchesSelector(c, "mjx-frac"));
+      if (directChildFrac) {
+        directChildFrac.classList.add("cm-tensor-reconciled");
+      }
     }
 
     const moleculeSpan = { start: node.start, end: node.end };
@@ -902,7 +1296,7 @@ export class QuaternionSpatialReconciler {
     const denSelector = expectedDenTag ? `${getTagName(expectedDenTag)}, mjx-den` : "mjx-den";
 
     // Stamp the entire fraction molecule (W = 3)
-    stampQuaternionElement(fracEl, {
+    this.stampElement(fracEl, {
       start: node.start,
       end: node.end,
       kind: "fraction",
@@ -917,26 +1311,26 @@ export class QuaternionSpatialReconciler {
     });
 
     const unwrapFractionSlot = (slotEl: Element, slotRange: QuaternionResolvedRange): Element => {
-      // In TeX/MathJax CHTML, \cfrac{num}{den} wraps <mjx-num> and <mjx-den> contents in:
-      // <mjx-mrow> -> (<mjx-mpadded> strut, <mjx-texatom> actual slot children)
-      const directMrows = Array.from(slotEl.children).filter((c) => matchesSelector(c, "mjx-mrow"));
-      if (directMrows.length === 1) {
-        const mrow = directMrows[0];
-        const hasStrut = Array.from(mrow.children).some((c) => matchesSelector(c, "mjx-mpadded"));
-        if (hasStrut) {
-          mrow.classList.add("cm-tensor-reconciled");
-          stampQuaternionElement(mrow, slotRange);
-          for (const mp of Array.from(mrow.querySelectorAll("mjx-mpadded, mjx-mpadded *"))) {
-            mp.classList.add("cm-tensor-reconciled");
-          }
-          const nonStrutChildren = Array.from(mrow.children).filter((c) => !matchesSelector(c, "mjx-mpadded"));
-          if (nonStrutChildren.length === 1 && matchesSelector(nonStrutChildren[0], "mjx-texatom, mjx-mstyle, mjx-mrow")) {
-            nonStrutChildren[0].classList.add("cm-tensor-reconciled");
-            stampQuaternionElement(nonStrutChildren[0], slotRange);
-            return nonStrutChildren[0];
-          }
-          return mrow;
+      // In TeX/MathJax CHTML, \frac and \cfrac wrap <mjx-num> and <mjx-den> contents in:
+      // a single <mjx-mrow> alongside struts (<mjx-nstrut>, <mjx-dstrut>, or <mjx-mpadded>).
+      // If there are other content elements alongside <mjx-mrow>, the slot is already unwrapped.
+      const directNonStrutChildren = Array.from(slotEl.children).filter(
+        (c) => !matchesSelector(c, "mjx-mpadded, mjx-nstrut, mjx-dstrut")
+      );
+      if (directNonStrutChildren.length === 1 && matchesSelector(directNonStrutChildren[0], "mjx-mrow")) {
+        const mrow = directNonStrutChildren[0];
+        mrow.classList.add("cm-tensor-reconciled");
+        this.stampElement(mrow, slotRange);
+        for (const strut of Array.from(slotEl.querySelectorAll("mjx-mpadded, mjx-nstrut, mjx-dstrut"))) {
+          strut.classList.add("cm-tensor-reconciled");
         }
+        const innerNonStrutChildren = Array.from(mrow.children).filter((c) => !matchesSelector(c, "mjx-mpadded, mjx-nstrut, mjx-dstrut"));
+        if (innerNonStrutChildren.length === 1 && matchesSelector(innerNonStrutChildren[0], "mjx-texatom, mjx-mrow")) {
+          innerNonStrutChildren[0].classList.add("cm-tensor-reconciled");
+          this.stampElement(innerNonStrutChildren[0], slotRange);
+          return innerNonStrutChildren[0];
+        }
+        return mrow;
       }
       return slotEl;
     };
@@ -946,7 +1340,12 @@ export class QuaternionSpatialReconciler {
       Array.from(fracEl.children).find((c) => matchesSelector(c, numSelector)) ||
       fracEl.querySelector(numSelector);
     if (numEl) {
-      const numSpan = getNodeListSpan(node.numerator) || moleculeSpan;
+      let numSpan = getNodeListSpan(node.numerator);
+      if (!numSpan) {
+        const cmdLen = node.command ? node.command.length : 5;
+        const insertPos = Math.min(node.end, node.start + cmdLen + 1);
+        numSpan = { start: insertPos, end: insertPos };
+      }
       const numRange: QuaternionResolvedRange = {
         start: numSpan.start,
         end: numSpan.end,
@@ -960,7 +1359,12 @@ export class QuaternionSpatialReconciler {
           enclosure: context.enclosure,
         },
       };
-      stampQuaternionElement(numEl, numRange);
+      this.stampElement(numEl, numRange);
+      if (node.numerator.length === 0) {
+        for (const ch of Array.from(numEl.querySelectorAll("*"))) {
+          this.stampElement(ch, numRange);
+        }
+      }
       const numContext: MultiScaleContext = {
         slot: numSpan,
         molecule: moleculeSpan,
@@ -977,7 +1381,7 @@ export class QuaternionSpatialReconciler {
       Array.from(fracEl.querySelectorAll(denSelector)).find((cand) => !elementContains(numEl, cand)) ||
       fracEl.querySelector(denSelector);
     if (denEl) {
-      const denSpan = getNodeListSpan(node.denominator) || moleculeSpan;
+      const denSpan = getNodeListSpan(node.denominator) || { start: node.end, end: node.end };
       const denRange: QuaternionResolvedRange = {
         start: denSpan.start,
         end: denSpan.end,
@@ -991,7 +1395,12 @@ export class QuaternionSpatialReconciler {
           enclosure: context.enclosure,
         },
       };
-      stampQuaternionElement(denEl, denRange);
+      this.stampElement(denEl, denRange);
+      if (node.denominator.length === 0) {
+        for (const ch of Array.from(denEl.querySelectorAll("*"))) {
+          this.stampElement(ch, denRange);
+        }
+      }
       const denContext: MultiScaleContext = {
         slot: denSpan,
         molecule: moleculeSpan,
@@ -999,6 +1408,64 @@ export class QuaternionSpatialReconciler {
       };
       const unwrappedDenEl = unwrapFractionSlot(denEl, denRange);
       this.reconcileSlot(unwrappedDenEl, node.denominator, fracZ, -1, denContext, 0);
+    }
+
+    // Synthetic fences: \binom, \dbinom, \tbinom produce outer ( and ) delimiters
+    if (node.command && (node.command === "\\binom" || node.command === "\\dbinom" || node.command === "\\tbinom" || node.command === "binom")) {
+      const mfracContainer = matchesSelector(fracEl, "mjx-mfrac") ? fracEl : (typeof fracEl.closest === "function" ? fracEl.closest("mjx-mfrac") : null);
+      if (mfracContainer) {
+        const cmdLength = node.command.length;
+        const cmdRange: QuaternionResolvedRange = {
+          start: node.start,
+          end: node.start + cmdLength,
+          kind: "leaf",
+          coord: { w: 1, z, y: parentY, x: parentX },
+          scales: {
+            glyph: { start: node.start, end: node.start + cmdLength },
+            atom: moleculeSpan,
+            slot: moleculeSpan,
+            molecule: moleculeSpan,
+            enclosure: context.enclosure,
+          },
+        };
+        const parentRow = mfracContainer.parentElement;
+        const siblings = parentRow ? Array.from(parentRow.children) : [];
+        const mfracIdx = siblings.indexOf(mfracContainer);
+        const prevSib: Element | null =
+          mfracIdx > 0
+            ? siblings[mfracIdx - 1] || null
+            : ((mfracContainer as { previousElementSibling?: Element | null }).previousElementSibling || null);
+        const openFence: Element | null = prevSib
+          ? matchesSelector(prevSib, "mjx-mo")
+            ? prevSib
+            : prevSib.querySelector("mjx-mo")
+          : null;
+        if (openFence && (getElementText(openFence) === "(" || getElementText(openFence) === "[")) {
+          openFence.classList.add("cm-tensor-reconciled");
+          this.stampElement(openFence, cmdRange);
+          if (prevSib && prevSib !== openFence) {
+            prevSib.classList.add("cm-tensor-reconciled");
+            this.stampElement(prevSib, cmdRange);
+          }
+        }
+        const nextSib: Element | null =
+          mfracIdx >= 0 && mfracIdx + 1 < siblings.length
+            ? siblings[mfracIdx + 1] || null
+            : ((mfracContainer as { nextElementSibling?: Element | null }).nextElementSibling || null);
+        const closeFence: Element | null = nextSib
+          ? matchesSelector(nextSib, "mjx-mo")
+            ? nextSib
+            : nextSib.querySelector("mjx-mo")
+          : null;
+        if (closeFence && (getElementText(closeFence) === ")" || getElementText(closeFence) === "]")) {
+          closeFence.classList.add("cm-tensor-reconciled");
+          this.stampElement(closeFence, cmdRange);
+          if (nextSib && nextSib !== closeFence) {
+            nextSib.classList.add("cm-tensor-reconciled");
+            this.stampElement(nextSib, cmdRange);
+          }
+        }
+      }
     }
   }
 
@@ -1013,16 +1480,22 @@ export class QuaternionSpatialReconciler {
     z: number,
     parentY: number,
     parentX: number,
-    context: MultiScaleContext
+    context: MultiScaleContext,
+    excludeSet?: ReadonlySet<Element>
   ): void {
     const isUnder = node.targetRole === "underscript";
     const selector = isUnder
       ? "mjx-munder, mjx-munderover, mjx-mover"
       : "mjx-mover, mjx-munderover, mjx-munder";
 
-    const uoEls = Array.from(parentEl.querySelectorAll(selector)).filter(
-      (el) => !el.classList.contains("cm-tensor-reconciled")
+    let uoEls = Array.from(parentEl.querySelectorAll(selector)).filter(
+      (el) => !el.classList.contains("cm-tensor-reconciled") && isScriptInSlotScope(el, parentEl) && (!excludeSet || !excludeSet.has(el))
     );
+    if (uoEls.length === 0) {
+      uoEls = Array.from(parentEl.querySelectorAll(selector)).filter(
+        (el) => !el.classList.contains("cm-tensor-reconciled") && (!excludeSet || !excludeSet.has(el))
+      );
+    }
     if (uoEls.length === 0) return;
 
     const uoEl = uoEls[0];
@@ -1032,7 +1505,7 @@ export class QuaternionSpatialReconciler {
     const uoZ = this.allocatePlaneZ();
 
     // Stamp the entire under/over molecule (W = 3)
-    stampQuaternionElement(uoEl, {
+    this.stampElement(uoEl, {
       start: node.start,
       end: node.end,
       kind: "underover",
@@ -1050,13 +1523,48 @@ export class QuaternionSpatialReconciler {
     const hasScript = node.script && node.script.length > 0;
 
     // Check if uoEl is a nested two-tier container (has an inner munder/mover in its base)
+    const directUoChildren = Array.from(uoEl.children);
     const baseEl =
-      uoEl.querySelector("mjx-base") ||
+      directUoChildren.find((c) => matchesSelector(c, "mjx-base, mjx-box")) ||
       (uoEl.firstElementChild && !matchesSelector(uoEl.firstElementChild, "mjx-under, mjx-over")
         ? uoEl.firstElementChild
         : null);
 
-    const innerUoEl = baseEl ? baseEl.querySelector(selector) : null;
+    const hasNestedUnderOver = node.base.some(
+      (c) =>
+        c.kind === "underover" ||
+        c.kind === "script" ||
+        (c.kind === "group" &&
+          c.children.some(
+            (gc) =>
+              gc.kind === "underover" ||
+              gc.kind === "script" ||
+              (gc.kind === "command" &&
+                (gc.name === "\\sum" ||
+                  gc.name === "\\prod" ||
+                  gc.name === "\\coprod" ||
+                  gc.name === "\\bigcup" ||
+                  gc.name === "\\bigcap" ||
+                  gc.name === "\\lim"))
+          )) ||
+        (c.kind === "command" && (c.name === "\\sum" || c.name === "\\prod" || c.name === "\\coprod" || c.name === "\\bigcup" || c.name === "\\bigcap" || c.name === "\\lim"))
+    );
+    const rawInnerUoEl = !hasNestedUnderOver && baseEl ? baseEl.querySelector(selector) : null;
+    const innerUoEl =
+      rawInnerUoEl &&
+      baseEl &&
+      (() => {
+        let curr = rawInnerUoEl.parentElement;
+        while (curr && curr !== baseEl) {
+          if (matchesSelector(curr, "mjx-mrow, mjx-script, mjx-under, mjx-over, mjx-num, mjx-den, mjx-mtable")) {
+            return false;
+          }
+          curr = curr.parentElement;
+        }
+        return curr === baseEl;
+      })()
+        ? rawInnerUoEl
+        : null;
 
     if (hasScript && innerUoEl) {
       // ---------------------------------------------------------
@@ -1082,7 +1590,7 @@ export class QuaternionSpatialReconciler {
           molecule: moleculeSpan,
           enclosure: context.enclosure,
         };
-        stampQuaternionElement(outerScriptContainer, {
+        this.stampElement(outerScriptContainer, {
           start: scriptSpan.start,
           end: scriptSpan.end,
           kind: "script",
@@ -1099,13 +1607,17 @@ export class QuaternionSpatialReconciler {
       }
 
       // 2. Reconcile Inner Molecule's Base: Y = 0, Z = innerZ
-      const innerBase =
+      const rawInnerBase =
         innerUoEl.querySelector("mjx-base") ||
         (innerUoEl.firstElementChild && !matchesSelector(innerUoEl.firstElementChild, "mjx-under, mjx-over")
           ? innerUoEl.firstElementChild
           : null);
+      const innerBase = unwrapUnderOverBase(rawInnerBase);
 
       if (innerBase && node.base.length > 0) {
+        if (rawInnerBase && rawInnerBase !== innerBase) {
+          rawInnerBase.classList.add("cm-tensor-reconciled");
+        }
         innerBase.classList.add("cm-tensor-reconciled");
         const baseSpan = getNodeListSpan(node.base) || { start: node.baseStart, end: node.baseEnd };
         const baseContext: MultiScaleContext = {
@@ -1113,10 +1625,10 @@ export class QuaternionSpatialReconciler {
           molecule: moleculeSpan,
           enclosure: context.enclosure,
         };
-        stampQuaternionElement(innerBase, {
+        this.stampElement(innerBase, {
           start: baseSpan.start,
           end: baseSpan.end,
-          kind: "leaf",
+          kind: "slot",
           coord: { w: 2, z: innerZ, y: 0, x: 0 },
           scales: {
             glyph: baseSpan,
@@ -1152,13 +1664,13 @@ export class QuaternionSpatialReconciler {
               enclosure: context.enclosure,
             },
           };
-          stampQuaternionElement(braceGlyph, opRange);
+          this.stampElement(braceGlyph, opRange);
           stampChildGlyphs(braceGlyph, opRange);
           // Mark all internal stretchy parts as reconciled
           const stretchyParts = Array.from(braceGlyph.querySelectorAll("mjx-stretchy-h, mjx-stretchy-v, mjx-beg, mjx-ext, mjx-mid, mjx-end, mjx-spacer"));
           for (const sp of stretchyParts) {
             sp.classList.add("cm-tensor-reconciled");
-            stampQuaternionElement(sp, { ...opRange, coord: { ...opRange.coord, w: 0 } });
+            this.stampElement(sp, { ...opRange, coord: { ...opRange.coord, w: 0 } });
           }
         }
       }
@@ -1166,18 +1678,23 @@ export class QuaternionSpatialReconciler {
       // ---------------------------------------------------------
       // SINGLE-TIER MOLECULE (No Script or Flat Container)
       // ---------------------------------------------------------
-      if (baseEl && node.base.length > 0) {
-        baseEl.classList.add("cm-tensor-reconciled");
+      const effectiveBase = unwrapUnderOverBase(baseEl);
+
+      if (effectiveBase && node.base.length > 0) {
+        if (baseEl && baseEl !== effectiveBase) {
+          baseEl.classList.add("cm-tensor-reconciled");
+        }
+        effectiveBase.classList.add("cm-tensor-reconciled");
         const baseSpan = getNodeListSpan(node.base) || { start: node.baseStart, end: node.baseEnd };
         const baseContext: MultiScaleContext = {
           slot: baseSpan,
           molecule: moleculeSpan,
           enclosure: context.enclosure,
         };
-        stampQuaternionElement(baseEl, {
+        this.stampElement(effectiveBase, {
           start: baseSpan.start,
           end: baseSpan.end,
-          kind: "leaf",
+          kind: "slot",
           coord: { w: 2, z: uoZ, y: 0, x: 0 },
           scales: {
             glyph: baseSpan,
@@ -1187,12 +1704,12 @@ export class QuaternionSpatialReconciler {
             enclosure: context.enclosure,
           },
         });
-        this.reconcileSlot(baseEl, node.base, uoZ, 0, baseContext, 0);
+        this.reconcileSlot(effectiveBase, node.base, uoZ, 0, baseContext, 0);
       }
 
       const scriptContainer = isUnder
-        ? (uoEl.querySelector("mjx-under") || uoEl.lastElementChild)
-        : (uoEl.querySelector("mjx-over") || uoEl.lastElementChild);
+        ? (directUoChildren.find((c) => matchesSelector(c, "mjx-under")) || uoEl.lastElementChild)
+        : (directUoChildren.find((c) => matchesSelector(c, "mjx-over")) || uoEl.lastElementChild);
 
       if (scriptContainer) {
         scriptContainer.classList.add("cm-tensor-reconciled");
@@ -1222,12 +1739,12 @@ export class QuaternionSpatialReconciler {
               enclosure: context.enclosure,
             },
           };
-          stampQuaternionElement(braceGlyph, opRange);
+          this.stampElement(braceGlyph, opRange);
           stampChildGlyphs(braceGlyph, opRange);
           const stretchyParts = Array.from(braceGlyph.querySelectorAll("mjx-stretchy-h, mjx-stretchy-v, mjx-beg, mjx-ext, mjx-mid, mjx-end, mjx-spacer"));
           for (const sp of stretchyParts) {
             sp.classList.add("cm-tensor-reconciled");
-            stampQuaternionElement(sp, { ...opRange, coord: { ...opRange.coord, w: 0 } });
+            this.stampElement(sp, { ...opRange, coord: { ...opRange.coord, w: 0 } });
           }
         }
 
@@ -1246,7 +1763,7 @@ export class QuaternionSpatialReconciler {
             molecule: moleculeSpan,
             enclosure: context.enclosure,
           };
-          stampQuaternionElement(scriptEl, {
+          this.stampElement(scriptEl, {
             start: scriptSpan.start,
             end: scriptSpan.end,
             kind: "script",
@@ -1276,11 +1793,17 @@ export class QuaternionSpatialReconciler {
     z: number,
     parentY: number,
     parentX: number,
-    context: MultiScaleContext
+    context: MultiScaleContext,
+    excludeSet?: ReadonlySet<Element>
   ): number {
-    const rootEls = Array.from(parentEl.querySelectorAll("mjx-sqrt, mjx-mroot")).filter(
-      (el) => !el.classList.contains("cm-tensor-reconciled")
+    let rootEls = Array.from(parentEl.querySelectorAll("mjx-sqrt, mjx-mroot")).filter(
+      (el) => !el.classList.contains("cm-tensor-reconciled") && isScriptInSlotScope(el, parentEl) && (!excludeSet || !excludeSet.has(el))
     );
+    if (rootEls.length === 0) {
+      rootEls = Array.from(parentEl.querySelectorAll("mjx-sqrt, mjx-mroot")).filter(
+        (el) => !el.classList.contains("cm-tensor-reconciled") && (!excludeSet || !excludeSet.has(el))
+      );
+    }
     if (rootEls.length === 0) return 0;
 
     const rootEl = rootEls[0];
@@ -1329,7 +1852,7 @@ export class QuaternionSpatialReconciler {
     const rootZ = this.allocatePlaneZ();
 
     // Stamp root molecule (W = 3)
-    stampQuaternionElement(rootEl, {
+    this.stampElement(rootEl, {
       start: node.start,
       end,
       kind: "root",
@@ -1346,7 +1869,7 @@ export class QuaternionSpatialReconciler {
     // Checkmark / surd element
     const surdEl = rootEl.querySelector("mjx-surd");
     if (surdEl) {
-      stampQuaternionElement(surdEl, {
+      this.stampElement(surdEl, {
         start: node.start,
         end,
         kind: "root",
@@ -1377,7 +1900,7 @@ export class QuaternionSpatialReconciler {
         molecule: moleculeSpan,
         enclosure: context.enclosure,
       };
-      stampQuaternionElement(boxEl, {
+      this.stampElement(boxEl, {
         start: radSpan.start,
         end: radSpan.end,
         kind: "root",
@@ -1390,7 +1913,27 @@ export class QuaternionSpatialReconciler {
           enclosure: context.enclosure,
         },
       });
-      this.reconcileSlot(boxEl, radicandNodes, rootZ, 0, radContext, 0);
+      const unwrappedBoxEl =
+        boxEl.children.length === 1 && matchesSelector(boxEl.children[0], "mjx-mrow")
+          ? boxEl.children[0]
+          : boxEl;
+      if (unwrappedBoxEl !== boxEl) {
+        unwrappedBoxEl.classList.add("cm-tensor-reconciled");
+        this.stampElement(unwrappedBoxEl, {
+          start: radSpan.start,
+          end: radSpan.end,
+          kind: "root",
+          coord: { w: 2, z: rootZ, y: 0, x: 0 },
+          scales: {
+            glyph: radSpan,
+            atom: radSpan,
+            slot: radSpan,
+            molecule: moleculeSpan,
+            enclosure: context.enclosure,
+          },
+        });
+      }
+      this.reconcileSlot(unwrappedBoxEl, radicandNodes, rootZ, 0, radContext, 0);
     }
 
     // Indexed root degree: <mjx-root> at Z = rootZ, Y = +1
@@ -1400,12 +1943,7 @@ export class QuaternionSpatialReconciler {
       rootEl.querySelector(degSelector);
     if (degreeEl) {
       const degSpan = getNodeListSpan(degreeNodes) || degreeSpan || moleculeSpan;
-      const degContext: MultiScaleContext = {
-        slot: degSpan,
-        molecule: moleculeSpan,
-        enclosure: context.enclosure,
-      };
-      stampQuaternionElement(degreeEl, {
+      const degRange: QuaternionResolvedRange = {
         start: degSpan.start,
         end: degSpan.end,
         kind: "script",
@@ -1417,9 +1955,23 @@ export class QuaternionSpatialReconciler {
           molecule: moleculeSpan,
           enclosure: context.enclosure,
         },
-      });
+      };
+      this.stampElement(degreeEl, degRange);
       if (degreeNodes.length > 0) {
-        this.reconcileSlot(degreeEl, degreeNodes, rootZ, 1, degContext, 0);
+        const unwrappedDegEl =
+          degreeEl.children.length === 1 && matchesSelector(degreeEl.children[0], "mjx-mrow")
+            ? degreeEl.children[0]
+            : degreeEl;
+        if (unwrappedDegEl !== degreeEl) {
+          unwrappedDegEl.classList.add("cm-tensor-reconciled");
+          this.stampElement(unwrappedDegEl, degRange);
+        }
+        const degContext: MultiScaleContext = {
+          slot: degSpan,
+          molecule: moleculeSpan,
+          enclosure: context.enclosure,
+        };
+        this.reconcileSlot(unwrappedDegEl, degreeNodes, rootZ, 1, degContext, 0);
       }
     }
     return consumedCount;
@@ -1435,20 +1987,21 @@ export class QuaternionSpatialReconciler {
     z: number,
     parentY: number,
     parentX: number,
-    context: MultiScaleContext
+    context: MultiScaleContext,
+    excludeSet?: ReadonlySet<Element>
   ): void {
     const isSuper = node.scriptType === "superscript";
     const slotRoleY = isSuper ? 1 : -1;
 
     if (!node.base) {
-      const nextItem = getNextSlotItem(parentEl);
+      const nextItem = getNextSlotItem(parentEl, excludeSet);
       const isNextEmptyBaseScript =
         nextItem &&
         matchesSelector(nextItem, "mjx-msup, mjx-msub, mjx-msubsup") &&
         !getElementText(findDirectScriptBase(nextItem));
       if (!isNextEmptyBaseScript) {
         if (node.arg && node.arg.length > 0) {
-          this.reconcileSlot(parentEl, node.arg, z, slotRoleY, context, 0);
+          this.reconcileSlot(parentEl, node.arg, z, slotRoleY, context, 0, excludeSet);
         }
         return;
       }
@@ -1478,13 +2031,14 @@ export class QuaternionSpatialReconciler {
     });
 
     const scriptEls = candidates.filter((el) => {
+      if (excludeSet && excludeSet.has(el)) return false;
       if (el !== parentEl && !isScriptInSlotScope(el, parentEl)) return false;
       if (el !== parentEl && el.classList.contains("cm-tensor-reconciled")) return false;
       if (el.matches("mjx-msubsup")) {
         const scriptContainer =
           Array.from(el.children).find((c) => matchesSelector(c, "mjx-script")) ||
           el.querySelector("mjx-script");
-        const spacer = scriptContainer?.querySelector("mjx-spacer");
+        const spacer = scriptContainer ? Array.from(scriptContainer.children).find((c) => matchesSelector(c, "mjx-spacer")) : null;
         if (spacer && scriptContainer) {
           const scriptChildren = Array.from(scriptContainer.children);
           const spacerIdx = scriptChildren.indexOf(spacer);
@@ -1512,7 +2066,7 @@ export class QuaternionSpatialReconciler {
 
     if (scriptEls.length === 0) {
       if (!node.base && node.arg && node.arg.length > 0) {
-        this.reconcileSlot(parentEl, node.arg, z, slotRoleY, context, 0);
+        this.reconcileSlot(parentEl, node.arg, z, slotRoleY, context, 0, excludeSet);
       }
       return;
     }
@@ -1523,6 +2077,29 @@ export class QuaternionSpatialReconciler {
       anchorBase = anchorBase.base as CSTNode;
     }
 
+    if (
+      anchorBase &&
+      anchorBase.kind === "command" &&
+      (SPACING_COMMANDS.has(anchorBase.name) ||
+        anchorBase.name === "\\\\" ||
+        anchorBase.name === "\\cr" ||
+        anchorBase.name === "\\newline") &&
+      anchorBase.name !== "\\ " &&
+      anchorBase.name !== "\\"
+    ) {
+      const nextItem = getNextSlotItem(parentEl, excludeSet);
+      const isNextEmptyBaseScript =
+        nextItem &&
+        matchesSelector(nextItem, "mjx-msup, mjx-msub, mjx-msubsup") &&
+        !getElementText(findDirectScriptBase(nextItem));
+      if (!isNextEmptyBaseScript) {
+        if (node.arg && node.arg.length > 0) {
+          this.reconcileSlot(parentEl, node.arg, z, slotRoleY, context, 0, excludeSet);
+        }
+        return;
+      }
+    }
+
     // Exact CST-to-DOM Base Type Alignment:
     // 1. If node.base is a ScriptNode: DOM base child must be a script container (or cand is a dual-slot mjx-msubsup/mjx-munderover sharing anchorBase).
     // 2. If anchorBase is a GroupNode: DOM base child must be a group row container (mjx-mrow) or a closing delimiter mjx-mo already reconciled by reconcileGroup.
@@ -1531,11 +2108,11 @@ export class QuaternionSpatialReconciler {
     const isGroupBase = Boolean((node.base && node.base.kind === "group") || (anchorBase && anchorBase.kind === "group"));
 
     let scriptEl = scriptEls[0];
-    const expectedAnchorText = anchorBase && !isScriptBase && !isGroupBase ? this.getExpectedNodeText(anchorBase) : "";
+    const expectedAnchorText = anchorBase && !isGroupBase ? this.getExpectedNodeText(anchorBase) : "";
     const matchingCands = scriptEls.filter((cand) => {
       const rawB = findDirectScriptBase(cand);
       if (!rawB) return false;
-      const bEl = matchesSelector(rawB, "mjx-base") && rawB.firstElementChild ? rawB.firstElementChild : rawB;
+      const bEl = unwrapScriptBase(rawB);
       const isDualSlot = matchesSelector(cand, "mjx-msubsup, mjx-munderover");
       const hasInnerScriptEl = matchesSelector(bEl, "mjx-msup, mjx-msub, mjx-msubsup, mjx-munderover");
       if (hasInnerScriptEl && !bEl.classList.contains("cm-tensor-reconciled")) {
@@ -1544,19 +2121,24 @@ export class QuaternionSpatialReconciler {
       const isCandScriptBase = hasInnerScriptEl && bEl.classList.contains("cm-tensor-reconciled");
       const isCandGroupBase =
         matchesSelector(bEl, "mjx-mrow") ||
-        (matchesSelector(bEl, "mjx-mo") && (bEl.classList.contains("cm-tensor-reconciled") || rawB.classList.contains("cm-tensor-reconciled")));
+        (node.base &&
+          node.base.kind === "group" &&
+          (bEl.classList.contains("cm-tensor-reconciled") || rawB.classList.contains("cm-tensor-reconciled")));
       if (isScriptBase && !isDualSlot) return isCandScriptBase;
       if (isGroupBase) return isCandGroupBase;
       return !hasInnerScriptEl && !matchesSelector(bEl, "mjx-mrow");
     });
 
     if (matchingCands.length > 0) {
-      const textMatchedCand = expectedAnchorText
+      const textMatchedCand = anchorBase && !isGroupBase
         ? matchingCands.find((cand) => {
             const rawB = findDirectScriptBase(cand);
-            const bEl = rawB && matchesSelector(rawB, "mjx-base") && rawB.firstElementChild ? rawB.firstElementChild : rawB;
+            const bEl = unwrapScriptBase(rawB);
+            if (bEl && matchesSelector(bEl, "mjx-msup, mjx-msub, mjx-msubsup, mjx-munderover")) {
+              return true;
+            }
             const domB = bEl ? getElementText(bEl) : "";
-            return !domB || domB === expectedAnchorText;
+            return !domB || domB === expectedAnchorText || isLeafTextMatch(domB, anchorBase, this.latex);
           })
         : null;
       scriptEl = textMatchedCand || matchingCands[0];
@@ -1568,7 +2150,7 @@ export class QuaternionSpatialReconciler {
     const scriptZ = this.allocatePlaneZ(anchorBase);
 
     // Stamp script molecule container (W = 3)
-    stampQuaternionElement(scriptEl, {
+    this.stampElement(scriptEl, {
       start: moleculeSpan.start,
       end: moleculeSpan.end,
       kind: "script",
@@ -1585,20 +2167,18 @@ export class QuaternionSpatialReconciler {
     // Stamp the base token if present and not already a composite script container
     if (anchorBase) {
       const rawBaseEl = findDirectScriptBase(scriptEl);
-      const innerBaseEl =
-        rawBaseEl && matchesSelector(rawBaseEl, "mjx-base") && rawBaseEl.firstElementChild
-          ? rawBaseEl.firstElementChild
-          : rawBaseEl;
+      const innerBaseEl = unwrapScriptBase(rawBaseEl);
       const isCompositeScript =
         innerBaseEl &&
         (matchesSelector(innerBaseEl, "mjx-script, mjx-under, mjx-over, mjx-msup, mjx-msub, mjx-msubsup, mjx-munderover") ||
           (isScriptBase && matchesSelector(innerBaseEl, "mjx-munder, mjx-mover")));
-      if (rawBaseEl && innerBaseEl && !isCompositeScript && !innerBaseEl.classList.contains("cm-tensor-reconciled")) {
+      if (rawBaseEl && innerBaseEl && !isCompositeScript && !innerBaseEl.classList.contains("cm-tensor-reconciled") && !this.reconciledNodes.has(anchorBase)) {
         if (anchorBase.kind === "group") {
           if (rawBaseEl !== innerBaseEl) {
             rawBaseEl.classList.add("cm-tensor-reconciled");
           }
-          this.reconcileGroup(innerBaseEl, anchorBase, z, parentY, parentX, context);
+          this.reconciledNodes.add(anchorBase);
+          this.reconcileGroup(innerBaseEl, anchorBase, z, parentY, parentX, context, excludeSet);
         } else {
           // Final Unicode Gate on script base token before stamping
           const domBaseText = getElementText(innerBaseEl);
@@ -1630,19 +2210,50 @@ export class QuaternionSpatialReconciler {
                 enclosure: context.enclosure,
               },
             };
-            const stampedInner = stampQuaternionElement(innerBaseEl, baseLeafRange);
+            const moverParent =
+              (typeof rawBaseEl.closest === "function" ? rawBaseEl.closest("mjx-mover, mjx-munder") : null) ||
+              (typeof scriptEl.querySelector === "function" ? scriptEl.querySelector("mjx-mover, mjx-munder") : null);
+            const baseText = anchorBase.kind === "identifier" ? (anchorBase.text || "") : "";
+            const isAccentBase =
+              anchorBase.kind === "identifier" &&
+              /^(?:\\vec|\\overrightarrow|\\overleftarrow|\\hat|\\bar|\\tilde|\\dot|\\ddot|\\check)/.test(baseText);
+            if (moverParent && isAccentBase) {
+              const cmdMatch = baseText.match(/^(\\[a-zA-Z]+)\{/);
+              const cmdLen = cmdMatch ? cmdMatch[1].length : 4;
+              const overEl = moverParent.querySelector("mjx-over, mjx-under");
+              if (overEl) {
+                const cmdRange: QuaternionResolvedRange = {
+                  ...baseLeafRange,
+                  start: anchorBase.start,
+                  end: anchorBase.start + cmdLen,
+                  scales: { ...baseLeafRange.scales, glyph: { start: anchorBase.start, end: anchorBase.start + cmdLen } },
+                };
+                overEl.classList.add("cm-tensor-reconciled");
+                this.stampElement(overEl, cmdRange);
+                for (const mo of Array.from(overEl.querySelectorAll("mjx-mo, mjx-c"))) {
+                  mo.classList.add("cm-tensor-reconciled");
+                  this.stampElement(mo, cmdRange);
+                }
+              }
+              const baseStart = anchorBase.start + cmdLen + 1;
+              const baseEnd = Math.max(baseStart, anchorBase.end - 1);
+              baseLeafRange.start = baseStart;
+              baseLeafRange.end = baseEnd;
+              baseLeafRange.scales.glyph = { start: baseStart, end: baseEnd };
+            }
+            const stampedInner = this.stampElement(innerBaseEl, baseLeafRange);
             if (stampedInner) {
               rawBaseEl.classList.add("cm-tensor-reconciled");
               innerBaseEl.classList.add("cm-tensor-reconciled");
               this.reconciledNodes.add(anchorBase);
               if (innerBaseEl !== rawBaseEl) {
-                stampQuaternionElement(rawBaseEl, baseLeafRange);
+                this.stampElement(rawBaseEl, baseLeafRange);
               }
               const descEls = Array.from(
                 innerBaseEl.querySelectorAll("mjx-mi, mjx-mn, mjx-mo, mjx-mtext, mjx-over, mjx-under, mjx-base, mjx-box")
               );
               for (const dEl of descEls) {
-                if (stampQuaternionElement(dEl, baseLeafRange)) {
+                if (this.stampElement(dEl, baseLeafRange)) {
                   dEl.classList.add("cm-tensor-reconciled");
                 }
               }
@@ -1661,7 +2272,7 @@ export class QuaternionSpatialReconciler {
 
     if (scriptEl.matches("mjx-msubsup")) {
       const scriptContainer = directChildren.find((c) => matchesSelector(c, "mjx-script")) || scriptEl.querySelector("mjx-script");
-      const spacer = scriptContainer?.querySelector("mjx-spacer");
+      const spacer = scriptContainer ? Array.from(scriptContainer.children).find((c) => matchesSelector(c, "mjx-spacer")) : null;
       if (spacer && scriptContainer) {
         // MathJax 4: <mjx-script> contains superscript before spacer, subscript after spacer
         const scriptChildren = Array.from(scriptContainer.children);
@@ -1682,13 +2293,13 @@ export class QuaternionSpatialReconciler {
             targetEls.length === 1 &&
             !matchesSelector(
               targetEls[0],
-              "mjx-mi, mjx-mn, mjx-mo, mjx-mtext, mjx-msub, mjx-msup, mjx-msubsup, mjx-munder, mjx-mover, mjx-munderover, mjx-mfrac, mjx-frac, mjx-sqrt, mjx-mroot"
+              "mjx-mi, mjx-mn, mjx-mo, mjx-mtext, mjx-msub, mjx-msup, mjx-msubsup, mjx-munder, mjx-mover, mjx-munderover, mjx-mfrac, mjx-frac, mjx-sqrt, mjx-mroot, mjx-mtable, mjx-table, mjx-itable, mjx-linestack, mjx-linebox"
             )
           ) {
             // Complex wrapper element (e.g. mjx-texatom, mjx-mrow)
             targetScriptEl = targetEls[0];
             targetScriptEl.classList.add("cm-tensor-reconciled");
-            stampQuaternionElement(targetScriptEl, {
+            this.stampElement(targetScriptEl, {
               start: argSpan.start,
               end: argSpan.end,
               kind: "script",
@@ -1753,7 +2364,7 @@ export class QuaternionSpatialReconciler {
         scriptEl.classList.add("cm-tensor-reconciled");
       } else if (scriptEl.matches("mjx-msubsup")) {
         const scriptContainer = directChildren.find((c) => matchesSelector(c, "mjx-script")) || scriptEl.querySelector("mjx-script");
-        const spacer = scriptContainer?.querySelector("mjx-spacer");
+        const spacer = scriptContainer ? Array.from(scriptContainer.children).find((c) => matchesSelector(c, "mjx-spacer")) : null;
         if (spacer && scriptContainer) {
           const scriptChildren = Array.from(scriptContainer.children);
           const spacerIdx = scriptChildren.indexOf(spacer);
@@ -1792,7 +2403,7 @@ export class QuaternionSpatialReconciler {
         molecule: context.molecule,
         enclosure: context.enclosure,
       };
-      stampQuaternionElement(targetScriptEl, {
+      this.stampElement(targetScriptEl, {
         start: argSpan.start,
         end: argSpan.end,
         kind: "script",
@@ -1818,13 +2429,14 @@ export class QuaternionSpatialReconciler {
     groupMos: Element[],
     openMo: Element,
     delimType?: string,
-    closeText?: string
+    closeText?: string,
+    internalSymmetricCount: number = 0
   ): Element | null {
-  const openIdx = groupMos.indexOf(openMo);
-  if (openIdx < 0) return null;
+    const openIdx = groupMos.indexOf(openMo);
+    if (openIdx < 0) return null;
 
-    const targetCloseChar = closeText ? closeText.replace(/^\\right\b/, "").trim() : "";
-    const targetOpenChar = getElementText(openMo);
+    const targetCloseChar = closeText ? closeText.replace(/^\\(?:left|right|middle)\b/, "").trim() : "";
+    const targetOpenChar = getElementText(openMo).replace(/^\\(?:left|right|middle)\b/, "").trim();
 
     // Paired delimiters requiring depth balancing
     const isPaired =
@@ -1835,45 +2447,45 @@ export class QuaternionSpatialReconciler {
       delimType === "bracket" ||
       delimType === "brace";
 
-    let depth = 1;
+    let depth = isPaired ? 1 : 1 + internalSymmetricCount;
     for (let i = openIdx + 1; i < groupMos.length; i++) {
       const mo = groupMos[i];
-      const text = getElementText(mo);
+      const text = getElementText(mo).replace(/^\\(?:left|right|middle)\b/, "").trim();
 
-    if (isPaired) {
-      if (text === "(" || text === "[" || text === "{" || text === targetOpenChar) {
-        depth++;
-      } else if (text === ")" || text === "]" || text === "}" || text === targetCloseChar) {
-        depth--;
-        if (depth === 0) {
-          return mo;
+      if (isPaired) {
+        if (text === "(" || text === "[" || text === "{" || text === targetOpenChar) {
+          depth++;
+        } else if (text === ")" || text === "]" || text === "}" || text === targetCloseChar) {
+          depth--;
+          if (depth === 0) {
+            return mo;
+          }
         }
-      }
-    } else {
-      // Symmetric delimiters (e.g. |x|, \|x\|)
-      const isNormMatch =
-        (targetCloseChar === "\\|" || targetCloseChar === "\\Vert") &&
-        (text === "‖" || text === "∥" || text === "||" || text === "\\|");
-      const isVertMatch =
-        (targetCloseChar === "|" || targetCloseChar === "\\vert") &&
-        (text === "|" || text === "∣" || text === "\\vert");
-      if (
-        text === targetCloseChar ||
-        text === targetOpenChar ||
-        isNormMatch ||
-        isVertMatch ||
-        (targetCloseChar && text.includes(targetCloseChar))
-      ) {
-        depth--;
-        if (depth === 0) {
-          return mo;
+      } else {
+        // Symmetric delimiters (e.g. |x|, \|x\|)
+        const isNormMatch =
+          (targetCloseChar === "\\|" || targetCloseChar === "\\Vert") &&
+          (text === "‖" || text === "∥" || text === "||" || text === "\\|");
+        const isVertMatch =
+          (targetCloseChar === "|" || targetCloseChar === "\\vert") &&
+          (text === "|" || text === "∣" || text === "\\vert" || text === "\\mid");
+        if (
+          text === targetCloseChar ||
+          text === targetOpenChar ||
+          isNormMatch ||
+          isVertMatch ||
+          (targetCloseChar && text.includes(targetCloseChar))
+        ) {
+          depth--;
+          if (depth === 0) {
+            return mo;
+          }
         }
       }
     }
-  }
 
-  return null;
-}
+    return null;
+  }
 
   /**
    * Reconciles Delimited Groups and Matrices: (...), [...], { ... }, or <mjx-mtable>.
@@ -1884,7 +2496,8 @@ export class QuaternionSpatialReconciler {
     z: number,
     parentY: number,
     parentX: number,
-    context: MultiScaleContext
+    context: MultiScaleContext,
+    excludeSet?: ReadonlySet<Element>
   ): void {
     // Check if this group wraps a matrix table: <mjx-mtable>
     const isMatrix =
@@ -1897,7 +2510,9 @@ export class QuaternionSpatialReconciler {
           (c.kind === "command" && (c.name === "\\\\" || c.name === "\\cr" || c.name === "\\newline"))
       );
     if (isMatrix) {
-      const tableEl = parentEl.querySelector("mjx-mtable:not(.cm-tensor-reconciled)");
+      const tableEl = Array.from(parentEl.querySelectorAll("mjx-mtable")).find(
+        (el) => !el.classList.contains("cm-tensor-reconciled") && (!excludeSet || !excludeSet.has(el))
+      );
       if (tableEl) {
         tableEl.classList.add("cm-tensor-reconciled");
         const matZ = this.allocatePlaneZ();
@@ -1916,13 +2531,32 @@ export class QuaternionSpatialReconciler {
             if (sib === tableEl || !matchesSelector(sib, "mjx-mo")) continue;
             sib.classList.add("cm-tensor-reconciled");
             const isBefore = sIdx < tableIdx;
-            const fenceSpan = isBefore
-              ? { start: node.openStart, end: node.openEnd }
-              : {
-                  start: node.closeStart ?? node.end,
-                  end: node.closeEnd ?? node.end,
-                };
-            if (fenceSpan.end > fenceSpan.start && getElementText(sib).length > 0) {
+            let fStart = isBefore ? node.openStart : (node.closeStart ?? node.end);
+            let fEnd = isBefore ? node.openEnd : (node.closeEnd ?? node.end);
+            if (fEnd <= fStart) {
+              if (isBefore) {
+                fStart = node.start;
+                const rawPrefix = (node as { rawPrefix?: unknown }).rawPrefix;
+                if (typeof rawPrefix === "string") {
+                  fEnd = Math.min(node.end, node.start + rawPrefix.length);
+                } else if (this.latex) {
+                  const envMatch = this.latex.slice(node.start).match(/^\\begin\{[a-zA-Z0-9*]+\}/);
+                  fEnd = envMatch ? node.start + envMatch[0].length : Math.min(node.end, node.start + 1);
+                } else {
+                  fEnd = Math.min(node.end, node.start + 1);
+                }
+              } else {
+                if (this.latex) {
+                  const endMatch = this.latex.slice(node.start, node.end).match(/\\end\{[a-zA-Z0-9*]+\}$/);
+                  fStart = endMatch ? node.end - endMatch[0].length : Math.max(node.start, node.end - 1);
+                } else {
+                  fStart = Math.max(node.start, node.end - 1);
+                }
+                fEnd = node.end;
+              }
+            }
+            if (fEnd > fStart && getElementText(sib).length > 0) {
+              const fenceSpan = { start: fStart, end: fEnd };
               const fenceRange: QuaternionResolvedRange = {
                 start: fenceSpan.start,
                 end: fenceSpan.end,
@@ -1936,11 +2570,26 @@ export class QuaternionSpatialReconciler {
                   enclosure: context.enclosure,
                 },
               };
-              stampQuaternionElement(sib, fenceRange);
+              this.stampElement(sib, fenceRange);
               stampChildGlyphs(sib, fenceRange);
             }
           }
         }
+
+        const tableRange: QuaternionResolvedRange = {
+          start: node.start,
+          end: node.end,
+          kind: "matrix",
+          coord: { w: 3, z: matZ, y: parentY, x: parentX },
+          scales: {
+            glyph: groupSpan,
+            atom: groupSpan,
+            slot: groupSpan,
+            molecule: groupSpan,
+            enclosure: context.enclosure,
+          },
+        };
+        this.stampElement(tableEl, tableRange);
 
         this.reconcileMatrix(tableEl, node, matZ, context);
         this.reconciledNodes.add(node);
@@ -1965,6 +2614,27 @@ export class QuaternionSpatialReconciler {
     let groupRowEl: Element = parentEl;
     let limitScriptContainer: Element | null = null;
 
+    const isDelimiterTextMatch = (moEl: Element, rawDelimText?: string): boolean => {
+      if (!rawDelimText) return true;
+      const rawDomText = getElementText(moEl);
+      if (!rawDomText) return true; // allow synthetic test mocks with empty textContent
+      const domText = rawDomText.replace(/^\\(?:left|right|middle)\b/, "").trim();
+      const cleanTarget = rawDelimText.replace(/^\\(?:left|right|middle)\b/, "").trim();
+      if (!cleanTarget || cleanTarget === ".") return true;
+      if (domText === cleanTarget || rawDomText === cleanTarget) return true;
+      if ((cleanTarget === "\\{" || cleanTarget === "\\lbrace") && domText === "{") return true;
+      if ((cleanTarget === "\\}" || cleanTarget === "\\rbrace") && domText === "}") return true;
+      if (cleanTarget === "\\lbrack" && domText === "[") return true;
+      if (cleanTarget === "\\rbrack" && domText === "]") return true;
+      if (cleanTarget === "\\langle" && (domText === "⟨" || domText === "<")) return true;
+      if (cleanTarget === "\\rangle" && (domText === "⟩" || domText === ">")) return true;
+      if ((cleanTarget === "|" || cleanTarget === "\\vert") && (domText === "|" || domText === "∣")) return true;
+      if ((cleanTarget === "\\|" || cleanTarget === "\\Vert") && (domText === "‖" || domText === "∥" || domText === "||")) return true;
+      const cat = lookupCatalog(cleanTarget);
+      if (cat && (domText === cat.expectedText || domText === cat.unicode)) return true;
+      return false;
+    };
+
     const hasVisibleOpen =
       node.openText &&
       node.delimType !== "bare_brace" &&
@@ -1984,34 +2654,70 @@ export class QuaternionSpatialReconciler {
       node.children.length > 0 &&
       node.children.some((c) => c.kind === "group" && c.delimType !== "bare_brace");
 
-    if (parentEl.matches("mjx-mrow") && !parentEl.classList.contains("cm-tensor-reconciled")) {
+    if (
+      parentEl.matches("mjx-mrow") &&
+      !parentEl.classList.contains("cm-tensor-reconciled") &&
+      node.delimType !== "bare_brace" &&
+      !getNextSlotItem(parentEl, excludeSet)?.matches("mjx-mrow")
+    ) {
       groupRowEl = parentEl;
       groupRowEl.classList.add("cm-tensor-reconciled");
     } else if (!isInnerFencedMrow) {
-      const nextItem = getNextSlotItem(parentEl);
+      const nextItem = getNextSlotItem(parentEl, excludeSet);
       if (nextItem) {
         if (matchesSelector(nextItem, "mjx-mrow")) {
           // Distinguish a full group mrow (e.g. \left[ ... \right] or { ... }) from a single-delimiter
-          // size wrapper mrow (e.g. \biggl[ which wraps only the opening <mjx-mo>[</mjx-mo> in an <mjx-mrow>).
+          // size wrapper mrow (e.g. \biggl[ which wraps only the opening <mjx-mo>[</mjx-mo> in an <mjx-mrow>)
+          // or a sibling fenced group mrow when reconciling a bare_brace group.
           const isSingleDelimiterWrapper =
             Boolean(hasVisibleOpen && hasVisibleClose) &&
             nextItem.querySelectorAll("mjx-mo").length < 2;
-          if (!isSingleDelimiterWrapper) {
+          const isFencedSiblingForBareBrace =
+            node.delimType === "bare_brace" &&
+            nextItem.children.length >= 2 &&
+            matchesSelector(nextItem.children[0], "mjx-mo") &&
+            matchesSelector(nextItem.children[nextItem.children.length - 1], "mjx-mo");
+          if (!isSingleDelimiterWrapper && !isFencedSiblingForBareBrace) {
             groupRowEl = nextItem;
             groupRowEl.classList.add("cm-tensor-reconciled");
           }
         } else if (
-          allLimits.length > 0 &&
+          node.delimType !== "bare_brace" &&
           matchesSelector(nextItem, "mjx-msubsup, mjx-msub, mjx-msup, mjx-munderover, mjx-munder, mjx-mover")
         ) {
           const rawB = findDirectScriptBase(nextItem);
-          const bEl = rawB && matchesSelector(rawB, "mjx-base") && rawB.firstElementChild ? rawB.firstElementChild : rawB;
-          if (bEl && matchesSelector(bEl, "mjx-mrow") && (!hasVisibleOpen || !hasVisibleClose || bEl.querySelectorAll("mjx-mo").length >= 2)) {
-            limitScriptContainer = nextItem;
+          const bEl = unwrapScriptBase(rawB);
+          if (
+            bEl &&
+            matchesSelector(bEl, "mjx-mrow") &&
+            !bEl.classList.contains("cm-tensor-reconciled") &&
+            (!hasVisibleOpen || !hasVisibleClose || bEl.querySelectorAll("mjx-mo").length >= 2)
+          ) {
+            if (allLimits.length > 0) {
+              limitScriptContainer = nextItem;
+            }
             if (rawB) rawB.classList.add("cm-tensor-reconciled");
             groupRowEl = bEl;
             groupRowEl.classList.add("cm-tensor-reconciled");
           }
+        }
+      }
+      const nextIsMatchingOpenMo =
+        hasVisibleOpen &&
+        nextItem &&
+        matchesSelector(nextItem, "mjx-mo") &&
+        isDelimiterTextMatch(nextItem, node.openText);
+      if (!nextIsMatchingOpenMo && groupRowEl === parentEl && (hasVisibleOpen || hasVisibleClose || node.delimType !== "bare_brace")) {
+        const mrowCands = Array.from(parentEl.querySelectorAll("mjx-mrow")).filter(
+          (el) =>
+            !el.classList.contains("cm-tensor-reconciled") &&
+            isScriptInSlotScope(el, parentEl) &&
+            (!excludeSet || !excludeSet.has(el)) &&
+            (!(hasVisibleOpen && hasVisibleClose) || el.querySelectorAll("mjx-mo").length >= 2)
+        );
+        if (mrowCands.length > 0) {
+          groupRowEl = mrowCands[0];
+          groupRowEl.classList.add("cm-tensor-reconciled");
         }
       }
     }
@@ -2028,6 +2734,7 @@ export class QuaternionSpatialReconciler {
     // 3-Part Frame Sequence: Frame = (OpenFence, Children..., CloseFence)
     const groupMos = Array.from(groupRowEl.querySelectorAll("mjx-mo")).filter((el) => {
       if (el.classList.contains("cm-tensor-reconciled")) return false;
+      if (groupRowEl !== parentEl && el.parentElement === groupRowEl) return true;
       if (isElementInSlotScope(el, groupRowEl)) return true;
       const scriptAncestor = findClosestInGroup(el, "mjx-msubsup, mjx-msub, mjx-msup, mjx-munderover, mjx-munder, mjx-mover");
       if (scriptAncestor && isScriptInSlotScope(scriptAncestor, groupRowEl)) {
@@ -2043,28 +2750,29 @@ export class QuaternionSpatialReconciler {
       return false;
     });
 
-    const isDelimiterTextMatch = (moEl: Element, rawDelimText?: string): boolean => {
-      if (!rawDelimText) return true;
-      const domText = getElementText(moEl);
-      if (!domText) return true; // allow synthetic test mocks with empty textContent
-      const cleanTarget = rawDelimText.replace(/^\\(?:left|right|middle)\b/, "").trim();
-      if (!cleanTarget || cleanTarget === ".") return true;
-      if (domText === cleanTarget) return true;
-      if ((cleanTarget === "\\{" || cleanTarget === "\\lbrace") && domText === "{") return true;
-      if ((cleanTarget === "\\}" || cleanTarget === "\\rbrace") && domText === "}") return true;
-      if (cleanTarget === "\\lbrack" && domText === "[") return true;
-      if (cleanTarget === "\\rbrack" && domText === "]") return true;
-      if (cleanTarget === "\\langle" && (domText === "⟨" || domText === "<")) return true;
-      if (cleanTarget === "\\rangle" && (domText === "⟩" || domText === ">")) return true;
-      if ((cleanTarget === "|" || cleanTarget === "\\vert") && (domText === "|" || domText === "∣")) return true;
-      if ((cleanTarget === "\\|" || cleanTarget === "\\Vert") && (domText === "‖" || domText === "∥" || domText === "||")) return true;
-      const cat = lookupCatalog(cleanTarget);
-      if (cat && (domText === cat.expectedText || domText === cat.unicode)) return true;
-      return false;
-    };
-
     let openMo: Element | null = null;
     let closeMo: Element | null = null;
+
+    const targetCloseClean = node.closeText ? node.closeText.replace(/^\\(?:left|right|middle)\b/, "").trim() : "";
+    let internalSymmetricCount = 0;
+    if (
+      targetCloseClean === "|" ||
+      targetCloseClean === "\\vert" ||
+      targetCloseClean === "\\|" ||
+      targetCloseClean === "\\Vert"
+    ) {
+      const isSingleVert = targetCloseClean === "|" || targetCloseClean === "\\vert";
+      for (const child of node.children) {
+        if (child.kind === "operator" || child.kind === "command") {
+          const raw = child.kind === "operator" ? child.text : child.name;
+          if (isSingleVert && (raw === "|" || raw === "\\vert" || raw === "\\mid" || raw === "∣")) {
+            internalSymmetricCount++;
+          } else if (!isSingleVert && (raw === "\\|" || raw === "\\Vert" || raw === "‖" || raw === "∥")) {
+            internalSymmetricCount++;
+          }
+        }
+      }
+    }
 
     if (hasVisibleOpen && groupMos.length > 0) {
       const openSpan = { start: node.openStart, end: node.openEnd };
@@ -2084,7 +2792,7 @@ export class QuaternionSpatialReconciler {
       // Feedback retry across groupMos candidates until one passes both delimiter text and the Final Stamp Gate
       for (const candMo of groupMos) {
         if (!isDelimiterTextMatch(candMo, node.openText)) continue;
-        if (stampQuaternionElement(candMo, openRange)) {
+        if (this.stampElement(candMo, openRange)) {
           openMo = candMo;
           openMo.classList.add("cm-tensor-reconciled");
           if (
@@ -2094,7 +2802,7 @@ export class QuaternionSpatialReconciler {
             openMo.parentElement.querySelectorAll("mjx-mo").length === 1 &&
             openMo.parentElement.querySelectorAll("mjx-mi, mjx-mn, mjx-mtext, mjx-mfrac, mjx-frac").length === 0
           ) {
-            if (stampQuaternionElement(openMo.parentElement, openRange)) {
+            if (this.stampElement(openMo.parentElement, openRange)) {
               openMo.parentElement.classList.add("cm-tensor-reconciled");
             }
           }
@@ -2104,9 +2812,21 @@ export class QuaternionSpatialReconciler {
       }
     }
     if (hasVisibleClose && openMo) {
-      closeMo = this.findMatchingCloseMo(groupMos, openMo, node.delimType, node.closeText);
+      closeMo = this.findMatchingCloseMo(
+        groupMos,
+        openMo,
+        node.delimType,
+        node.closeText,
+        internalSymmetricCount
+      );
     }
-    if (hasVisibleClose && !closeMo && groupRowEl !== parentEl && groupMos.length > (hasVisibleOpen ? 1 : 0)) {
+    if (
+      hasVisibleClose &&
+      !closeMo &&
+      groupRowEl !== parentEl &&
+      internalSymmetricCount === 0 &&
+      groupMos.length > (hasVisibleOpen ? 1 : 0)
+    ) {
       // In a dedicated mrow container, fallback to the last operator in that container only if its Unicode matches closeText
       const lastMo = groupMos[groupMos.length - 1];
       if (isDelimiterTextMatch(lastMo, node.closeText)) {
@@ -2127,7 +2847,7 @@ export class QuaternionSpatialReconciler {
       }
     }
 
-    const childExcludeSet = new Set<Element>();
+    const childExcludeSet = new Set<Element>(excludeSet ? Array.from(excludeSet) : []);
     if (closeMo) {
       childExcludeSet.add(closeMo);
     }
@@ -2149,7 +2869,7 @@ export class QuaternionSpatialReconciler {
           closeCandidates.push({ mo: nextAfterChildren, wrapper: null, scriptAnc: null });
         } else if (matchesSelector(nextAfterChildren, "mjx-msubsup, mjx-msub, mjx-msup, mjx-munderover, mjx-munder, mjx-mover")) {
           const rawB = findDirectScriptBase(nextAfterChildren);
-          const bEl = rawB && matchesSelector(rawB, "mjx-base") && rawB.firstElementChild ? rawB.firstElementChild : rawB;
+          const bEl = unwrapScriptBase(rawB);
           const innerMo = bEl && matchesSelector(bEl, "mjx-mo") ? bEl : bEl?.querySelector("mjx-mo") || null;
           if (innerMo && !innerMo.classList.contains("cm-tensor-reconciled") && isDelimiterTextMatch(innerMo, node.closeText)) {
             closeCandidates.push({ mo: innerMo, wrapper: rawB, scriptAnc: nextAfterChildren });
@@ -2185,12 +2905,12 @@ export class QuaternionSpatialReconciler {
 
       for (const cand of closeCandidates) {
         const closeMoEl = cand.mo;
-        if (stampQuaternionElement(closeMoEl, closeRange)) {
+        if (this.stampElement(closeMoEl, closeRange)) {
           closeMoEl.classList.add("cm-tensor-reconciled");
           if (cand.wrapper) {
             cand.wrapper.classList.add("cm-tensor-reconciled");
             if (cand.wrapper !== closeMoEl) {
-              stampQuaternionElement(cand.wrapper, closeRange);
+              this.stampElement(cand.wrapper, closeRange);
             }
           }
           if (cand.scriptAnc && !limitScriptContainer) {
@@ -2203,7 +2923,7 @@ export class QuaternionSpatialReconciler {
             closeMoEl.parentElement.querySelectorAll("mjx-mo").length === 1 &&
             closeMoEl.parentElement.querySelectorAll("mjx-mi, mjx-mn, mjx-mtext, mjx-mfrac, mjx-frac").length === 0
           ) {
-            if (stampQuaternionElement(closeMoEl.parentElement, closeRange)) {
+            if (this.stampElement(closeMoEl.parentElement, closeRange)) {
               closeMoEl.parentElement.classList.add("cm-tensor-reconciled");
             }
           }
@@ -2249,77 +2969,88 @@ export class QuaternionSpatialReconciler {
     type MatrixRowSpec = { row: number; cells: MatrixCellSpec[]; hasContent: boolean };
 
     const cstRows: MatrixRowSpec[] = [];
-    let currentRowCells: MatrixCellSpec[] = [];
-    let currentCell: CSTNode[] = [];
-    let currentRow = 0;
-    let currentCol = 0;
-
-    const flushCell = () => {
-      if (currentCell.length > 0) {
-        const lastNode = currentCell[currentCell.length - 1] as any;
-        let maxEnd = lastNode.end;
-        if (Array.isArray(lastNode.evaluationLimits)) {
-          for (const lim of lastNode.evaluationLimits) {
-            if (lim.end > maxEnd) maxEnd = lim.end;
-          }
-        }
-        if (Array.isArray(lastNode.normLimits)) {
-          for (const lim of lastNode.normLimits) {
-            if (lim.end > maxEnd) maxEnd = lim.end;
-          }
-        }
-        currentRowCells.push({
-          start: currentCell[0].start,
-          end: maxEnd,
-          row: currentRow,
-          col: currentCol,
-          nodes: [...currentCell],
-        });
-        currentCell = [];
-      } else {
-        currentRowCells.push({
-          start: groupNode.start,
-          end: groupNode.start,
-          row: currentRow,
-          col: currentCol,
-          nodes: [],
+    if (groupNode.grid) {
+      for (let r = 0; r < groupNode.grid.rowCount; r++) {
+        const rowCells = groupNode.grid.cells[r] || [];
+        cstRows.push({
+          row: r,
+          cells: rowCells,
+          hasContent: rowCells.some((c) => c.nodes.length > 0),
         });
       }
-    };
+    } else {
+      let currentRowCells: MatrixCellSpec[] = [];
+      let currentCell: CSTNode[] = [];
+      let currentRow = 0;
+      let currentCol = 0;
 
-    const flushRow = () => {
-      flushCell();
-      const hasContent = currentRowCells.some((c) => c.nodes.length > 0);
-      cstRows.push({
-        row: currentRow,
-        cells: currentRowCells,
-        hasContent,
-      });
-      currentRowCells = [];
-      currentRow++;
-      currentCol = 0;
-    };
+      const flushCell = () => {
+        if (currentCell.length > 0) {
+          const lastNode = currentCell[currentCell.length - 1] as any;
+          let maxEnd = lastNode.end;
+          if (Array.isArray(lastNode.evaluationLimits)) {
+            for (const lim of lastNode.evaluationLimits) {
+              if (lim.end > maxEnd) maxEnd = lim.end;
+            }
+          }
+          if (Array.isArray(lastNode.normLimits)) {
+            for (const lim of lastNode.normLimits) {
+              if (lim.end > maxEnd) maxEnd = lim.end;
+            }
+          }
+          currentRowCells.push({
+            start: currentCell[0].start,
+            end: maxEnd,
+            row: currentRow,
+            col: currentCol,
+            nodes: [...currentCell],
+          });
+          currentCell = [];
+        } else {
+          currentRowCells.push({
+            start: groupNode.start,
+            end: groupNode.start,
+            row: currentRow,
+            col: currentCol,
+            nodes: [],
+          });
+        }
+      };
 
-    for (const child of groupNode.children) {
-      const isAmpersand =
-        (child.kind === "punctuation" && child.char === "&") ||
-        (child.kind === "identifier" && child.text === "&") ||
-        (child.kind === "operator" && child.text === "&");
-      const isRowBreak =
-        child.kind === "command" &&
-        (child.name === "\\\\" || child.name === "\\cr" || child.name === "\\newline");
-
-      if (isAmpersand) {
+      const flushRow = () => {
         flushCell();
-        currentCol++;
-      } else if (isRowBreak) {
-        flushRow();
-      } else {
-        currentCell.push(child);
+        const hasContent = currentRowCells.some((c) => c.nodes.length > 0);
+        cstRows.push({
+          row: currentRow,
+          cells: currentRowCells,
+          hasContent,
+        });
+        currentRowCells = [];
+        currentRow++;
+        currentCol = 0;
+      };
+
+      for (const child of groupNode.children) {
+        const isAmpersand =
+          (child.kind === "punctuation" && child.char === "&") ||
+          (child.kind === "identifier" && child.text === "&") ||
+          (child.kind === "operator" && child.text === "&");
+        const isRowBreak =
+          child.kind === "command" &&
+          (child.name === "\\\\" || child.name === "\\cr" || child.name === "\\newline");
+
+        if (isAmpersand) {
+          flushCell();
+          currentCol++;
+        } else if (isRowBreak) {
+          flushRow();
+        } else {
+          currentCell.push(child);
+        }
       }
-    }
-    if (currentCell.length > 0 || currentRowCells.length > 0 || cstRows.length === 0) {
-      flushRow();
+      if (currentCell.length > 0 || currentRowCells.length > 0 || cstRows.length === 0) {
+        flushRow();
+      }
     }
 
     // Collect direct <mjx-mtr> / <mjx-mlabeledtr> / <mjx-linebox> rows belonging to this tableEl (not nested tables)
@@ -2333,8 +3064,10 @@ export class QuaternionSpatialReconciler {
     });
 
     const reconcilePairedCell = (mtd: Element, cell: MatrixCellSpec) => {
-      if (cell.nodes.length === 0) return;
-
+      if (!cell.nodes || cell.nodes.length === 0) {
+        mtd.classList.add("cm-tensor-reconciled", "color-math-cell-padding");
+        return;
+      }
       const cellBaseX = cell.col * 16;
       const cellCoord: SpatialCoordinate4D = { w: 2, z: matZ, y: -cell.row, x: cellBaseX };
       const cellSpan = { start: cell.start, end: cell.end };
@@ -2344,7 +3077,7 @@ export class QuaternionSpatialReconciler {
         enclosure: context.enclosure,
       };
 
-      stampQuaternionElement(mtd, {
+      this.stampElement(mtd, {
         start: cell.start,
         end: cell.end,
         kind: "matrix_cell",
@@ -2358,7 +3091,9 @@ export class QuaternionSpatialReconciler {
         },
       });
 
-      this.reconcileSlot(mtd, cell.nodes, matZ, -cell.row, cellContext, cellBaseX);
+      if (cell.nodes && cell.nodes.length > 0) {
+        this.reconcileSlot(mtd, cell.nodes, matZ, -cell.row, cellContext, cellBaseX);
+      }
     };
 
     if (mtrEls.length > 0) {
@@ -2478,7 +3213,7 @@ export class QuaternionSpatialReconciler {
         ? "MJX-MTEXT"
         : node.kind === "number"
         ? "MJX-MN"
-        : node.kind === "operator"
+        : node.kind === "operator" || (node.kind === "command" && (COMMAND_TO_UNICODE[node.name] !== undefined || lookupCatalog(node.name)?.roleId === ROLE_RELATION || lookupCatalog(node.name)?.roleId === ROLE_OPERATOR))
         ? "MJX-MO"
         : node.kind === "punctuation"
         ? "MJX-MO"
@@ -2529,7 +3264,14 @@ export class QuaternionSpatialReconciler {
       const bareName = rawName.startsWith("\\") ? rawName.slice(1) : rawName;
       const backslashName = rawName.startsWith("\\") ? rawName : "\\" + rawName;
       const catEntry = lookupCatalog(backslashName) || lookupCatalog(bareName);
-      if (catEntry) {
+      if (COMMAND_TO_UNICODE[backslashName]) {
+        expectedText = COMMAND_TO_UNICODE[backslashName];
+        expectedTag = "MJX-MO";
+        if (catEntry) {
+          expectedHex = catEntry.hexCode;
+          isFunction = catEntry.roleId === ROLE_FUNCTION;
+        }
+      } else if (catEntry) {
         expectedText = catEntry.expectedText !== undefined ? catEntry.expectedText : (catEntry.unicode || bareName);
         expectedHex = catEntry.hexCode;
         isFunction = catEntry.roleId === ROLE_FUNCTION;
@@ -2582,10 +3324,14 @@ export class QuaternionSpatialReconciler {
     // Check if this leaf is a fused macro (e.g. \vec{V}, \overrightarrow{OP}, \hat{x}, \mathbb{R})
     const rawSlice = this.latex ? this.latex.slice(node.start, node.end).trim() : "";
     let innerMacroText = "";
-    const fusedMacroMatch = expectedText.match(/^(\\[a-zA-Z]+)\{([\s\S]*)\}$/);
+    const macroCandidate = rawSlice.startsWith("\\") ? rawSlice : expectedText.startsWith("\\") ? expectedText : "\\" + expectedText;
+    const fusedMacroMatch = macroCandidate.match(/^(\\[a-zA-Z]+)\{([\s\S]*)\}$/);
     if (fusedMacroMatch) {
       const macroCmd = fusedMacroMatch[1];
       innerMacroText = fusedMacroMatch[2].trim();
+      if (innerMacroText && (node.kind === "identifier" || expectedText.startsWith("\\") || !expectedText)) {
+        expectedText = innerMacroText;
+      }
       const catEntry = lookupCatalog(macroCmd);
       const childTag = getExpectedChildTag(catEntry, 0);
       if (childTag === TAG_OVER || childTag === TAG_UNDER) {
@@ -2594,21 +3340,49 @@ export class QuaternionSpatialReconciler {
         const accentCand =
           nextItem && matchesSelector(nextItem, targetTag)
             ? nextItem
+            : nextItem && typeof nextItem.querySelector === "function"
+            ? nextItem.querySelector(targetTag)
             : null;
         if (accentCand) {
           accentCand.classList.add("cm-tensor-reconciled");
           this.reconciledNodes.add(node);
-          stampQuaternionElement(accentCand, range);
+          this.stampElement(accentCand, range);
+          if (nextItem && nextItem !== accentCand) {
+            nextItem.classList.add("cm-tensor-reconciled");
+            this.stampElement(nextItem, range);
+          }
           const descEls = Array.from(
             accentCand.querySelectorAll("mjx-mi, mjx-mn, mjx-mo, mjx-mtext, mjx-over, mjx-under, mjx-base, mjx-box, mjx-stretchy-h, mjx-stretchy-v")
           );
+          const cmdEnd = node.start + macroCmd.length;
+          const cmdRange: QuaternionResolvedRange = {
+            ...range,
+            start: node.start,
+            end: cmdEnd,
+            scales: { ...range.scales, glyph: { start: node.start, end: cmdEnd } },
+          };
+          const baseStart = node.start + macroCmd.length + 1;
+          const baseEnd = Math.max(baseStart, node.end - 1);
+          const baseRange: QuaternionResolvedRange = {
+            ...range,
+            start: baseStart,
+            end: baseEnd,
+            scales: { ...range.scales, glyph: { start: baseStart, end: baseEnd } },
+          };
           for (const dEl of descEls) {
             dEl.classList.add("cm-tensor-reconciled");
-            stampQuaternionElement(dEl, range);
+            const isAccentGlyph = matchesSelector(dEl, "mjx-mo, mjx-over, mjx-under, mjx-stretchy-h, mjx-stretchy-v");
+            this.stampElement(dEl, isAccentGlyph ? cmdRange : baseRange);
           }
-          stampChildGlyphs(accentCand, range);
+          stampChildGlyphs(accentCand, range, this.sourceMap);
           return;
         }
+      }
+    } else {
+      const typstFontMatch = macroCandidate.match(/^(?:bb|bold|frak|scr|cal)\(([\s\S]*)\)$/);
+      if (typstFontMatch) {
+        innerMacroText = typstFontMatch[1].trim();
+        expectedText = innerMacroText;
       }
     }
 
@@ -2620,10 +3394,10 @@ export class QuaternionSpatialReconciler {
 
     if (candidateEls.length === 0) return;
 
-    // Ordered visible leaves in this slot (including already-reconciled left neighbors) for O(1) neighbor verification
+    // Ordered visible leaves in this slot (including already-reconciled left neighbors and script bases) for O(1) neighbor verification
     const allSlotLeaves = Array.from(
       slotEl.querySelectorAll("mjx-mi, mjx-mn, mjx-mo, mjx-mtext")
-    ).filter((el) => isElementInSlotScope(el, slotEl) && (!excludeSet || !excludeSet.has(el)));
+    ).filter((el) => isBaselineLeafInSlotScope(el, slotEl) && (!excludeSet || !excludeSet.has(el)));
 
     const partnerExpectedText = node.compoundPartner ? this.getExpectedNodeText(node.compoundPartner) : "";
     const prevExpectedText = node.prevLeaf ? this.getExpectedNodeText(node.prevLeaf) : "";
@@ -2718,7 +3492,7 @@ export class QuaternionSpatialReconciler {
       }
 
       // 3. Monotonic Left-to-Right Sequence Preference
-      score += (candidateEls.length - idx) / candidateEls.length;
+      score += ((candidateEls.length - idx) / candidateEls.length) * 8;
 
       // 4. MPHF-Style Anti-Corruption Gate: Contradictory text penalty
       // Works in both textContent DOMs and live MathJax 4 CHTML (<mjx-c> glyphChar DOMs)
@@ -2760,11 +3534,20 @@ export class QuaternionSpatialReconciler {
             }
           }
 
-          if (prevExpectedText && prevDomText === prevExpectedText) {
-            score += 12;
+          const prevRange = prevDomEl ? getMathJaxElementRange(prevDomEl) : undefined;
+          const isPrevLocked = Boolean(prevRange && node.prevLeaf && prevRange.start === node.prevLeaf.start && prevRange.end === node.prevLeaf.end);
+          if (isPrevLocked) {
+            score += 25;
+          } else if (prevDomEl && (prevDomText === prevExpectedText || (node.prevLeaf && isLeafTextMatch(prevDomText, node.prevLeaf, this.latex)))) {
+            score += 3;
           }
-          if (nextExpectedText && nextDomText === nextExpectedText) {
-            score += 12;
+
+          const nextRange = nextDomEl ? getMathJaxElementRange(nextDomEl) : undefined;
+          const isNextLocked = Boolean(nextRange && node.nextLeaf && nextRange.start === node.nextLeaf.start && nextRange.end === node.nextLeaf.end);
+          if (isNextLocked) {
+            score += 25;
+          } else if (nextDomEl && (nextDomText === nextExpectedText || (node.nextLeaf && isLeafTextMatch(nextDomText, node.nextLeaf, this.latex)))) {
+            score += 3;
           }
         }
       }
@@ -2781,10 +3564,10 @@ export class QuaternionSpatialReconciler {
     // Sort candidates by score descending and retry across candidates until one passes the Final Stamp Gate
     scoredCandidates.sort((a, b) => b.score - a.score);
     for (const { el } of scoredCandidates) {
-      if (stampQuaternionElement(el, range)) {
+      if (this.stampElement(el, range)) {
         el.classList.add("cm-tensor-reconciled");
         this.reconciledNodes.add(node);
-        stampChildGlyphs(el, range);
+        stampChildGlyphs(el, range, this.sourceMap);
         return;
       }
     }
@@ -2795,8 +3578,13 @@ export class QuaternionSpatialReconciler {
  * Public Reconciler API: Synchronously executes 3D/4D Spatial Quaternion reconciliation on a container.
  * Returns the set of CSTNodes consumed and bound by Engine A so Engine B (fallback stamper) never re-consumes them.
  */
-export function reconcileQuaternionSpatial(container: Element, ast: CSTNode[], latex: string): Set<CSTNode> {
-  const reconciler = new QuaternionSpatialReconciler(latex);
+export function reconcileQuaternionSpatial(
+  container: Element,
+  ast: CSTNode[],
+  latex: string,
+  sourceMap?: DesugarSourceMap
+): Set<CSTNode> {
+  const reconciler = new QuaternionSpatialReconciler(latex, sourceMap);
   reconciler.reconcile(container, ast);
   return reconciler.reconciledNodes;
 }
@@ -2966,7 +3754,23 @@ export function extractCSTQuaternionTokens(
                 (c.kind === "command" && (c.name === "\\\\" || c.name === "\\cr" || c.name === "\\newline"))
             );
           const groupSpan = { start: node.start, end: node.end };
-          if (isMatrix) {
+          if (node.grid) {
+            const matZ = allocatePlaneZ();
+            for (let r = 0; r < node.grid.rowCount; r++) {
+              for (let c = 0; c < node.grid.colCount; c++) {
+                const cell = node.grid.cells[r]?.[c];
+                if (cell && cell.nodes.length > 0) {
+                  const cellSpan = { start: cell.start, end: cell.end };
+                  const rowY = r === 0 ? 0 : -r;
+                  walkSlot(cell.nodes, matZ, rowY, {
+                    slot: cellSpan,
+                    molecule: groupSpan,
+                    enclosure: context.enclosure,
+                  }, c * 16);
+                }
+              }
+            }
+          } else if (isMatrix) {
             const matZ = allocatePlaneZ();
             walkSlot(node.children, matZ, 0, {
               slot: groupSpan,

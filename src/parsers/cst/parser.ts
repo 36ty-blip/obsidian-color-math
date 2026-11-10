@@ -11,11 +11,16 @@ import {
   IdentifierNode,
   OperatorNode,
   UnderOverNode,
+  MatrixGridCell,
+  MatrixGridMetadata,
+  CSTDiagnostic,
 } from "./types";
 import { DelimiterStack } from "./stack";
 import { lookupCatalog } from "../catalog";
+import { MATRIX_SUGAR_PREFIXES } from "../../config/constructors.generated";
+import { SHIFT_FREE_ACCENT_MAP } from "../../editor/navigation_primitives";
 import { findDifferentialSpans, DifferentialSpan } from "../differentials";
-import { readVerbEnd, skipMacroDefinition } from "../../utils/latex_helpers";
+import { readVerbEnd, skipMacroDefinition, UNIVERSAL_FONT_MODIFIER_MAP } from "../../utils/latex_helpers";
 import {
   CHAR_BACKSLASH,
   CHAR_LBRACE,
@@ -115,10 +120,15 @@ export class MathCSTParser {
   private expectingResidueArgs: boolean = false;
   private inProbabilityContext: boolean = false;
   private stack: DelimiterStack = new DelimiterStack();
+  private diagnostics: CSTDiagnostic[] = [];
 
   constructor(text: string) {
     this.text = text;
     this.len = text.length;
+  }
+
+  public getDiagnostics(): CSTDiagnostic[] {
+    return this.diagnostics;
   }
 
   public parse(): CSTNode[] {
@@ -136,13 +146,65 @@ export class MathCSTParser {
     const flushSegment = () => {
       if (segment.length === 0) return;
 
-      // Collect flat sequence of leaf-level nodes in this slot segment
-      const slotLeaves: CSTNode[] = [];
+      // Collect flat sequence of leaf-level nodes in this slot segment,
+      // inserting null barriers across non-bare_brace structural molecules (fractions, radicals,
+      // underover braces, matrices) and emitting synthetic fence leaves for delimited groups
+      // so tokens before/after a molecule never falsely link across it.
+      const slotLeaves: Array<CSTNode | null> = [];
+      const pushBarrier = () => {
+        if (slotLeaves.length > 0 && slotLeaves[slotLeaves.length - 1] !== null) {
+          slotLeaves.push(null);
+        }
+      };
       const collectSlotFlatLeaves = (list: CSTNode[]) => {
         for (let i = 0; i < list.length; i++) {
           const n = list[i];
           if (n.kind === "group" && n.delimType === "bare_brace") {
             collectSlotFlatLeaves(n.children);
+          } else if (n.kind === "group") {
+            const isMatrix =
+              n.delimType === "matrix" ||
+              n.children.some(
+                (c) =>
+                  (c.kind === "punctuation" && (c as any).char === "&") ||
+                  (c.kind === "identifier" && (c as any).text === "&") ||
+                  (c.kind === "operator" && (c as any).text === "&") ||
+                  (c.kind === "command" && (c.name === "\\\\" || c.name === "\\cr" || c.name === "\\newline"))
+              );
+            if (!isMatrix && n.openText && n.openText !== "{" && n.openStart < n.openEnd) {
+              slotLeaves.push({
+                kind: "operator",
+                start: n.openStart,
+                end: n.openEnd,
+                text: n.openText,
+              } as CSTNode);
+            }
+            pushBarrier();
+            if (
+              !isMatrix &&
+              n.closeText &&
+              n.closeText !== "}" &&
+              n.closeStart !== undefined &&
+              n.closeEnd !== undefined &&
+              n.closeStart < n.closeEnd
+            ) {
+              slotLeaves.push({
+                kind: "operator",
+                start: n.closeStart,
+                end: n.closeEnd,
+                text: n.closeText,
+              } as CSTNode);
+            }
+          } else if (n.kind === "fraction" || n.kind === "underover") {
+            pushBarrier();
+          } else if (n.kind === "command" && (n.name === "\\sqrt" || n.name === "\\mroot")) {
+            pushBarrier();
+            if (i + 1 < list.length && list[i + 1].kind === "group" && (list[i + 1] as GroupNode).delimType === "bracket") {
+              i++;
+            }
+            if (i + 1 < list.length) {
+              i++;
+            }
           } else if (
             n.kind === "identifier" ||
             n.kind === "number" ||
@@ -152,6 +214,118 @@ export class MathCSTParser {
             n.kind === "text" ||
             n.kind === "boundary"
           ) {
+            if (n.kind === "command") {
+              const cat = lookupCatalog(n.name);
+              if (
+                cat?.roleId === 10 /* ROLE_SPACING */ ||
+                n.name === "\\quad" ||
+                n.name === "\\qquad" ||
+                n.name === "\\," ||
+                n.name === "\\:" ||
+                n.name === "\\;" ||
+                n.name === "\\!" ||
+                n.name === "\\ " ||
+                n.name === "\\" ||
+                n.name === "\\enspace" ||
+                n.name === "\\space" ||
+                n.name === "\\thinspace" ||
+                n.name === "\\medspace" ||
+                n.name === "\\thickspace" ||
+                n.name === "\\negthinspace" ||
+                n.name === "\\negmedspace" ||
+                n.name === "\\negthickspace" ||
+                n.name === "\\hskip" ||
+                n.name === "\\kern" ||
+                n.name === "\\\\" ||
+                n.name === "\\cr" ||
+                n.name === "\\newline"
+              ) {
+                continue;
+              }
+              if (
+                (n.name === "\\mathbf" ||
+                  n.name === "\\boldsymbol" ||
+                  n.name === "\\pmb" ||
+                  n.name === "\\vec" ||
+                  n.name === "\\hat" ||
+                  n.name === "\\bar" ||
+                  n.name === "\\tilde" ||
+                  n.name === "\\dot" ||
+                  n.name === "\\ddot" ||
+                  n.name === "\\mathit" ||
+                  n.name === "\\mathrm" ||
+                  n.name === "\\mathbb" ||
+                  n.name === "\\mathcal" ||
+                  n.name === "\\mathfrak" ||
+                  n.name === "\\mathsf" ||
+                  n.name === "\\mathtt" ||
+                  n.name === "\\Bbb" ||
+                  n.name === "\\check" ||
+                  n.name === "\\acute" ||
+                  n.name === "\\grave" ||
+                  n.name === "\\breve" ||
+                  n.name === "\\overline" ||
+                  n.name === "\\underline" ||
+                  n.name === "\\overrightarrow" ||
+                  n.name === "\\overleftarrow" ||
+                  n.name === "\\overleftrightarrow" ||
+                  n.name === "\\widetilde" ||
+                  n.name === "\\widehat" ||
+                  n.name === "\\text" ||
+                  n.name === "\\operatorname" ||
+                  n.name === "\\ket" ||
+                  n.name === "\\bra" ||
+                  n.name === "\\braket") &&
+                i + 1 < list.length &&
+                list[i + 1].kind === "group" &&
+                (list[i + 1] as GroupNode).delimType === "bare_brace"
+              ) {
+                const groupArg = list[i + 1] as GroupNode;
+                const hasStructuralChild =
+                  groupArg.delimType === "matrix" ||
+                  groupArg.children.some(
+                    (c) =>
+                      c.kind === "group" ||
+                      c.kind === "fraction" ||
+                      c.kind === "underover" ||
+                      c.kind === "root" ||
+                      c.kind === "script" ||
+                      (c.kind === "command" && (c.name === "\\sqrt" || c.name === "\\mroot"))
+                  );
+                const isSingleFontStyledIdentifier =
+                  groupArg.children.length === 2 &&
+                  groupArg.children[0].kind === "command" &&
+                  (groupArg.children[1].kind === "identifier" || groupArg.children[1].kind === "command");
+                const isCompoundAccent =
+                  hasStructuralChild ||
+                  ((n.name === "\\overline" ||
+                    n.name === "\\underline" ||
+                    n.name === "\\widetilde" ||
+                    n.name === "\\widehat" ||
+                    n.name === "\\overrightarrow" ||
+                    n.name === "\\overleftarrow" ||
+                    n.name === "\\overleftrightarrow" ||
+                    n.name === "\\vec" ||
+                    n.name === "\\hat" ||
+                    n.name === "\\bar" ||
+                    n.name === "\\tilde") &&
+                    groupArg.children.length > 1 &&
+                    !isSingleFontStyledIdentifier);
+                if (!isCompoundAccent) {
+                  const fusedLeaf = {
+                    kind: n.name === "\\text" ? "text" : "identifier",
+                    start: n.start,
+                    end: groupArg.end,
+                    text: this.text.slice(n.start, groupArg.end),
+                    _origCmd: n,
+                    _origGroup: groupArg,
+                  } as unknown as CSTNode;
+                  slotLeaves.push(fusedLeaf);
+                  i++;
+                  continue;
+                }
+              }
+            }
             slotLeaves.push(n);
           }
         }
@@ -160,11 +334,23 @@ export class MathCSTParser {
 
       for (let i = 0; i < slotLeaves.length; i++) {
         const curr = slotLeaves[i];
-        if (i > 0) setNonEnum(curr, "prevLeaf", slotLeaves[i - 1]);
-        if (i + 1 < slotLeaves.length) setNonEnum(curr, "nextLeaf", slotLeaves[i + 1]);
+        if (!curr) continue;
+        const prev = i > 0 ? slotLeaves[i - 1] : null;
+        const next = i + 1 < slotLeaves.length ? slotLeaves[i + 1] : null;
+        if (prev) setNonEnum(curr, "prevLeaf", prev);
+        if (next) setNonEnum(curr, "nextLeaf", next);
+        const origCmd = (curr as any)._origCmd as CSTNode | undefined;
+        const origGroup = (curr as any)._origGroup as GroupNode | undefined;
+        if (origCmd) {
+          if (prev) setNonEnum(origCmd, "prevLeaf", prev);
+          if (next) setNonEnum(origCmd, "nextLeaf", next);
+        }
+        if (origGroup && origGroup.children.length > 0) {
+          const lastChild = origGroup.children[origGroup.children.length - 1];
+          if (next) setNonEnum(lastChild, "nextLeaf", next);
+        }
 
-        if (diffSpans.length > 0 && i + 1 < slotLeaves.length && isDiffOperatorNode(curr)) {
-          const next = slotLeaves[i + 1];
+        if (diffSpans.length > 0 && next && isDiffOperatorNode(curr)) {
           const inDiffSpan = diffSpans.some(
             (ds) =>
               (ds.kind === "differential" && curr.start === ds.start && next.end <= ds.end) ||
@@ -377,6 +563,12 @@ export class MathCSTParser {
         continue;
       }
 
+      // 1b. Markdown blockquote prefix '>' at start of line inside display math
+      if (code === 62 /* '>' */ && (this.index === 0 || this.text.charCodeAt(this.index - 1) === 10 || this.text.charCodeAt(this.index - 1) === 13)) {
+        this.index++;
+        continue;
+      }
+
       // 2. Comments (%)
       if (code === CHAR_PERCENT) {
         const start = this.index;
@@ -448,6 +640,7 @@ export class MathCSTParser {
 
       // 5. Bare Grouping Braces: {
       if (code === CHAR_LBRACE) {
+        const prevNode = nodes.length > 0 ? nodes[nodes.length - 1] : undefined;
         const groupNode = this.parseBareBraceGroup(depth);
         // Check for infix division: {num}/{den} or {num}/[den]
         let after = this.index;
@@ -488,6 +681,15 @@ export class MathCSTParser {
         const start = this.index;
         this.index++;
         const isSyntaxError = code === CHAR_RBRACE;
+        if (isSyntaxError) {
+          this.diagnostics.push({
+            message: "Unmatched closing brace '}'",
+            start,
+            end: this.index,
+            severity: "error",
+            code: "mismatched_delimiter",
+          });
+        }
         const delimType = code === CHAR_RBRACE ? "bare_brace" : code === CHAR_RPAREN ? "paren" : "bracket";
         nodes.push({
           kind: "group",
@@ -774,6 +976,65 @@ export class MathCSTParser {
         const word = this.text.slice(this.index, wEnd);
         const lowerWord = word.toLowerCase();
 
+        // 11-sugar. Shorthand Matrix, Font and Accent Constructors (unified lookahead)
+        let after = wEnd;
+        while (after < this.len && this.text.charCodeAt(after) <= 32) after++;
+        const nextC = after < this.len ? this.text.charCodeAt(after) : 0;
+
+        // 11a. Shorthand Matrix / Multi-line Environment Constructors:
+        // mat[...], mat{...}, pmat[...], align[...], cases[...], gather[...], etc.
+        if (nextC === CHAR_LBRACKET || nextC === CHAR_LBRACE) {
+          const matchedMatrix = (word in MATRIX_SUGAR_PREFIXES) ? word : (lowerWord in MATRIX_SUGAR_PREFIXES) ? lowerWord : undefined;
+          if (matchedMatrix) {
+            const node = this.parseShorthandMatrix(this.index, after, matchedMatrix, nextC, depth);
+            nodes.push(node);
+            continue;
+          }
+        }
+
+        // 11b. Typst-style font shortcuts & shift-free bracket accents:
+        // bb(...), bold(...), cal(...), frak(...), scr(...), or hat[...], vec[...], bar[...]
+        const fontPrefix = (nextC === CHAR_LPAREN || nextC === CHAR_LBRACE || nextC === CHAR_LBRACKET)
+          ? UNIVERSAL_FONT_MODIFIER_MAP[lowerWord]
+          : undefined;
+        const accentPrefix = (nextC === CHAR_LBRACKET)
+          ? SHIFT_FREE_ACCENT_MAP[lowerWord]
+          : undefined;
+        const groupPrefix = fontPrefix || accentPrefix;
+
+        if (groupPrefix && nextC !== 0) {
+          const fStart = this.index;
+          this.index = after + 1;
+          const openEnd = this.index;
+          const closeCode = nextC === CHAR_LPAREN ? CHAR_RPAREN : nextC === CHAR_LBRACE ? CHAR_RBRACE : CHAR_RBRACKET;
+          const stopMode = nextC === CHAR_LBRACE ? STOP_RBRACE : STOP_PAREN_OR_BRACKET;
+          const children = this.parseNodeList(depth + 1, stopMode);
+          let closeStart = this.index;
+          let closeEnd = this.index;
+          if (this.index < this.len && this.text.charCodeAt(this.index) === closeCode) {
+            closeStart = this.index;
+            this.index++;
+            closeEnd = this.index;
+          }
+          const sugarGroup: GroupNode = {
+            kind: "group",
+            delimType: nextC === CHAR_LPAREN ? "paren" : nextC === CHAR_LBRACE ? "brace" : "bracket",
+            openStart: fStart,
+            openEnd,
+            openText: this.text.slice(fStart, openEnd),
+            closeStart,
+            closeEnd,
+            closeText: closeEnd > closeStart ? this.text.slice(closeStart, closeEnd) : "",
+            depth,
+            start: fStart,
+            end: closeEnd,
+            children,
+            rawPrefix: groupPrefix,
+          };
+          nodes.push(sugarGroup);
+          continue;
+        }
+
         // 11a. Standard Math Functions (sin, cos, tan, det, adj, ln, exp, etc.)
         if (BARE_FUNCTION_WORDS.has(lowerWord)) {
           const wStart = this.index;
@@ -877,6 +1138,12 @@ export class MathCSTParser {
         continue;
       }
 
+      // Skip standalone spacing accents/cedilla (¸, U+00B8) that produce zero MathJax CHTML glyphs
+      if (code === 0x00B8) {
+        this.index++;
+        continue;
+      }
+
       // 1.2 Imaginary unit i / j in complex arithmetic (e.g. 2i, 2\pi i, e^{i\theta}, x + iy)
       const isImaginary = (code === 105 || code === 106) && this.isImaginaryUnitContext(nodes);
       const idStart = this.index;
@@ -892,6 +1159,31 @@ export class MathCSTParser {
         rawText: idChar,
         isImaginaryUnit: isImaginary,
       });
+    }
+
+    // TeX Infix Fractions: {num \over den}, {num \choose den}, {num \atop den}
+    const overIdx = nodes.findIndex(
+      (n) =>
+        n.kind === "command" &&
+        (n.name === "\\over" || n.name === "\\choose" || n.name === "\\atop")
+    );
+    if (overIdx !== -1) {
+      const overCmd = nodes[overIdx] as { kind: "command"; name: string; start: number; end: number };
+      const numNodes = nodes.slice(0, overIdx);
+      const denNodes = nodes.slice(overIdx + 1);
+      const fracStart = numNodes.length > 0 ? numNodes[0].start : overCmd.start;
+      const fracEnd = denNodes.length > 0 ? denNodes[denNodes.length - 1].end : overCmd.end;
+      return [
+        {
+          kind: "fraction",
+          command: overCmd.name,
+          start: fracStart,
+          end: fracEnd,
+          numerator: numNodes,
+          denominator: denNodes,
+          hasUnclosedBrace: false,
+        },
+      ];
     }
 
     return nodes;
@@ -948,10 +1240,27 @@ export class MathCSTParser {
       ) {
         closeStart = this.index;
         this.index += 4;
-        this.readBracedGroupContent();
+        const endEnvName = this.readBracedGroupContent();
         closeEnd = this.index;
+        if (endEnvName !== envName) {
+          this.diagnostics.push({
+            message: `Environment \\begin{${envName}} ended by \\end{${endEnvName || ""}}`,
+            start: closeStart,
+            end: closeEnd,
+            severity: "error",
+            code: "mismatched_delimiter",
+          });
+        }
+      } else {
+        this.diagnostics.push({
+          message: `Unclosed environment: \\begin{${envName || ""}}`,
+          start,
+          end: openEnd,
+          severity: "error",
+          code: "unclosed_delimiter",
+        });
       }
-      return {
+      const matrixGroup: GroupNode = {
         kind: "group",
         delimType: "matrix",
         openStart: start,
@@ -965,10 +1274,44 @@ export class MathCSTParser {
         end: closeEnd,
         children,
       };
+      matrixGroup.grid = this.extractMatrixGrid(matrixGroup);
+      return matrixGroup;
     }
     if (cmd === "\\end") {
       this.readBracedGroupContent();
       return null;
+    }
+
+    // Parse \substack{...} as a matrix group so internal \\ row breaks create a dedicated <mjx-mtable>
+    if (cmd === "\\substack") {
+      this.skipWhitespace();
+      if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_LBRACE) {
+        const subGroup = this.parseBareBraceGroup(depth);
+        const matrixGroup: GroupNode = {
+          ...subGroup,
+          delimType: "matrix",
+          openStart: start,
+          openEnd: subGroup.openEnd,
+          openText: this.text.slice(start, subGroup.openEnd),
+          start,
+        };
+        matrixGroup.grid = this.extractMatrixGrid(matrixGroup);
+        return matrixGroup;
+      }
+    }
+
+    // Parse backslashed matrix constructor shorthand: \mat[...], \align[...], \cases[...], \pmat[...], etc.
+    const bareCmd = cmd.startsWith("\\") ? cmd.slice(1) : cmd;
+    if (bareCmd in MATRIX_SUGAR_PREFIXES || bareCmd.toLowerCase() in MATRIX_SUGAR_PREFIXES) {
+      let cur = this.index;
+      while (cur < this.len && this.text.charCodeAt(cur) <= 32) cur++;
+      if (cur < this.len) {
+        const nextC = this.text.charCodeAt(cur);
+        if (nextC === CHAR_LBRACKET || nextC === CHAR_LBRACE) {
+          const matchedPrefix = (bareCmd in MATRIX_SUGAR_PREFIXES) ? bareCmd : bareCmd.toLowerCase();
+          return this.parseShorthandMatrix(start, cur, matchedPrefix, nextC, depth);
+        }
+      }
     }
 
     // Skip verbatim blocks: \verb|...|
@@ -1118,8 +1461,19 @@ export class MathCSTParser {
       }
     }
 
-    // Fractions: \frac, \dfrac, \tfrac, \cfrac
-    if (cmd === "\\frac" || cmd === "\\dfrac" || cmd === "\\tfrac" || cmd === "\\cfrac") {
+    // Fractions: \frac, \dfrac, \tfrac, \cfrac, \dv, \pdv, \fdv
+    if (
+      cmd === "\\frac" ||
+      cmd === "\\dfrac" ||
+      cmd === "\\tfrac" ||
+      cmd === "\\cfrac" ||
+      cmd === "\\dv" ||
+      cmd === "\\pdv" ||
+      cmd === "\\fdv"
+    ) {
+      if (cmd === "\\dv" || cmd === "\\pdv" || cmd === "\\fdv") {
+        this.skipOptionalBracket();
+      }
       return this.parseFraction(start, cmd, depth);
     }
 
@@ -1328,15 +1682,22 @@ export class MathCSTParser {
         const close = this.findClosingBrace(this.index);
         if (close !== -1) {
           const textContent = this.text.slice(this.index + 1, close);
-          const nodeEnd = close + 1;
-          this.index = nodeEnd;
-          return {
-            kind: "text",
-            start,
-            end: nodeEnd,
-            text: textContent,
-            command: cmd,
-          };
+          if (
+            (cmd === "\\mathrm" || cmd === "\\operatorname") &&
+            (new RegExp("[/^_+*\\-=]").test(textContent) || /[^a-zA-Z0-9\s]/.test(textContent) || /\d/.test(textContent))
+          ) {
+            // Leave for normal command + group parsing so compound math symbols and units are reconciled discretely
+          } else {
+            const nodeEnd = close + 1;
+            this.index = nodeEnd;
+            return {
+              kind: "text",
+              start,
+              end: nodeEnd,
+              text: textContent,
+              command: cmd,
+            };
+          }
         }
       }
     }
@@ -1833,37 +2194,51 @@ export class MathCSTParser {
     this.skipWhitespace();
     let numNodes: CSTNode[] = [];
     let numUnclosed = false;
+    let numRange: { start: number; end: number } | undefined;
     if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_LBRACE) {
       const numRes = this.parseBracedArgument(depth + 1);
       numNodes = numRes.nodes;
       numUnclosed = numRes.isUnclosed;
+      numRange = { start: numRes.start, end: numRes.end };
     } else if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_BACKSLASH) {
       const cNode = this.parseCommand(depth + 1);
-      if (cNode) numNodes = [cNode];
+      if (cNode) {
+        numNodes = [cNode];
+        numRange = { start: cNode.start, end: cNode.end };
+      }
     } else if (this.index < this.len && this.text.charCodeAt(this.index) > 32) {
       const s = this.text[this.index];
       const sStart = this.index;
       this.index++;
       const isNum = s >= "0" && s <= "9";
-      numNodes = [isNum ? { kind: "number", start: sStart, end: this.index, value: s } : { kind: "identifier", start: sStart, end: this.index, text: s }];
+      const node = isNum ? { kind: "number" as const, start: sStart, end: this.index, value: s } : { kind: "identifier" as const, start: sStart, end: this.index, text: s };
+      numNodes = [node];
+      numRange = { start: sStart, end: this.index };
     }
 
     this.skipWhitespace();
     let denNodes: CSTNode[] = [];
     let denUnclosed = false;
+    let denRange: { start: number; end: number } | undefined;
     if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_LBRACE) {
       const denRes = this.parseBracedArgument(depth + 1);
       denNodes = denRes.nodes;
       denUnclosed = denRes.isUnclosed;
+      denRange = { start: denRes.start, end: denRes.end };
     } else if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_BACKSLASH) {
       const cNode = this.parseCommand(depth + 1);
-      if (cNode) denNodes = [cNode];
+      if (cNode) {
+        denNodes = [cNode];
+        denRange = { start: cNode.start, end: cNode.end };
+      }
     } else if (this.index < this.len && this.text.charCodeAt(this.index) > 32) {
       const s = this.text[this.index];
       const sStart = this.index;
       this.index++;
       const isNum = s >= "0" && s <= "9";
-      denNodes = [isNum ? { kind: "number", start: sStart, end: this.index, value: s } : { kind: "identifier", start: sStart, end: this.index, text: s }];
+      const node = isNum ? { kind: "number" as const, start: sStart, end: this.index, value: s } : { kind: "identifier" as const, start: sStart, end: this.index, text: s };
+      denNodes = [node];
+      denRange = { start: sStart, end: this.index };
     }
 
     // 1.2 Wirtinger Differentials: \frac{\partial f}{\partial z} vs \frac{\partial f}{\partial \bar{z}}
@@ -1897,6 +2272,8 @@ export class MathCSTParser {
       end: this.index,
       numerator: numNodes,
       denominator: denNodes,
+      numRange,
+      denRange,
       hasUnclosedBrace: numUnclosed || denUnclosed,
       isWirtinger,
       isHolomorphic,
@@ -2059,6 +2436,16 @@ export class MathCSTParser {
         closeText = openChar === "(" ? "]" : ")";
         isHalfOpenInterval = true;
       }
+    }
+
+    if (closeEnd === undefined) {
+      this.diagnostics.push({
+        message: `Unclosed delimiter '${openChar}'`,
+        start: openStart,
+        end: openEnd,
+        severity: "error",
+        code: "unclosed_delimiter",
+      });
     }
 
     // 6.3 Stochastic Quadratic Variation: [X]_t, [M]_t
@@ -2290,6 +2677,7 @@ export class MathCSTParser {
     const openStart = this.index;
     this.index++;
     const openEnd = this.index;
+    const openText = "{";
 
     const children = this.parseNodeList(depth + 1, STOP_RBRACE);
     let closeStart: number | undefined;
@@ -2304,6 +2692,15 @@ export class MathCSTParser {
     }
 
     const isUnclosed = closeStart === undefined;
+    if (isUnclosed) {
+      this.diagnostics.push({
+        message: `Unclosed ${openText}`,
+        start: openStart,
+        end: openEnd,
+        severity: "error",
+        code: "unclosed_delimiter",
+      });
+    }
     return {
       kind: "group",
       delimType: "bare_brace",
@@ -2321,15 +2718,173 @@ export class MathCSTParser {
     };
   }
 
+  private parseShorthandMatrix(
+    start: number,
+    openBracketIdx: number,
+    prefix: string,
+    bracketCode: number,
+    depth: number
+  ): GroupNode {
+    this.index = openBracketIdx + 1;
+    const openEnd = this.index;
+    const isBracket = bracketCode === CHAR_LBRACKET;
+    const stopMode = isBracket ? STOP_PAREN_OR_BRACKET : STOP_RBRACE;
+    const children = this.parseNodeList(depth + 1, stopMode);
+    let closeStart = this.index;
+    let closeEnd = this.index;
+    if (
+      this.index < this.len &&
+      this.text.charCodeAt(this.index) === (isBracket ? CHAR_RBRACKET : CHAR_RBRACE)
+    ) {
+      closeStart = this.index;
+      this.index++;
+      closeEnd = this.index;
+    } else {
+      this.diagnostics.push({
+        message: `Unclosed matrix constructor: ${prefix}${isBracket ? "[" : "{"}`,
+        start,
+        end: openEnd,
+        severity: "error",
+        code: "unclosed_delimiter",
+      });
+    }
+    const matrixGroup: GroupNode = {
+      kind: "group",
+      delimType: "matrix",
+      openStart: start,
+      openEnd,
+      openText: this.text.slice(start, openEnd),
+      closeStart,
+      closeEnd,
+      closeText: closeEnd > closeStart ? this.text.slice(closeStart, closeEnd) : "",
+      depth,
+      start,
+      end: closeEnd,
+      children,
+      rawPrefix: prefix,
+    };
+    matrixGroup.grid = this.extractMatrixGrid(matrixGroup);
+    return matrixGroup;
+  }
+
+  public extractMatrixGrid(group: GroupNode): MatrixGridMetadata {
+    const cells: MatrixGridCell[][] = [];
+    let currentRowCells: MatrixGridCell[] = [];
+    let currentCellNodes: CSTNode[] = [];
+    let prevBoundaryEnd = group.openEnd;
+    let rowIndex = 0;
+    let colIndex = 0;
+
+    // Check if this grid uses semicolons as row separators and commas as column separators (e.g. mat{a, b, c; d, a, n;})
+    let hasAmpersandOrBackslashRow = false;
+    let hasSemicolon = false;
+    for (const node of group.children) {
+      if (
+        (node.kind === "operator" && (node as any).text === "&") ||
+        (node.kind === "punctuation" && (node as any).char === "&") ||
+        (node.kind === "boundary" && (node as any).text === "&") ||
+        (node.kind === "command" && (node.name === "\\\\" || node.name === "\\cr" || node.name === "\\newline"))
+      ) {
+        hasAmpersandOrBackslashRow = true;
+        break;
+      }
+      if (node.kind === "punctuation" && (node as any).char === ";") {
+        hasSemicolon = true;
+      }
+    }
+    const useSemicolonRows = !hasAmpersandOrBackslashRow && hasSemicolon;
+
+    const flushCell = (cellEnd: number) => {
+      let start = prevBoundaryEnd;
+      let end = cellEnd;
+      const isEmpty = currentCellNodes.length === 0;
+      if (!isEmpty) {
+        start = currentCellNodes[0].start;
+        end = currentCellNodes[currentCellNodes.length - 1].end;
+      }
+      currentRowCells.push({
+        row: rowIndex,
+        col: colIndex,
+        start,
+        end,
+        nodes: currentCellNodes,
+        isEmpty,
+      });
+      currentCellNodes = [];
+      prevBoundaryEnd = cellEnd;
+      colIndex++;
+    };
+
+    const flushRow = (rowEnd: number) => {
+      flushCell(rowEnd);
+      if (currentRowCells.length > 1 && currentRowCells[currentRowCells.length - 1].isEmpty) {
+        currentRowCells.pop();
+      }
+      if (currentRowCells.length > 0) {
+        cells.push(currentRowCells);
+      }
+      currentRowCells = [];
+      rowIndex++;
+      colIndex = 0;
+    };
+
+    for (let i = 0; i < group.children.length; i++) {
+      const node = group.children[i];
+      const isColDelim = useSemicolonRows
+        ? (node.kind === "punctuation" && (node as any).char === ",")
+        : ((node.kind === "operator" && (node as any).text === "&") ||
+           (node.kind === "punctuation" && (node as any).char === "&") ||
+           (node.kind === "boundary" && (node as any).text === "&"));
+
+      const isRowDelim = useSemicolonRows
+        ? (node.kind === "punctuation" && (node as any).char === ";")
+        : (node.kind === "command" && (node.name === "\\\\" || node.name === "\\cr" || node.name === "\\newline"));
+
+      if (isRowDelim) {
+        flushRow(node.start);
+        prevBoundaryEnd = node.end;
+      } else if (isColDelim) {
+        flushCell(node.start);
+        prevBoundaryEnd = node.end;
+      } else {
+        currentCellNodes.push(node);
+      }
+    }
+
+    const finalEnd = group.closeStart !== undefined ? group.closeStart : group.end;
+    flushCell(finalEnd);
+    if (currentRowCells.length > 1 && currentRowCells[currentRowCells.length - 1].isEmpty) {
+      currentRowCells.pop();
+    }
+    if (currentRowCells.length === 1 && currentRowCells[0].isEmpty) {
+      // trailing row break produced an empty row
+    } else if (currentRowCells.length > 0) {
+      cells.push(currentRowCells);
+    }
+
+    const rowCount = cells.length;
+    let colCount = 0;
+    for (let r = 0; r < cells.length; r++) {
+      if (cells[r].length > colCount) colCount = cells[r].length;
+    }
+
+    return { rowCount, colCount, cells };
+  }
+
   private parseEscapedBraceGroup(openStart: number, depth: number): GroupNode {
     let openEnd = this.index;
     let isInterfaceAverage = false;
 
     // 2.1 Interface Average double brace \{\{u\}\}
     if (this.text.startsWith("\\{", this.index)) {
-      this.index += 2;
-      openEnd = this.index;
-      isInterfaceAverage = true;
+      const remainder = this.text.slice(this.index + 2);
+      const nextSingleClose = remainder.indexOf("\\}");
+      const nextDoubleClose = remainder.indexOf("\\}\\}");
+      if (nextDoubleClose !== -1 && nextSingleClose === nextDoubleClose) {
+        this.index += 2;
+        openEnd = this.index;
+        isInterfaceAverage = true;
+      }
     }
 
     let closeStart: number | undefined;
@@ -2350,7 +2905,7 @@ export class MathCSTParser {
     // 6.1 Quantum Anticommutator: \{\hat{A}, \hat{B}\} vs 3.1 Symplectic Poisson Bracket: \{q_i, H\}
     let isAnticommutator = false;
     let isPoissonBracket = false;
-    if (!isInterfaceAverage && this.hasTopLevelComma(openEnd, closeStart ?? this.index)) {
+    if (this.hasTopLevelComma(openEnd, closeStart ?? this.index)) {
       const raw = this.nodesToRawText(children);
       if (raw.includes("\\hat") || raw.includes("\\dagger")) {
         isAnticommutator = true;
@@ -2368,9 +2923,9 @@ export class MathCSTParser {
       closeStart,
       closeEnd,
       closeText,
-      isInterfaceAverage,
       isPoissonBracket,
       isAnticommutator,
+      isInterfaceAverage,
       isSyntaxError: false,
       depth,
       start: openStart,
@@ -2406,6 +2961,8 @@ export class MathCSTParser {
       const isKetFollows =
         nextRanglePos !== -1 &&
         (nextLanglePos === -1 || nextRanglePos < nextLanglePos) &&
+        !nextRest.startsWith("_") &&
+        !nextRest.startsWith("^") &&
         !/[+=,\\](?:quad|text|begin|end)/.test(between) &&
         !/[+=]/.test(between);
 
@@ -2536,14 +3093,21 @@ export class MathCSTParser {
     const normLimits: CSTNode[] = [];
     if (closeEnd !== undefined) {
       let cur = this.index;
+      while (cur < this.len && this.text.charCodeAt(cur) <= 32) {
+        cur++;
+      }
       while (
         cur < this.len &&
         (this.text.charCodeAt(cur) === CHAR_UNDERSCORE || this.text.charCodeAt(cur) === CHAR_CARET)
       ) {
+        this.index = cur;
         const char = this.text.charCodeAt(cur) === CHAR_UNDERSCORE ? "_" : "^";
         const script = this.parseScript(depth, char);
         normLimits.push(script);
         cur = this.index;
+        while (cur < this.len && this.text.charCodeAt(cur) <= 32) {
+          cur++;
+        }
       }
       if (normLimits.length > 0) {
         isRegularizationNorm = true;
@@ -2639,14 +3203,21 @@ export class MathCSTParser {
     const normLimits: CSTNode[] = [];
     if (closeEnd !== undefined && isDoubleNormBar) {
       let cur = this.index;
+      while (cur < this.len && this.text.charCodeAt(cur) <= 32) {
+        cur++;
+      }
       while (
         cur < this.len &&
         (this.text.charCodeAt(cur) === CHAR_UNDERSCORE || this.text.charCodeAt(cur) === CHAR_CARET)
       ) {
+        this.index = cur;
         const char = this.text.charCodeAt(cur) === CHAR_UNDERSCORE ? "_" : "^";
         const script = this.parseScript(depth, char);
         normLimits.push(script);
         cur = this.index;
+        while (cur < this.len && this.text.charCodeAt(cur) <= 32) {
+          cur++;
+        }
       }
       if (normLimits.length > 0) {
         isRegularizationNorm = true;
@@ -2697,6 +3268,15 @@ export class MathCSTParser {
     }
 
     const isUnclosed = closeStart === undefined;
+    if (isUnclosed) {
+      this.diagnostics.push({
+        message: `Unclosed ${openText}`,
+        start: openStart,
+        end: openEnd,
+        severity: "error",
+        code: "unclosed_delimiter",
+      });
+    }
     const groupNode: GroupNode = {
       kind: "group",
       delimType: "sized",
@@ -2741,17 +3321,25 @@ export class MathCSTParser {
     const scriptType = char === "_" ? "subscript" : "superscript";
 
     let arg: CSTNode[];
+    let argRange: { start: number; end: number } | undefined;
     if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_LBRACE) {
       const braced = this.parseBracedArgument(depth);
       arg = braced.nodes;
+      argRange = { start: braced.start, end: braced.end };
     } else if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_BACKSLASH) {
       const cmdNode = this.parseCommand(depth, prevNode);
-      arg = cmdNode ? [cmdNode] : [];
+      if (cmdNode) {
+        arg = [cmdNode];
+        argRange = { start: cmdNode.start, end: cmdNode.end };
+      } else {
+        arg = [];
+      }
     } else if (this.index < this.len && this.text.charCodeAt(this.index) > 32) {
       const single = this.text[this.index];
       const argStart = this.index;
       this.index++;
       arg = [{ kind: "identifier", start: argStart, end: this.index, text: single }];
+      argRange = { start: argStart, end: this.index };
     } else {
       arg = [];
     }
@@ -2896,6 +3484,7 @@ export class MathCSTParser {
       scriptType,
       base: prevNode,
       arg,
+      argRange,
       isHigherOrderDerivative,
       isConjugate,
       isContravariantTensorIndex,
@@ -2916,18 +3505,29 @@ export class MathCSTParser {
     };
   }
 
-  private parseBracedArgument(depth: number): { nodes: CSTNode[]; isUnclosed: boolean } {
+  private parseBracedArgument(depth: number): { nodes: CSTNode[]; isUnclosed: boolean; start: number; end: number } {
     if (this.index >= this.len || this.text.charCodeAt(this.index) !== CHAR_LBRACE) {
-      return { nodes: [], isUnclosed: false };
+      return { nodes: [], isUnclosed: false, start: this.index, end: this.index };
     }
     const openStart = this.index;
     this.index++; // skip '{'
+    const innerStart = this.index;
     const nodes = this.parseNodeList(depth, STOP_RBRACE);
     let isUnclosed = false;
+    let innerEnd = this.index;
     if (this.index < this.len && this.text.charCodeAt(this.index) === CHAR_RBRACE) {
+      innerEnd = this.index;
       this.index++; // consume '}'
     } else {
       isUnclosed = true;
+      innerEnd = this.index;
+      this.diagnostics.push({
+        message: "Unclosed brace '{'",
+        start: openStart,
+        end: openStart + 1,
+        severity: "error",
+        code: "unclosed_delimiter",
+      });
       nodes.push({
         kind: "group",
         delimType: "bare_brace",
@@ -2941,7 +3541,7 @@ export class MathCSTParser {
         children: [],
       });
     }
-    return { nodes, isUnclosed };
+    return { nodes, isUnclosed, start: innerStart, end: innerEnd };
   }
 
   private readBracedGroupContent(): string | null {

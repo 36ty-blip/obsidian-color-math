@@ -71,6 +71,14 @@ export const COLOR_MATH_SETTING_CATALOG: ColorMathSettingMeta[] = [
     category: "Core",
   },
   {
+    id: "ribbon-convert-to-latex",
+    sectionId: "section-core",
+    name: "Convert note to pure LaTeX (Ribbon)",
+    desc: "Show pure LaTeX conversion action in the ribbon menu.",
+    aliases: ["ribbon", "latex", "convert", "pure latex", "export"],
+    category: "Core",
+  },
+  {
     id: "live-rendering-reading-view",
     sectionId: "section-core",
     name: "Live rendering in Reading View (MathJax)",
@@ -213,10 +221,10 @@ export const COLOR_MATH_SETTING_CATALOG: ColorMathSettingMeta[] = [
     category: "Theme & Palettes",
   },
 
-  // Section 5: Notation Dialects & Multilingual Interoperability
+  // Dialects absorbed into Feature Preview & Experimental
   {
     id: "dialect-latex",
-    sectionId: "section-dialects",
+    sectionId: "section-feature-preview-experimental",
     name: "Standard LaTeX dialect",
     desc: "Enables standard LaTeX math syntax recognition and macro expansion.",
     aliases: ["latex", "tex", "standard latex", "dialect"],
@@ -224,7 +232,7 @@ export const COLOR_MATH_SETTING_CATALOG: ColorMathSettingMeta[] = [
   },
   {
     id: "dialect-typst",
-    sectionId: "section-dialects",
+    sectionId: "section-feature-preview-experimental",
     name: "Typst math dialect",
     desc: "Enables Typst math syntax shorthand and operator conversions.",
     aliases: ["typst", "typst math", "modern dialect"],
@@ -232,7 +240,7 @@ export const COLOR_MATH_SETTING_CATALOG: ColorMathSettingMeta[] = [
   },
   {
     id: "dialect-asciimath",
-    sectionId: "section-dialects",
+    sectionId: "section-feature-preview-experimental",
     name: "AsciiMath dialect",
     desc: "Enables AsciiMath shorthand and plain-text mathematical operators.",
     aliases: ["asciimath", "ascii math", "plain text"],
@@ -240,7 +248,7 @@ export const COLOR_MATH_SETTING_CATALOG: ColorMathSettingMeta[] = [
   },
   {
     id: "dialect-matlab",
-    sectionId: "section-dialects",
+    sectionId: "section-feature-preview-experimental",
     name: "MATLAB & Octave dialect",
     desc: "Recognizes MATLAB/Octave matrix definitions, array operations, and vector syntax.",
     aliases: ["matlab", "octave", "matrix", "engineering"],
@@ -248,7 +256,7 @@ export const COLOR_MATH_SETTING_CATALOG: ColorMathSettingMeta[] = [
   },
   {
     id: "dialect-python",
-    sectionId: "section-dialects",
+    sectionId: "section-feature-preview-experimental",
     name: "Python & SymPy dialect",
     desc: "Recognizes Python syntax, SymPy expressions, and NumPy math notation.",
     aliases: ["python", "sympy", "numpy"],
@@ -256,7 +264,7 @@ export const COLOR_MATH_SETTING_CATALOG: ColorMathSettingMeta[] = [
   },
   {
     id: "dialect-wolfram",
-    sectionId: "section-dialects",
+    sectionId: "section-feature-preview-experimental",
     name: "Wolfram Language & Mathematica dialect",
     desc: "Recognizes Wolfram Language capitalized functions and mathematical constructs.",
     aliases: ["wolfram", "mathematica", "cas"],

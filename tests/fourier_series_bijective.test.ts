@@ -8,6 +8,7 @@ import { RegisterHTMLHandler } from "@mathjax/src/js/handlers/html.js";
 import "@mathjax/src/js/input/tex/ams/AmsConfiguration.js";
 
 import { MathCSTParser } from "../src/parsers/cst/parser";
+import { collectLeaves } from "../src/editor/lazy_navigation";
 import { stampMathJaxDOM } from "../src/editor/dom_stamper";
 import { getMathJaxElementRange } from "../src/editor/weakmap_index";
 import { highlightSelectionInMathContainer } from "../src/editor/inline_tooltip";
@@ -103,6 +104,11 @@ describe("Fourier Series Bijective Layout Reconciliation Suite", () => {
     }
     const container = convert(mathNode);
     stampMathJaxDOM(container, raw);
+
+    const lineboxes = container.querySelectorAll("mjx-linebox");
+    lineboxes.forEach((lb: any, i: number) => {
+      console.log(`Linebox ${i}:`, lb.className, getMathJaxElementRange(lb));
+    });
 
     const leaves = container.querySelectorAll("mjx-mi, mjx-mn, mjx-mo, mjx-mtext");
     const unstamped: string[] = [];

@@ -10,7 +10,7 @@ import {
   IdentifierNode,
   OperatorNode,
   FractionNode,
-} from "../src/parsers/cst_parser";
+} from "../src/parsers/cst/index";
 import { DEFAULT_COLORS } from "../src/config";
 
 function findNodes<T = any>(nodes: any[], predicate: (n: any) => boolean): T[] {

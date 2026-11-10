@@ -66,7 +66,8 @@ export type RibbonClickAction =
   | "toggle-live"
   | "quick-menu"
   | "reference-modal"
-  | "settings";
+  | "settings"
+  | "convert-note-to-latex";
 
 interface ColorMathSettings {
   palette: ColorPalette;
@@ -87,6 +88,7 @@ interface ColorMathSettings {
   ribbonShowCleanSelection: boolean;
   ribbonShowReference: boolean;
   ribbonShowSettings: boolean;
+  ribbonShowConvertToLatex: boolean;
   autoSyncTheme: boolean;
   autoLightDark: boolean;
   enableTaxonomy: boolean;
@@ -175,6 +177,7 @@ const DEFAULT_SETTINGS: ColorMathSettings = {
   ribbonShowCleanSelection: true,
   ribbonShowReference: true,
   ribbonShowSettings: true,
+  ribbonShowConvertToLatex: true,
   autoSyncTheme: false,
   autoLightDark: true,
   enableTaxonomy: true,
@@ -1008,6 +1011,10 @@ export default class ColorMathPlugin extends Plugin {
         }
         break;
       }
+      case "convert-note-to-latex": {
+        void this.convertNoteMathToLatex();
+        break;
+      }
       default:
         this.showRibbonMenu(evt);
         break;
@@ -1153,6 +1160,18 @@ export default class ColorMathPlugin extends Plugin {
               appWithSetting.setting.open();
               appWithSetting.setting.openTabById(this.manifest.id);
             }
+          })
+      );
+    }
+
+    if (this.settings.ribbonShowConvertToLatex) {
+      hasItems = true;
+      menu.addItem((item) =>
+        item
+          .setTitle("Convert note to pure LaTeX")
+          .setIcon("file-code")
+          .onClick(() => {
+            void this.convertNoteMathToLatex();
           })
       );
     }
@@ -2248,6 +2267,7 @@ class ColorMathSettingTab extends PluginSettingTab {
           dropdown
             .addOption("menu", "Open action menu (Default)")
             .addOption("toggle-live", "Toggle dynamic live rendering")
+            .addOption("convert-note-to-latex", "Convert note to pure LaTeX")
             .addOption("quick-menu", "Open quick ambiguity menu")
             .addOption("reference-modal", "Open syntax & operator cheatsheet")
             .addOption("settings", "Open plugin settings")
@@ -2400,6 +2420,21 @@ class ColorMathSettingTab extends PluginSettingTab {
             })
         ),
       ["settings", "preferences", "config"]
+    );
+
+    this.addSearchAliases(
+      new Setting(ribbonItemsBody)
+        .setName("Convert note to pure LaTeX")
+        .setDesc("Show pure LaTeX conversion action in the ribbon menu.")
+        .addToggle((toggle) =>
+          toggle
+            .setValue(this.plugin.settings.ribbonShowConvertToLatex)
+            .onChange(async (val) => {
+              this.plugin.settings.ribbonShowConvertToLatex = val;
+              await this.plugin.saveSettings();
+            })
+        ),
+      ["latex", "convert", "pure latex", "export", "menu"]
     );
 
     this.addSearchAliases(
@@ -2796,23 +2831,67 @@ class ColorMathSettingTab extends PluginSettingTab {
         let textComp: TextComponent | null = null;
         const swatchSlot = setting.controlEl.createDiv({ cls: "color-math-swatch-slot" });
 
+        const parseCssColorToHex = (str: string): string | null => {
+          const s = str.trim().toLowerCase();
+          if (s.startsWith("#")) {
+            if (/^#[0-9a-f]{6}$/.test(s)) return s;
+            if (/^#[0-9a-f]{3}$/.test(s)) {
+              return `#${s[1]}${s[1]}${s[2]}${s[2]}${s[3]}${s[3]}`;
+            }
+          }
+          const named: Record<string, string> = {
+            white: "#ffffff",
+            black: "#000000",
+            red: "#ff0000",
+            green: "#008000",
+            blue: "#0000ff",
+            cyan: "#00ffff",
+            yellow: "#ffff00",
+            orange: "#ffa500",
+            purple: "#800080",
+            magenta: "#ff00ff",
+            pink: "#ffc0cb",
+            gray: "#808080",
+            grey: "#808080",
+            silver: "#c0c0c0",
+            gold: "#ffd700",
+            lime: "#00ff00",
+            navy: "#000080",
+            teal: "#008080",
+            aqua: "#00ffff",
+            maroon: "#800000",
+            olive: "#808000",
+            coral: "#ff7f50",
+            salmon: "#fa8072",
+            khaki: "#f0e68c",
+            violet: "#ee82ee",
+            indigo: "#4b0082",
+            turquoise: "#40e0d0",
+            lavender: "#e6e6fa",
+            beige: "#f5f5dc",
+          };
+          if (named[s]) return named[s];
+          if (typeof document !== "undefined") {
+            const probe = document.createElement("span");
+            probe.style.color = s;
+            document.body?.appendChild(probe);
+            const computed = getComputedStyle(probe).color;
+            probe.remove();
+            const m = computed.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+            if (m) {
+              const r = parseInt(m[1]).toString(16).padStart(2, "0");
+              const g = parseInt(m[2]).toString(16).padStart(2, "0");
+              const b = parseInt(m[3]).toString(16).padStart(2, "0");
+              return `#${r}${g}${b}`;
+            }
+          }
+          return null;
+        };
+
         const renderSwatch = (colorVal: string) => {
           swatchSlot.empty();
           const off = isCurrentlyOff(colorVal);
-          if (!off && colorVal.startsWith("#")) {
-            const picker = swatchSlot.createEl("input", {
-              type: "color",
-              cls: "color-math-color-picker",
-              value: colorVal,
-            });
-            picker.addEventListener("input", (e) => {
-              const val = (e.target as HTMLInputElement).value;
-              cachedColor = val;
-              this.plugin.settings.palette[role] = val;
-              textComp?.setValue(val);
-              void this.plugin.saveSettings();
-            });
-          } else {
+          if (off) {
             const noneBtn = swatchSlot.createDiv({
               cls: "color-math-none-swatch",
               text: "Off",
@@ -2827,6 +2906,28 @@ class ColorMathSettingTab extends PluginSettingTab {
               renderSwatch(restored);
               void this.plugin.saveSettings();
             });
+          } else {
+            const hex = parseCssColorToHex(colorVal);
+            if (hex) {
+              const picker = swatchSlot.createEl("input", {
+                type: "color",
+                cls: "color-math-color-picker",
+                value: hex,
+              });
+              picker.addEventListener("input", (e) => {
+                const val = (e.target as HTMLInputElement).value;
+                cachedColor = val;
+                this.plugin.settings.palette[role] = val;
+                textComp?.setValue(val);
+                void this.plugin.saveSettings();
+              });
+            } else {
+              const colorBox = swatchSlot.createDiv({
+                cls: "color-math-color-picker color-math-named-swatch",
+              });
+              colorBox.style.backgroundColor = colorVal;
+              colorBox.setAttribute("title", colorVal);
+            }
           }
         };
 
@@ -2872,6 +2973,9 @@ class ColorMathSettingTab extends PluginSettingTab {
                 this.plugin.settings.palette[role] = trimmed;
                 if (trimmed.startsWith("#")) {
                   cachedColor = trimmed;
+                } else {
+                  const h = parseCssColorToHex(trimmed);
+                  if (h) cachedColor = h;
                 }
                 const off = isCurrentlyOff(trimmed);
                 setting.settingEl.toggleClass("color-math-role-disabled", off);
@@ -3091,7 +3195,7 @@ class ColorMathSettingTab extends PluginSettingTab {
     const hashSlotsBody = this.createSubCollapsible(
       themeBody,
       "sub-theme-variable-hash-palette",
-      "🔀 Variable Data-Flow Hashing & Palette (8 Slots)",
+      "🔀 Variable Data-Flow Hashing & Palette (16 Slots)",
       false
     );
 
@@ -3101,7 +3205,7 @@ class ColorMathSettingTab extends PluginSettingTab {
     this.addSearchAliases(
       new Setting(hashSlotsBody)
         .setName("Variable data-flow hashing")
-        .setDesc("Computes deterministic 32-bit MurmurHash3 / FNV-1a hash keys (h(v) mod 8) per algebraic identifier, guaranteeing visual color continuity across multi-line derivations in 𝒪(1) constant time (<5 ns latency budget).")
+        .setDesc("Computes deterministic 32-bit MurmurHash3 / FNV-1a hash keys (h(v) mod 16) per algebraic identifier, guaranteeing visual color continuity across multi-line derivations in 𝒪(1) constant time (<5 ns latency budget).")
         .addToggle((toggle) =>
           toggle
             .setValue(this.plugin.settings.variableDataFlow)
@@ -3116,32 +3220,52 @@ class ColorMathSettingTab extends PluginSettingTab {
     );
 
     const HASH_SLOT_NAMES = [
-      "Slot 0 (Cartesian x, X / Index j / Dual p / Vol V)",
-      "Slot 1 (Parameter u / Time t / Energy E)",
-      "Slot 2 (Coefficient a / Velocity v / Greek α, φ, ψ, ε)",
-      "Slot 3 (Coefficient b / Index k / Dual s / Greek β)",
-      "Slot 4 (Cartesian y, Y / Index i / Temp T / Greek θ)",
-      "Slot 5 (Cartesian z, Z / Index l / Greek δ, γ)",
-      "Slot 6 (Coefficient c / Index n / Greek λ)",
-      "Slot 7 (Coefficient d / Dual q / Greek ω)",
+      "Slot 0 (Cartesian y, Y / Stat ss / lim)",
+      "Slot 1 (Parameter u / Dual h / inf)",
+      "Slot 2 (Coefficient a / Coordinate q / Temp T / min / avg)",
+      "Slot 3 (Discrete index i / opt / init)",
+      "Slot 4 (Temporal coordinate t / max / th)",
+      "Slot 5 (Cartesian z, Z / Stat mean / eff)",
+      "Slot 6 (Coefficient b / Index l / sat)",
+      "Slot 7 (Velocity v)",
+      "Slot 8 (Function f / Force F / Index m / rms / crit)",
+      "Slot 9 (Discrete index j / Energy E)",
+      "Slot 10 (Coefficient c / Momentum p / Volume V)",
+      "Slot 11 (Primary spatial coordinate x, X)",
+      "Slot 12 (Coordinate w / Work W / eq / nom)",
+      "Slot 13 (Function g, G / Dimension index n)",
+      "Slot 14 (Coefficient d / Pressure P / Dual variable s / sup)",
+      "Slot 15 (Discrete index k / peak / fin)",
     ];
 
     const HASH_SLOT_DESCRIPTIONS = [
-      "Assigned to primary spatial coordinate x, random variable X, index j, momentum p, and volume V. Default: Tokyo Blue (#7aa2f7).",
-      "Assigned to parameter u, temporal coordinate t, and expectation/energy E. Default: Tokyo Cyan (#7dcfff).",
-      "Assigned to coefficient a, velocity v, and continuous fields α, φ, ψ, ε. Default: Tokyo Purple (#bb9af7).",
-      "Assigned to coefficient b, discrete index k, dual variable s, pressure P, and field β. Default: Tokyo Pink (#f7768e).",
-      "Assigned to spatial coordinate y, random variable Y, index i, temperature T, and angle θ. Default: Tokyo Gold (#e0af68).",
-      "Assigned to spatial coordinate z, random variable Z, index l, Dirac delta δ, and field γ. Default: Tokyo Green (#9ece6a).",
-      "Assigned to coefficient c, dimension index n, and eigenvalue/wavelength λ. Default: Light Cyan / Teal (#2ac3de).",
-      "Assigned to coefficient d, generalized coordinate q, and frequency ω. Default: Tokyo Peach (#ff9e64).",
+      "Assigned to Cartesian y, random variable Y, steady-state ss, and limit scope lim. Default: Crimson / Ruby (#ff929e).",
+      "Assigned to parameter u, dual variable h, and infimum inf. Default: Coral / Vermilion (#ff9975).",
+      "Assigned to coefficient a, generalized coordinate q, temperature T, minimum min, and average avg. Default: Amber / Tangerine (#fc9e47).",
+      "Assigned to discrete summation index i, optimum opt, and initial state init. Default: Warm Gold / Honey (#e6ad29).",
+      "Assigned to temporal coordinate t, maximum max, and thermal threshold th. Default: Chartreuse / Olive (#c6bc33).",
+      "Assigned to Cartesian coordinate z, random variable Z, mean, and effective state eff. Default: Lime Green (#9cc958).",
+      "Assigned to coefficient b, discrete index l, and saturation sat. Default: Emerald / Kelly (#6ed889).",
+      "Assigned to velocity v. Default: Spring / Mint (#1fdcb4).",
+      "Assigned to function f, force F, index m, root-mean-square rms, and critical state crit. Default: Aqua / Teal (#00dbdb).",
+      "Assigned to discrete index j and energy / expectation E. Default: Sky Cyan (#00d4fd).",
+      "Assigned to coefficient c, momentum p, and volume V. Default: Cerulean / Azure (#51c9ff).",
+      "Assigned to primary Cartesian coordinate x and random variable X. Default: Cobalt / Royal Blue (#89bcff).",
+      "Assigned to coordinate w, work W, equilibrium eq, and nominal state nom. Default: Indigo / Iris (#b4aeff).",
+      "Assigned to function g, G and dimension index n. Default: Purple / Violet (#d8a2ff).",
+      "Assigned to coefficient d, pressure P, dual variable s, and supremum sup. Default: Magenta / Orchid (#f398eb).",
+      "Assigned to discrete index k, peak value, and final state fin. Default: Rose / Hot Pink (#ff93c7).",
     ];
 
-    if (!this.plugin.settings.variableHashPalette || this.plugin.settings.variableHashPalette.length < 8) {
-      this.plugin.settings.variableHashPalette = [...VARIABLE_HASH_PALETTE];
+    if (!this.plugin.settings.variableHashPalette || this.plugin.settings.variableHashPalette.length < 16) {
+      const current = Array.isArray(this.plugin.settings.variableHashPalette) ? this.plugin.settings.variableHashPalette : [];
+      this.plugin.settings.variableHashPalette = [
+        ...current,
+        ...VARIABLE_HASH_PALETTE.slice(current.length),
+      ];
     }
 
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 16; i++) {
       const currentSlotColor = (this.plugin.settings.variableHashPalette[i] || VARIABLE_HASH_PALETTE[i]).trim();
       const isCurrentlyOff = (col: string): boolean => {
         const l = col.toLowerCase();
@@ -3840,7 +3964,7 @@ class ColorMathSettingTab extends PluginSettingTab {
     this.addSearchAliases(
       new Setting(unicodeBody)
         .setName("Greek letter style")
-        .setDesc("Unicode codepoint mapping for Greek characters: Mathematical Alphanumeric Symbols (Plane 1 italic: 𝝍, 𝝰) or Basic Multilingual Plane (U+0370–U+03FF: ψ, α).")
+        .setDesc("Unicode codepoint mapping for Greek characters: Mathematical Alphanumeric Symbols (Plane 1 italic) or Basic Multilingual Plane standard alphabet.")
         .addDropdown((dropdown) =>
           dropdown
             .addOption("plane1", "Mathematical Italic (Plane 1: 𝝍, 𝝰)")
@@ -3852,36 +3976,6 @@ class ColorMathSettingTab extends PluginSettingTab {
             })
         ),
       ["greek", "unicode", "plane 1", "bmp", "italic", "math font"]
-    );
-
-    this.addSearchAliases(
-      new Setting(unicodeBody)
-        .setName("Convert definite / bounded integrals")
-        .setDesc("Controls conversion of bounded integrals (\\int_a^b) to Unicode (∫_a^b). Keeping this OFF preserves LaTeX commands for proper displaystyle vertical limit placement in TeX engines.")
-        .addToggle((toggle) =>
-          toggle
-            .setValue(this.plugin.settings.convertDefiniteIntegrals)
-            .onChange(async (val) => {
-              this.plugin.settings.convertDefiniteIntegrals = val;
-              await this.plugin.saveSettings();
-            })
-        ),
-      ["integral", "bounded", "unicode", "convert", "displaystyle"]
-    );
-
-    this.addSearchAliases(
-      new Setting(unicodeBody)
-        .setName("Convert bounded operators")
-        .setDesc("Controls conversion of bounded summation and product operators (\\sum_{i=1}^n) to Unicode (∑_{i=1}^n). Keeping this OFF preserves LaTeX commands for centered vertical limit layout.")
-        .addToggle((toggle) =>
-          toggle
-            .setValue(this.plugin.settings.convertBoundedOperators)
-            .onChange(async (val) => {
-              this.plugin.settings.convertBoundedOperators = val;
-              await this.plugin.saveSettings();
-            })
-        ),
-      ["summation", "product", "sigma", "pi", "bounded", "operator"]
     );
 
     this.addSearchAliases(
@@ -3912,112 +4006,6 @@ class ColorMathSettingTab extends PluginSettingTab {
             })
         ),
       ["prose", "unicode to latex", "text", "convert", "revert"]
-    );
-
-    // =========================================================================
-    // Section 6: 🌐 Mathematical Dialects & Interoperability
-    // =========================================================================
-    const dialectsBody = this.createCollapsible(
-      containerEl,
-      "section-math-dialects",
-      "🌐 Mathematical Dialects & Interoperability",
-      false
-    );
-
-    this.addSearchAliases(
-      new Setting(dialectsBody)
-        .setName("LaTeX & MathJax 4 Core")
-        .setDesc("Enables core AMS-LaTeX, mathtools, and MathJax 4 symbols, operators, and environments via the primary MPHF table.")
-        .addToggle((toggle) =>
-          toggle
-            .setValue(this.plugin.settings.dialectLatex)
-            .onChange(async (val) => {
-              this.plugin.settings.dialectLatex = val;
-              await this.plugin.saveSettings();
-              this.plugin.rerenderMath();
-            })
-        ),
-      ["latex", "mathjax", "core", "ams"]
-    );
-
-    this.addSearchAliases(
-      new Setting(dialectsBody)
-        .setName("Typst Math Dialect")
-        .setDesc("Recognizes Typst mathematical shorthands (e.g. arrow notations, symbol aliases) with branchless 𝚯(1) bitmask filtering (≈0.3 ns latency) in the L1 cache resident MPHF table.")
-        .addToggle((toggle) =>
-          toggle
-            .setValue(this.plugin.settings.dialectTypst)
-            .onChange(async (val) => {
-              this.plugin.settings.dialectTypst = val;
-              await this.plugin.saveSettings();
-              this.plugin.rerenderMath();
-            })
-        ),
-      ["typst", "dialect", "shorthand", "arrow"]
-    );
-
-    this.addSearchAliases(
-      new Setting(dialectsBody)
-        .setName("AsciiMath Dialect")
-        .setDesc("Enables AsciiMath syntax token parsing (e.g. :=, !=, * for \\cdot, xx for \\times, @ for \\circ) with instant canonical conversion.")
-        .addToggle((toggle) =>
-          toggle
-            .setValue(this.plugin.settings.dialectAsciiMath)
-            .onChange(async (val) => {
-              this.plugin.settings.dialectAsciiMath = val;
-              await this.plugin.saveSettings();
-              this.plugin.rerenderMath();
-            })
-        ),
-      ["asciimath", "dialect", "syntax"]
-    );
-
-    this.addSearchAliases(
-      new Setting(dialectsBody)
-        .setName("MATLAB / GNU Octave Dialect")
-        .setDesc("Recognizes MATLAB and Octave computational operators and mathematical functions (e.g. chol, qr, svd, eig, expm, norm, det) without requiring manual backslashes.")
-        .addToggle((toggle) =>
-          toggle
-            .setValue(this.plugin.settings.dialectMatlab)
-            .onChange(async (val) => {
-              this.plugin.settings.dialectMatlab = val;
-              await this.plugin.saveSettings();
-              this.plugin.rerenderMath();
-            })
-        ),
-      ["matlab", "octave", "matrix", "linear algebra", "dialect"]
-    );
-
-    this.addSearchAliases(
-      new Setting(dialectsBody)
-        .setName("Python & SymPy Math Dialect")
-        .setDesc("Enables SymPy and Python mathematical universe function names (e.g. DiracDelta, Heaviside, LambertW, harmonic, polylog) scoped strictly to mathematical analysis.")
-        .addToggle((toggle) =>
-          toggle
-            .setValue(this.plugin.settings.dialectPython)
-            .onChange(async (val) => {
-              this.plugin.settings.dialectPython = val;
-              await this.plugin.saveSettings();
-              this.plugin.rerenderMath();
-            })
-        ),
-      ["python", "sympy", "numpy", "dialect"]
-    );
-
-    this.addSearchAliases(
-      new Setting(dialectsBody)
-        .setName("Wolfram Language Dialect")
-        .setDesc("Recognizes PascalCase Wolfram functions and named character tokens (e.g. \\[DifferentialD], ArcCot, Det, Sin) mapped directly to canonical rendering.")
-        .addToggle((toggle) =>
-          toggle
-            .setValue(this.plugin.settings.dialectWolfram)
-            .onChange(async (val) => {
-              this.plugin.settings.dialectWolfram = val;
-              await this.plugin.saveSettings();
-              this.plugin.rerenderMath();
-            })
-        ),
-      ["wolfram", "mathematica", "pascal case", "dialect"]
     );
 
     // =========================================================================
@@ -4187,6 +4175,109 @@ class ColorMathSettingTab extends PluginSettingTab {
       "section-feature-preview-experimental",
       "🧪 Feature Preview & Experimental",
       false
+    );
+
+    const dialectsBody = this.createSubCollapsible(
+      experimentalBody,
+      "sub-math-dialects",
+      "🌐 Mathematical Dialects & Interoperability",
+      false
+    );
+
+    this.addSearchAliases(
+      new Setting(dialectsBody)
+        .setName("LaTeX & MathJax 4 Core")
+        .setDesc("Enables core AMS-LaTeX, mathtools, and MathJax 4 symbols, operators, and environments via the primary MPHF table.")
+        .addToggle((toggle) =>
+          toggle
+            .setValue(this.plugin.settings.dialectLatex)
+            .onChange(async (val) => {
+              this.plugin.settings.dialectLatex = val;
+              await this.plugin.saveSettings();
+              this.plugin.rerenderMath();
+            })
+        ),
+      ["latex", "mathjax", "core", "ams"]
+    );
+
+    this.addSearchAliases(
+      new Setting(dialectsBody)
+        .setName("Typst Math Dialect")
+        .setDesc("Recognizes Typst mathematical shorthands (e.g. arrow notations, symbol aliases) with branchless 𝚯(1) bitmask filtering (≈0.3 ns latency) in the L1 cache resident MPHF table.")
+        .addToggle((toggle) =>
+          toggle
+            .setValue(this.plugin.settings.dialectTypst)
+            .onChange(async (val) => {
+              this.plugin.settings.dialectTypst = val;
+              await this.plugin.saveSettings();
+              this.plugin.rerenderMath();
+            })
+        ),
+      ["typst", "dialect", "shorthand", "arrow"]
+    );
+
+    this.addSearchAliases(
+      new Setting(dialectsBody)
+        .setName("AsciiMath Dialect")
+        .setDesc("Enables AsciiMath syntax token parsing (e.g. :=, !=, * for \\cdot, xx for \\times, @ for \\circ) with instant canonical conversion.")
+        .addToggle((toggle) =>
+          toggle
+            .setValue(this.plugin.settings.dialectAsciiMath)
+            .onChange(async (val) => {
+              this.plugin.settings.dialectAsciiMath = val;
+              await this.plugin.saveSettings();
+              this.plugin.rerenderMath();
+            })
+        ),
+      ["asciimath", "dialect", "syntax"]
+    );
+
+    this.addSearchAliases(
+      new Setting(dialectsBody)
+        .setName("MATLAB / GNU Octave Dialect")
+        .setDesc("Recognizes MATLAB and Octave computational operators and mathematical functions (e.g. chol, qr, svd, eig, expm, norm, det) without requiring manual backslashes.")
+        .addToggle((toggle) =>
+          toggle
+            .setValue(this.plugin.settings.dialectMatlab)
+            .onChange(async (val) => {
+              this.plugin.settings.dialectMatlab = val;
+              await this.plugin.saveSettings();
+              this.plugin.rerenderMath();
+            })
+        ),
+      ["matlab", "octave", "matrix", "linear algebra", "dialect"]
+    );
+
+    this.addSearchAliases(
+      new Setting(dialectsBody)
+        .setName("Python & SymPy Math Dialect")
+        .setDesc("Enables SymPy and Python mathematical universe function names (e.g. DiracDelta, Heaviside, LambertW, harmonic, polylog) scoped strictly to mathematical analysis.")
+        .addToggle((toggle) =>
+          toggle
+            .setValue(this.plugin.settings.dialectPython)
+            .onChange(async (val) => {
+              this.plugin.settings.dialectPython = val;
+              await this.plugin.saveSettings();
+              this.plugin.rerenderMath();
+            })
+        ),
+      ["python", "sympy", "numpy", "dialect"]
+    );
+
+    this.addSearchAliases(
+      new Setting(dialectsBody)
+        .setName("Wolfram Language Dialect")
+        .setDesc("Recognizes PascalCase Wolfram functions and named character tokens (e.g. \\[DifferentialD], ArcCot, Det, Sin) mapped directly to canonical rendering.")
+        .addToggle((toggle) =>
+          toggle
+            .setValue(this.plugin.settings.dialectWolfram)
+            .onChange(async (val) => {
+              this.plugin.settings.dialectWolfram = val;
+              await this.plugin.saveSettings();
+              this.plugin.rerenderMath();
+            })
+        ),
+      ["wolfram", "mathematica", "pascal case", "dialect"]
     );
 
     this.addSearchAliases(

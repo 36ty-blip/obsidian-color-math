@@ -1,8 +1,9 @@
 // src/parsers/modes.ts
 
-import { ColorPalette, ActiveMathMode, ColorMathOptions, hashStringToColor } from "../config";
+import { ColorPalette, ActiveMathMode, ColorMathOptions, hashStringToColor, VARIABLE_HASH_PALETTE } from "../config";
 import { ColorSpan } from "../utils/spans";
-import type { DifferentialSpan } from "./differentials";
+import { collectDifferentialSpans, type DifferentialSpan } from "./differentials";
+import { lookupCatalog } from "./catalog";
 
 /**
  * Domain-specific operators, tensors, and notation collections across the 14 modes.
@@ -286,13 +287,16 @@ export function generateModeAwareDerivativeSpans(
 
   for (const span of diffSpans) {
     if (span.kind !== "derivative_fraction") {
-      // Infinitesimals (e.g. dx, dt)
-      spans.push({
-        start: span.start,
-        end: span.end,
-        color: palette.derivative || "#bb9af7",
-        priority: 24,
-      });
+      // Infinitesimals (e.g. dx, dt, \partial y, ∂x, dT)
+      spans.push(
+        ...collectDifferentialSpans(
+          body,
+          palette,
+          [span],
+          options,
+          options?.variableHashPalette || VARIABLE_HASH_PALETTE
+        )
+      );
       continue;
     }
 
@@ -428,6 +432,73 @@ export function generateModeAwareDerivativeSpans(
       const numAbsEnd = span.start + numEndOffset;
       const denomAbsStart = span.start + denomStartOffset;
       const denomAbsEnd = span.start + denomEndOffset;
+
+      if (options?.variableDataFlow) {
+        // 1. Numerator operator & variable separation
+        const numOpMatch = span.text.slice(numStartOffset).match(/^(?:\\partial|∂|d|\\mathrm\{d\})(?:\^\{?\d+\}?)?\s*/);
+        if (numOpMatch) {
+          const numOpLen = numOpMatch[0].trimEnd().length;
+          spans.push({
+            start: numAbsStart,
+            end: numAbsStart + numOpLen,
+            color: palette.derivative || "#bb9af7",
+            priority: 24,
+            role: "derivative",
+          });
+          if (numeratorVar) {
+            const rawVar = numeratorVar.replace(/^[{]|[}]$/g, "");
+            const canonicalVar = lookupCatalog(rawVar)?.canonical || rawVar;
+            spans.push({
+              start: numAbsStart + numOpMatch[0].length,
+              end: numAbsEnd,
+              color: hashStringToColor(canonicalVar, options?.variableHashPalette || VARIABLE_HASH_PALETTE),
+              priority: 26,
+              role: "variable",
+            });
+          }
+        } else {
+          spans.push({
+            start: numAbsStart,
+            end: numAbsEnd,
+            color: palette.derivative || "#bb9af7",
+            priority: 24,
+            role: "derivative",
+          });
+        }
+
+        // 2. Denominator operator & variable separation
+        const denomOpMatch = span.text.slice(denomStartOffset).match(/^(?:\\partial|∂|d|\\mathrm\{d\})(?:\^\{?\d+\}?)?\s*/);
+        if (denomOpMatch) {
+          const denomOpLen = denomOpMatch[0].trimEnd().length;
+          spans.push({
+            start: denomAbsStart,
+            end: denomAbsStart + denomOpLen,
+            color: palette.derivative || "#bb9af7",
+            priority: 24,
+            role: "derivative",
+          });
+          if (denominatorVar) {
+            const rawVar = denominatorVar.replace(/^[{]|[}]$/g, "");
+            const canonicalVar = lookupCatalog(rawVar)?.canonical || rawVar;
+            spans.push({
+              start: denomAbsStart + denomOpMatch[0].length,
+              end: denomAbsEnd,
+              color: hashStringToColor(canonicalVar, options?.variableHashPalette || VARIABLE_HASH_PALETTE),
+              priority: 26,
+              role: "variable",
+            });
+          }
+        } else {
+          spans.push({
+            start: denomAbsStart,
+            end: denomAbsEnd,
+            color: palette.derivative || "#bb9af7",
+            priority: 24,
+            role: "derivative",
+          });
+        }
+        continue;
+      }
 
       const numColor = numeratorVar ? hashStringToColor(numeratorVar) : (palette.main || "#7aa2f7");
       const denomColor = denominatorVar ? hashStringToColor(denominatorVar) : (palette.derivative || "#bb9af7");

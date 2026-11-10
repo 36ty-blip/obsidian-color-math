@@ -13,7 +13,9 @@ import {
   assertMathematicalInvariant,
   assertSemanticOracle,
   GridDisagreementTelemetry,
+  synthesizeMathJaxDOM,
 } from "./tri_engine_harness";
+import { MathCSTParser } from "../src/parsers/cst/parser";
 
 describe("Tri-Engine Navigation Invariant Testing & Grid Disagreement Benchmarking (Roadmap Pillar 0 & 3)", () => {
   const telemetry = new GridDisagreementTelemetry();
@@ -76,10 +78,10 @@ describe("Tri-Engine Navigation Invariant Testing & Grid Disagreement Benchmarki
 
     // TRI-PARITY CONSENSUS ASSERTION
     telemetry.recordMatch(m1, m2, m3, isLeaf);
-    expect(m1.start).toBe(m2!.start);
-    expect(m2!.start).toBe(m3!.start);
-    expect(m1.end).toBe(m2!.end);
-    expect(m2!.end).toBe(m3!.end);
+    expect(m1.start, `Equation: ${latex} | Token: ${expectedToken}`).toBe(m2!.start);
+    expect(m2!.start, `Equation: ${latex} | Token: ${expectedToken}`).toBe(m3!.start);
+    expect(m1.end, `Equation: ${latex} | Token: ${expectedToken}`).toBe(m2!.end);
+    expect(m2!.end, `Equation: ${latex} | Token: ${expectedToken}`).toBe(m3!.end);
 
     // MATHEMATICAL INVARIANT ORACLE
     assertMathematicalInvariant(latex, m1, expectedToken);
@@ -529,6 +531,36 @@ describe("Tri-Engine Navigation Invariant Testing & Grid Disagreement Benchmarki
 
     // 4. \beta (19 to 24) - Greek symbol boundary
     verifyTriEngineTarget(elBeta, root, latex, "\\beta");
+  });
+
+  // --------------------------------------------------------------------------
+  // SCRIPT-BASE NEIGHBOR DISAMBIGUATION & NESTED MOLECULE REGRESSIONS
+  // --------------------------------------------------------------------------
+  it("Script-Base Neighbor Disambiguation: never swaps identical tokens adjacent to scripted bases (a + 4x^3 + 4x)", () => {
+    const equations = [
+      "a + 4x^3 + 4x",
+      "a + 4x + 4x",
+      "a + 4x^3 + 4x^2",
+      "\\Delta H_1 + \\Delta H_2 = \\Delta H",
+      "\\int_{T_1}^{T_2} \\Delta C_V dT = \\Delta C_V(T_2 - T_1)",
+      "\\rho = \\frac{(1 + (y_1)^2)^\\frac32}{y_2}",
+      "{i S}_{\\mathrm{YM}} + i S",
+      "x_1^{i_1} y_1^{i'_1}",
+    ];
+
+    for (const latex of equations) {
+      const cst = new MathCSTParser(latex).parse();
+      const { root, targets } = synthesizeMathJaxDOM(cst, latex);
+      stampMathJaxDOM(root as unknown as Element, latex, cst);
+
+      for (const target of targets) {
+        verifyTriEngineTarget(target.element, root, latex, target.expectedText);
+        // Also verify exact ground-truth CST node span match (no swapped tokens!)
+        const m2 = getMathJaxElementRange(target.element as unknown as Element);
+        expect(m2?.start).toBe(target.node.start);
+        expect(m2?.end).toBe(target.node.end);
+      }
+    }
   });
 
   // --------------------------------------------------------------------------

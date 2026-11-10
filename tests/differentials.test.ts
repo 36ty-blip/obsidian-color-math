@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { findDifferentialSpans, SUBDIFFERENTIAL_PATTERN } from "../src/parsers/differentials";
 import { colorLatexBody, computeSemanticMathSpans } from "../src/converters/generic";
-import { DEFAULT_COLORS } from "../src/config";
+import { DEFAULT_COLORS, hashStringToColor } from "../src/config";
 
 describe("Calculus Differentials & Derivatives Disambiguation", () => {
   describe("findDifferentialSpans", () => {
@@ -59,27 +59,30 @@ describe("Calculus Differentials & Derivatives Disambiguation", () => {
       expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.derivative}}{\\frac{d}{dx}}`);
     });
 
-    it("Option B: infinitesimal differential dx inherits variable hash color of x", () => {
+    it("separates differential operator d from coordinate variable x with variableDataFlow", () => {
       const result = colorLatexBody("\\int x^2 \\, dx", DEFAULT_COLORS, {
         variableDataFlow: true,
         colorDifferentials: true,
       });
-      // dx should be atomic token inheriting the variable hash color of x (#7aa2f7)
-      expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.main}}{dx}`);
-      expect(result).not.toContain(`\\textcolor{${DEFAULT_COLORS.main}}{d}`);
+      // d should receive derivative color (#bb9af7) and x receives variable hash color
+      expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.derivative}}{d}`);
+      expect(result).toContain(`\\textcolor{${hashStringToColor("x")}}{x}`);
+      expect(result).not.toContain("dx}");
     });
 
-    it("Option B: da inherits variable hash of a in \\int x^2 + d + a^2 da", () => {
+    it("separates differential operator d from coordinate variable a in \\int x^2 + d + a^2 da", () => {
       const result = colorLatexBody("\\int x^2 + d + a^2 \\; da", DEFAULT_COLORS, {
         variableDataFlow: true,
         colorDifferentials: true,
       });
-      // a^2 has purple #bb9af7
-      expect(result).toContain(`\\textcolor{#bb9af7}{a}`);
-      // da inherits purple #bb9af7 as an atomic unit
-      expect(result).toContain(`\\textcolor{#bb9af7}{da}`);
-      // standalone d is peach #ff9e64
-      expect(result).toContain(`\\textcolor{#ff9e64}{d}`);
+      const colorA = hashStringToColor("a");
+      const colorD = hashStringToColor("d");
+      // a^2 has variable hash
+      expect(result).toContain(`\\textcolor{${colorA}}{a}`);
+      // da separates into d in derivative color and a in variable hash color
+      expect(result).toContain(`\\textcolor{${DEFAULT_COLORS.derivative}}{d}`);
+      // standalone d has variable hash
+      expect(result).toContain(`\\textcolor{${colorD}}{d}`);
     });
 
     it("Option B fallback: when colorInfinitesimals is false, da splits into individual scalar variable hashes", () => {
@@ -88,8 +91,9 @@ describe("Calculus Differentials & Derivatives Disambiguation", () => {
         colorDifferentials: true,
         colorInfinitesimals: false,
       });
-      // d is peach #ff9e64 and a is purple #bb9af7
-      expect(result).toContain(`\\textcolor{#ff9e64}{d}\\textcolor{#bb9af7}{a}`);
+      const colorA = hashStringToColor("a");
+      const colorD = hashStringToColor("d");
+      expect(result).toContain(`\\textcolor{${colorD}}{d}\\textcolor{${colorA}}{a}`);
     });
   });
 

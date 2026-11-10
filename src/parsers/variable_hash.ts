@@ -60,6 +60,42 @@ const VARIABLE_OPAQUE_MACROS = new Set([
   "hskip",
 ]);
 
+export const STATE_QUALIFIERS = new Set([
+  // Family 1: Extrema & Variational Bounds
+  "max", "min", "sup", "inf", "opt", "lim",
+  // Family 2: Signal Metrics & Effective States
+  "rms", "avg", "mean", "peak", "eff",
+  // Family 3: Critical, Equilibrium & Phase Regimes
+  "eq", "crit", "sat", "ss", "th", "nom",
+  // Family 4: Boundary, Resultant & Directional States
+  "init", "fin", "ref", "net", "tot", "ext", "int"
+]);
+
+/**
+ * Determines whether a position in LaTeX code resides inside a subscript context
+ * (either directly preceded by '_' or within an open '_{...}' block).
+ */
+export function isEnclosingSubscript(body: string, index: number): boolean {
+  let depth = 0;
+  for (let i = index - 1; i >= 0; i--) {
+    const ch = body[i];
+    if (ch === "}") {
+      depth++;
+    } else if (ch === "{") {
+      if (depth > 0) {
+        depth--;
+      } else {
+        let j = i - 1;
+        while (j >= 0 && /\s/.test(body[j])) j--;
+        return j >= 0 && body[j] === "_";
+      }
+    } else if (depth === 0 && (ch === "_" || ch === "^")) {
+      return ch === "_";
+    }
+  }
+  return false;
+}
+
 function skipComment(text: string, start: number): number {
   let index = start + 1;
   while (index < text.length && text[index] !== "\r" && text[index] !== "\n") {
@@ -109,6 +145,19 @@ export function collectVariableSpans(
 
     const operand = readOperand(body, index);
     if (operand !== null && operand.kind === "opaque") {
+      if (isEnclosingSubscript(body, index)) {
+        const innerText = body.slice(operand.start, operand.end).replace(/^\\[a-zA-Z]+\{?|\}$/g, "").trim().toLowerCase();
+        if (STATE_QUALIFIERS.has(innerText)) {
+          spans.push({
+            start: index,
+            end: operand.end,
+            color: hashStringToColor(innerText, hashPalette),
+            priority: 26,
+          });
+          index = operand.end;
+          continue;
+        }
+      }
       index = operand.end;
       continue;
     }
@@ -188,7 +237,8 @@ export function collectVariableSpans(
                 const inner = braced[0];
                 const baseMatch = inner.match(/[a-zA-Z]|[\u0370-\u03FF]|\uD835[\uDC00-\uDFFF]/);
                 const baseLetter = baseMatch ? baseMatch[0] : "x";
-                const color = hashStringToColor(baseLetter, hashPalette);
+                const canonicalKey = lookupCatalog(baseLetter)?.canonical || baseLetter;
+                const color = hashStringToColor(canonicalKey, hashPalette);
                 spans.push({
                   start: index,
                   end: braced[1],
@@ -225,7 +275,8 @@ export function collectVariableSpans(
               if (letterMatch) {
                 const fullVar = letterMatch[0];
                 const baseLetter = fullVar.replace(/'/g, "");
-                const color = hashStringToColor(baseLetter, hashPalette);
+                const canonicalKey = lookupCatalog(baseLetter)?.canonical || baseLetter;
+                const color = hashStringToColor(canonicalKey, hashPalette);
                 spans.push({
                   start: index,
                   end: targetStart + fullVar.length,
@@ -320,9 +371,37 @@ export function collectVariableSpans(
           if (afterCmd < body.length && body[afterCmd] === "{") {
             const braced = readBraced(body, afterCmd);
             if (braced !== null) {
+              const innerWord = braced[0].trim().toLowerCase();
+              if (isEnclosingSubscript(body, index) && STATE_QUALIFIERS.has(innerWord)) {
+                const color = hashStringToColor(innerWord, hashPalette);
+                spans.push({
+                  start: index,
+                  end: braced[1],
+                  color,
+                  priority: 26,
+                });
+                index = braced[1];
+                continue;
+              }
               index = braced[1];
               continue;
             }
+          }
+        }
+
+        // Subscript state qualifier commands (e.g. \max, \min, \sup, \inf in A_{\max})
+        if (isEnclosingSubscript(body, index)) {
+          const rawMacro = cmdName.slice(1).toLowerCase();
+          if (STATE_QUALIFIERS.has(rawMacro)) {
+            const color = hashStringToColor(rawMacro, hashPalette);
+            spans.push({
+              start: index,
+              end: cmdEnd,
+              color,
+              priority: 26,
+            });
+            index = cmdEnd;
+            continue;
           }
         }
 
@@ -372,12 +451,69 @@ export function collectVariableSpans(
     // 2. Bare mathematical symbols (Greek letters, constants, operators like hbar, nabla, alpha, arrow.r)
     const bareSymbol = matchBareSymbol(body, index);
     if (bareSymbol) {
+      if (isEnclosingSubscript(body, index)) {
+        const rawKey = (bareSymbol.entry.key || "").toLowerCase();
+        if (STATE_QUALIFIERS.has(rawKey)) {
+          const color = hashStringToColor(rawKey, hashPalette);
+          spans.push({
+            start: index,
+            end: index + bareSymbol.length,
+            color,
+            priority: 26,
+          });
+          index += bareSymbol.length;
+          continue;
+        }
+      }
+
       const afterBare = body.slice(index + bareSymbol.length).trimStart();
       const hasArgs = afterBare.startsWith("(") || afterBare.startsWith("\\left(");
-      if (hasArgs && bareSymbol.length <= 3 && !bareFunctions.has(body.slice(index, index + bareSymbol.length).toLowerCase())) {
-        // Fall through to 2-3 letter variable multiplication (e.g. ax(y+z), sp(v))
+      const entry = bareSymbol.entry;
+      if (hasArgs && bareSymbol.length === 1) {
+        // Single-letter function call: skip function name (e.g. f(x), g(x))
+        index += 1;
+        continue;
+      }
+      const isCanonicalSymbol = entry.roleId === ROLE_CONSTANT || entry.roleId === ROLE_PARAMETER;
+      if (
+        hasArgs &&
+        bareSymbol.length <= 3 &&
+        !isCanonicalSymbol &&
+        !bareFunctions.has(body.slice(index, index + bareSymbol.length).toLowerCase())
+      ) {
+        // Fall through to 2-3 letter variable multiplication (e.g. non-catalog identifiers)
       } else {
-        const entry = bareSymbol.entry;
+        const isBareDiff =
+          bareSymbol.length === 2 &&
+          (bareSymbol.entry.key.startsWith("d") || bareSymbol.entry.key.startsWith("∂") || bareSymbol.entry.key.startsWith("δ")) &&
+          /^[a-zA-Z]$/.test(body[index + 1]);
+
+        if (isBareDiff && (options?.variableDataFlow || options?.colorDifferentials !== false)) {
+          const varChar = body[index + 1];
+          const diffColor =
+            typeof palette === "object" && !Array.isArray(palette) && palette.derivative
+              ? palette.derivative
+              : "#bb9af7";
+          const canonicalVar = lookupCatalog(varChar)?.canonical || varChar;
+          const varColor = hashStringToColor(canonicalVar, hashPalette);
+          spans.push({
+            start: index,
+            end: index + 1,
+            color: diffColor,
+            role: "derivative",
+            priority: 24,
+          });
+          spans.push({
+            start: index + 1,
+            end: index + 2,
+            color: varColor,
+            role: "variable",
+            priority: 26,
+          });
+          index += bareSymbol.length;
+          continue;
+        }
+
         if (entry.roleId === ROLE_CONSTANT) {
           const constColor =
             typeof palette === "object" && !Array.isArray(palette) && palette.orange
@@ -398,6 +534,7 @@ export function collectVariableSpans(
             start: index,
             end: index + bareSymbol.length,
             color: diffColor,
+            role: "derivative",
             priority: 24,
           });
         } else if (entry.roleId === ROLE_OPERATOR || entry.roleId === ROLE_RELATION) {
@@ -433,16 +570,58 @@ export function collectVariableSpans(
       const word = wordMatch[1];
       const lowerWord = word.toLowerCase();
 
-      // 1. Bare functions without parentheses: e.g. sin x, ln x, rank A, det M
+      // 1. State qualifiers inside subscripts (Option A): hash token atomically to prevent multi-letter shattering
+      if (isEnclosingSubscript(body, index) && STATE_QUALIFIERS.has(lowerWord)) {
+        const color = hashStringToColor(lowerWord, hashPalette);
+        spans.push({
+          start: index,
+          end: index + word.length,
+          color,
+          priority: 26,
+        });
+        index += word.length;
+        continue;
+      }
+
+      // 2. Extremum operators max and min: always retain function meaning outside subscripts
+      if (lowerWord === "max" || lowerWord === "min") {
+        index += word.length;
+        continue;
+      }
+
+      // Check if followed by parentheses / arguments: e.g. dim(V), det(A), rank(A)
+      const afterWord = body.slice(index + word.length).trimStart();
+      const hasArgs = afterWord.startsWith("(") || afterWord.startsWith("\\left(") || afterWord.startsWith("{");
+      const isSubOrSuper = index > 0 && (body[index - 1] === "_" || body[index - 1] === "^");
+
+      // 2. Dimensional and matrix functions: dim(V), det(A), ker(T), rank(M)
+      const DIM_OR_MATRIX_FNS = new Set(["dim", "det", "ker", "rank", "nullity", "hom", "deg", "tr", "trace", "span", "diag"]);
+      if (DIM_OR_MATRIX_FNS.has(lowerWord)) {
+        if (hasArgs && !isSubOrSuper) {
+          // Function call with argument: skip variable hash so function color applies
+          index += word.length;
+          continue;
+        } else {
+          // Isolated without argument: treat as variable and hash!
+          const color = hashStringToColor(word, hashPalette);
+          spans.push({
+            start: index,
+            end: index + word.length,
+            color,
+            priority: 26,
+          });
+          index += word.length;
+          continue;
+        }
+      }
+
+      // 3. Other bare functions without parentheses: e.g. sin x, ln x
       if (bareFunctions.has(lowerWord)) {
         index += word.length;
         continue;
       }
 
-      // 2. Check if followed by parentheses: e.g. rank(A), nullity(A), f(x), ax(y + z)
-      const afterWord = body.slice(index + word.length).trimStart();
-      const hasArgs = afterWord.startsWith("(") || afterWord.startsWith("\\left(");
-      const isSubOrSuper = index > 0 && (body[index - 1] === "_" || body[index - 1] === "^");
+      // 4. Check if other multi-letter word followed by parentheses: e.g. f(x), ax(y + z)
       if (hasArgs && !isSubOrSuper) {
         if (word.length >= 4) {
           // Multi-letter function call: skip entire word (e.g. rank, nullity, poly)
@@ -494,7 +673,8 @@ export function collectVariableSpans(
       const baseLetter = fullVar.replace(/'/g, "");
       const varEnd = index + fullVar.length;
 
-      const color = hashStringToColor(baseLetter, hashPalette);
+      const canonicalKey = lookupCatalog(baseLetter)?.canonical || baseLetter;
+      const color = hashStringToColor(canonicalKey, hashPalette);
       spans.push({
         start: index,
         end: varEnd,

@@ -6,7 +6,7 @@
 import { MathCSTParser } from "../parsers/cst/parser";
 import { CSTNode } from "../parsers/cst/types";
 import { collectLeaves, ResolvedRange } from "./lazy_navigation";
-import { getMathJaxElementRange, indexMathJaxElement } from "./weakmap_index";
+import { getMathJaxElementRange, getDirectMathJaxElementRange, indexMathJaxElement } from "./weakmap_index";
 import {
   reconcileSpatialTensor,
   getElementText,
@@ -18,31 +18,42 @@ import {
 /**
  * Attaches a cm-src-<start>-<end> class (Method 1) and indexes into WeakMap (Method 2),
  * strictly gated by the Final Verification Gate (Cell Containment + Unicode Identity + Non-Overwrite).
+ * Line containers (<mjx-linebox>) receive cm-cell- rather than cm-src-.
  */
 function stampElement(
   el: Element,
   start: number,
   end: number,
   kind: ResolvedRange["kind"] = "leaf",
-  latex?: string
+  latex?: string,
+  sourceMap?: DesugarSourceMap
 ): boolean {
-  if (start < 0 || end <= start) return false;
+  if (start < 0 || end < start) return false;
   // Never overwrite an element already reconciled by the 4D Spatial Tensor engine
-  if (getMathJaxElementRange(el)) return false;
+  if (getDirectMathJaxElementRange(el)) return false;
 
   if (el.classList && typeof el.classList.contains === "function" && el.classList.contains("color-math-cell-padding")) {
     return false;
   }
 
-  // 1. 2D Cell / Line Containment Gate
+  let finalStart = start;
+  let finalEnd = end;
+  if (sourceMap && !sourceMap.isEmpty()) {
+    const mapped = sourceMap.projectRangeToRaw(start, end);
+    finalStart = mapped.start;
+    finalEnd = mapped.end;
+  }
+  if (finalStart < 0 || finalEnd < finalStart) return false;
+
+  // 1. 2D Cell / Line Containment Gate (comparing in unified raw markdown space)
   const mtd = typeof el.closest === "function" ? el.closest("mjx-mtd, mjx-linebox") : null;
   const cellRange = mtd ? getMathJaxElementRange(mtd) : undefined;
-  if (cellRange && (start < cellRange.start || end > cellRange.end)) {
+  if (cellRange && (finalStart < cellRange.start || finalEnd > cellRange.end)) {
     return false;
   }
 
-  // 2. Final Unicode Identity Gate for leaf tokens
-  if (latex && (kind === "leaf" || kind === "text") && el.tagName && /^MJX-M(?:I|N|O|TEXT)$/i.test(el.tagName)) {
+  // 2. Final Unicode Identity Gate for leaf tokens (skipping zero-width insertion sentinels)
+  if (latex && start < end && (kind === "leaf" || kind === "text") && el.tagName && /^MJX-M(?:I|N|O|TEXT)$/i.test(el.tagName)) {
     const domText = getElementText(el);
     const rawSlice = latex.slice(start, end);
     if (domText && rawSlice && !isSliceTextCompatible(domText, rawSlice)) {
@@ -50,18 +61,23 @@ function stampElement(
     }
   }
 
-  el.classList.add(`cm-src-${start}-${end}`);
+  const isLineContainer = typeof (el as any).matches === "function" && (el as any).matches("mjx-linebox, mjx-linestack");
+  if (isLineContainer) {
+    el.classList.add(`cm-cell-${finalStart}-${finalEnd}`);
+  } else {
+    el.classList.add(`cm-src-${finalStart}-${finalEnd}`);
+  }
   indexMathJaxElement(el, {
-    start,
-    end,
-    kind,
+    start: finalStart,
+    end: finalEnd,
+    kind: isLineContainer ? "line" : kind,
     coord: { w: 1, z: 0, y: 0, x: 0 },
     scales: {
-      glyph: { start, end },
-      atom: { start, end },
-      slot: { start, end },
-      molecule: { start, end },
-      enclosure: { start, end },
+      glyph: { start: finalStart, end: finalEnd },
+      atom: { start: finalStart, end: finalEnd },
+      slot: { start: finalStart, end: finalEnd },
+      molecule: { start: finalStart, end: finalEnd },
+      enclosure: { start: finalStart, end: finalEnd },
     },
   });
   return true;
@@ -76,7 +92,8 @@ function stampLeaves(
   container: Element,
   leafNodes: CSTNode[],
   reconciledNodes?: Set<CSTNode>,
-  latex?: string
+  latex?: string,
+  sourceMap?: DesugarSourceMap
 ): void {
   const allDomLeaves = Array.from(container.querySelectorAll("mjx-mi, mjx-mn, mjx-mo, mjx-mtext"));
   if (allDomLeaves.length === 0 || leafNodes.length === 0) return;
@@ -93,7 +110,7 @@ function stampLeaves(
   // Run up to 3 feedback passes: each newly locked symbol in Pass k acts as a verified anchor for Pass k+1
   for (let pass = 0; pass < 3; pass++) {
     const leafEls = allDomLeaves.filter(
-      (el) => !getMathJaxElementRange(el) && !el.classList.contains("cm-tensor-reconciled")
+      (el) => !getDirectMathJaxElementRange(el) && !el.classList.contains("cm-tensor-reconciled")
     );
     if (leafEls.length === 0) break;
 
@@ -107,14 +124,26 @@ function stampLeaves(
       if (!expectedText) continue;
 
       const isCandEligible = (el: Element): boolean => {
-        if (getMathJaxElementRange(el)) return false;
+        if (getDirectMathJaxElementRange(el)) return false;
+        const mappedNode = sourceMap && !sourceMap.isEmpty()
+          ? sourceMap.projectRangeToRaw(node.start, node.end)
+          : { start: node.start, end: node.end };
+
         const mtd = getEnclosingCell(el);
         const cellRange = mtd ? getMathJaxElementRange(mtd) : undefined;
-        if (cellRange && (node.start < cellRange.start || node.end > cellRange.end)) {
-          return false;
-        }
         const normText = getElementText(el);
         const rawText = String(el.textContent || "").trim();
+        if (cellRange && (mappedNode.start < cellRange.start || mappedNode.end > cellRange.end)) {
+          return false;
+        }
+
+        // Enclosing Table Scope Barrier: prevent tokens from Table 1 from matching inside Table 2
+        const mtable = typeof el.closest === "function" ? el.closest("mjx-mtable") : null;
+        const tableRange = mtable ? getMathJaxElementRange(mtable) : undefined;
+        if (tableRange && (mappedNode.start < tableRange.start || mappedNode.end > tableRange.end)) {
+          return false;
+        }
+
         if (el.classList && typeof el.classList.contains === "function" && el.classList.contains("color-math-cell-padding")) {
           return false;
         }
@@ -133,6 +162,14 @@ function stampLeaves(
         if (domIdx < 0) return score;
 
         const elCell = getEnclosingCell(el);
+
+        const nodeIdx = leafNodes.indexOf(node);
+        if (domIdx >= 0 && leafNodes.length > 0 && allDomLeaves.length > 0) {
+          const normCst = nodeIdx / leafNodes.length;
+          const normDom = domIdx / allDomLeaves.length;
+          const dist = Math.abs(normCst - normDom);
+          score += Math.max(0, 20 * (1 - dist * 4));
+        }
 
         // 1. Direct Left Neighbor Verification + Locked Anchor Bonus
         if (node.prevLeaf && domIdx > 0) {
@@ -179,11 +216,19 @@ function stampLeaves(
             break;
           }
         }
-        if (leftAnchorRange && node.start >= leftAnchorRange.start) {
-          score += 15;
+        if (leftAnchorRange) {
+          if (node.start >= leftAnchorRange.start) {
+            score += 15;
+          } else {
+            score -= 50; // Anti-inversion penalty
+          }
         }
-        if (rightAnchorRange && node.end <= rightAnchorRange.end) {
-          score += 15;
+        if (rightAnchorRange) {
+          if (node.end <= rightAnchorRange.end) {
+            score += 15;
+          } else {
+            score -= 50; // Anti-inversion penalty
+          }
         }
         if (
           leftAnchorRange &&
@@ -224,7 +269,7 @@ function stampLeaves(
       // Retry across ranked candidates until one passes the Final Stamp Gate
       for (const cand of scoredCands) {
         const matchingEl = leafEls[cand.idx];
-        if (stampElement(matchingEl, node.start, node.end, kind, latex)) {
+        if (stampElement(matchingEl, node.start, node.end, kind, latex, sourceMap)) {
           consumedNodes.add(node);
           newlyStampedInPass++;
           if (cand.idx >= cursor) {
@@ -232,7 +277,13 @@ function stampLeaves(
           }
           const childGlyphs = Array.from(matchingEl.querySelectorAll("mjx-c"));
           for (const glyph of childGlyphs) {
-            stampElement(glyph, node.start, node.end, kind, latex);
+            stampElement(glyph, node.start, node.end, kind, latex, sourceMap);
+          }
+          const parentMover = typeof matchingEl.closest === "function"
+            ? matchingEl.closest("mjx-mover, mjx-munder, mjx-munderover")
+            : null;
+          if (parentMover && container.contains(parentMover)) {
+            stampElement(parentMover, node.start, node.end, kind, latex, sourceMap);
           }
           break;
         }
@@ -270,6 +321,29 @@ export function stampMathJaxDOM(container: Element, latex: string): void {
     // 3. Verification-gated leaf recovery pass (skipping nodes already bound by the 4D Tree Engine)
     const leafNodes = collectLeaves(ast);
     stampLeaves(container, leafNodes, reconciledNodes, latex);
+
+    // 4. Upgrade Method 1 (cm-src) & Method 2 (WeakMap) on MathJax Error Elements (<mjx-merror>)
+    const errorEls = Array.from(container.querySelectorAll("mjx-merror"));
+    for (const errorEl of errorEls) {
+      const errText = (errorEl.textContent || "").trim();
+      const macroMatch = errText.match(/\\[a-zA-Z]+(?:\{[a-zA-Z0-9*]+\})?/);
+      if (macroMatch) {
+        const cmd = macroMatch[0];
+        const idx = latex.indexOf(cmd);
+        if (idx >= 0) {
+          stampElement(errorEl, idx, idx + cmd.length, "leaf", latex);
+          const childTexts = Array.from(errorEl.querySelectorAll("mjx-mtext, mjx-c"));
+          for (const ch of childTexts) {
+            stampElement(ch, idx, idx + cmd.length, "leaf", latex);
+          }
+        }
+      } else {
+        const diags = parser.getDiagnostics();
+        if (diags.length > 0) {
+          stampElement(errorEl, diags[0].start, diags[0].end, "leaf", latex);
+        }
+      }
+    }
   } catch (err) {
     // Fail-safe: Never crash rendering if CST alignment encounters unexpected syntax
     console.debug("Color Math: stampMathJaxDOM non-fatal alignment failure:", err);

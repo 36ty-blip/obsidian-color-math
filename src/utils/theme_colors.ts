@@ -1,4 +1,9 @@
-import { ColorPalette, DEFAULT_PALETTE } from "../config";
+import {
+  ColorPalette,
+  DEFAULT_PALETTE,
+  DARK_VARIABLE_HASH_PALETTE,
+  LIGHT_VARIABLE_HASH_PALETTE,
+} from "../config";
 
 /**
  * Converts any CSS color string (hex, rgb, rgba) into a standard #RRGGBB hex string.
@@ -52,6 +57,14 @@ export function isVaultLightMode(): boolean {
     return false;
   }
   return document.body.classList.contains("theme-light");
+}
+
+/**
+ * Returns the optimal 16-color variable hash palette for the active vault theme (light or dark).
+ */
+export function getVariableHashPalette(isLight?: boolean): string[] {
+  const light = isLight !== undefined ? isLight : isVaultLightMode();
+  return light ? LIGHT_VARIABLE_HASH_PALETTE : DARK_VARIABLE_HASH_PALETTE;
 }
 
 /**

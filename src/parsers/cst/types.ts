@@ -45,6 +45,29 @@ export interface EvaluationBarNode extends BaseNode {
   limits: CSTNode[];
 }
 
+export interface MatrixGridCell {
+  row: number;
+  col: number;
+  start: number;
+  end: number;
+  nodes: CSTNode[];
+  isEmpty: boolean;
+}
+
+export interface MatrixGridMetadata {
+  rowCount: number;
+  colCount: number;
+  cells: MatrixGridCell[][];
+}
+
+export interface CSTDiagnostic {
+  message: string;
+  start: number;
+  end: number;
+  severity: "error" | "warning";
+  code: "unclosed_delimiter" | "mismatched_delimiter" | "unknown_macro" | "misplaced_separator";
+}
+
 export interface GroupNode extends BaseNode {
   kind: "group";
   delimType: "paren" | "bracket" | "brace" | "bare_brace" | "angle" | "pipe" | "sized" | "matrix";
@@ -54,6 +77,7 @@ export interface GroupNode extends BaseNode {
   closeStart?: number;
   closeEnd?: number;
   closeText?: string;
+  grid?: MatrixGridMetadata;
   isHalfOpenInterval?: boolean;
   isLeftRight?: boolean;
   isSyntaxError?: boolean;
@@ -77,6 +101,7 @@ export interface GroupNode extends BaseNode {
   normOrder?: string;             // "1", "2", "\infty", "F"
   normLimits?: CSTNode[];
   evaluationLimits?: CSTNode[];
+  rawPrefix?: string;
   depth: number;
   children: CSTNode[];
 }
@@ -86,6 +111,8 @@ export interface FractionNode extends BaseNode {
   command: string; // "\frac", "\dfrac", "\tfrac", "\cfrac"
   numerator: CSTNode[];
   denominator: CSTNode[];
+  numRange?: { start: number; end: number };
+  denRange?: { start: number; end: number };
   isInfixSlash?: boolean;
   hasUnclosedBrace?: boolean;
   isWirtinger?: boolean;
@@ -100,6 +127,7 @@ export interface ScriptNode extends BaseNode {
   scriptType: "subscript" | "superscript";
   base?: CSTNode;
   arg: CSTNode[];
+  argRange?: { start: number; end: number };
   isHigherOrderDerivative?: boolean;
   isConjugate?: boolean; // e.g. z^*
   isSingularityPole?: boolean;

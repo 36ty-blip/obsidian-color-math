@@ -1,6 +1,6 @@
 {
   "name": "obsidian-color-math",
-  "version": "1.0.115",
+  "version": "1.0.128",
   "description": "AST-driven semantic syntax highlighting and real-time MathJax CHTML decoration for mathematical expressions in markdown notes.",
   "main": "main.js",
   "scripts": {
@@ -10,9 +10,15 @@
     "bench:build": "node esbuild.bench.mjs",
     "bench:sync": "node scripts/sync_benchmarks.mjs",
     "bench": "npm run bench:build && node --expose-gc dist/perf_runner.cjs && node scripts/sync_benchmarks.mjs",
+    "visualize": "npx tsx scripts/visualize_dual_tree.ts",
     "profile:keystroke": "npx tsx scripts/keystroke_profiler.ts",
-    "test": "node scripts/generate_constructors.mjs && vitest run",
+    "test": "node scripts/run_tests.mjs",
+    "test:all": "node scripts/run_tests.mjs --all",
+    "test:failed": "node scripts/run_tests.mjs --failed",
+    "test:list": "node scripts/run_tests.mjs --list",
+    "test:stage": "node scripts/run_tests.mjs --stage",
     "test:orchestrate": "node scripts/run_tests.mjs",
+    "test:vitest": "vitest run",
     "test:watch": "vitest",
     "test:corpus": "npx tsx tests/corpus_audit.ts",
     "bench:split": "npx tsx tests/corpus_split_audit.ts",
@@ -52,6 +58,7 @@
     "fast-check": "^3.18.0",
     "katex": "^0.19.1",
     "obsidian": "latest",
+    "tsx": "^4.23.15",
     "typescript": "^5.4.5",
     "vitest": "^1.6.0"
   }
