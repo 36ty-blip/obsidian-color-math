@@ -1,7 +1,7 @@
 {
   "id": "color-math",
   "name": "Color Math",
-  "version": "1.0.128",
+  "version": "1.0.129",
   "minAppVersion": "1.4.0",
   "description": "AST-driven semantic syntax highlighting and real-time MathJax CHTML decoration for mathematical expressions in markdown notes.",
   "author": "36ty-blip",

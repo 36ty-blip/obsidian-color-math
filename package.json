@@ -1,6 +1,6 @@
 {
   "name": "obsidian-color-math",
-  "version": "1.0.128",
+  "version": "1.0.129",
   "description": "AST-driven semantic syntax highlighting and real-time MathJax CHTML decoration for mathematical expressions in markdown notes.",
   "main": "main.js",
   "scripts": {
