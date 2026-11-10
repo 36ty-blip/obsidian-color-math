@@ -193,8 +193,24 @@ async function main() {
   const targetVersion = options.exactVersion || bumpVersion(currentVersions.pkgVersion, options.bumpType);
   console.log(`  • Current Version: ${c.dim}${currentVersions.pkgVersion}${c.reset} $\\longrightarrow$ Target Version: ${c.green}${c.bold}${targetVersion}${c.reset} (${options.exactVersion ? "exact" : options.bumpType})`);
 
-  // --- Phase 1: Official Obsidian Linter & Multi-Core Test Suite Verification ---
-  console.log(`\n${c.bold}[Phase 1: Official Obsidian Linter & Multi-Core Test Verification]${c.reset}`);
+  // --- Phase 1: Pre-Flight Integrity, Official Obsidian Linter & Multi-Core Tests ---
+  console.log(`\n${c.bold}[Phase 1: Pre-Flight Integrity, Official Obsidian Linter & Multi-Core Tests]${c.reset}`);
+
+  // Step 1A-0: Lockfile Parity & Dependency Integrity Verification
+  console.log(`  • Verifying npm lockfile synchronization (zero-drift check)...`);
+  try {
+    execSync("npm install --package-lock-only", { cwd: rootDir, stdio: "pipe" });
+    const lockDiff = execSync("git diff --name-only package-lock.json", { cwd: rootDir, encoding: "utf-8" }).trim();
+    if (lockDiff.length > 0) {
+      console.error(`\n${c.red}❌ package-lock.json is out of date or drifted from package.json!${c.reset}`);
+      console.error(`Please run 'npm install' and commit the updated package-lock.json.`);
+      process.exit(1);
+    }
+    console.log(`  • ${c.green}✔ Lockfile parity verified: package-lock.json is 100% synchronized.${c.reset}`);
+  } catch (err) {
+    console.error(`\n${c.red}❌ Lockfile verification failed: ${err.message}${c.reset}`);
+    process.exit(1);
+  }
 
   // Step 1A: Official Obsidian Community Linter Audit
   if (options.skipLint) {

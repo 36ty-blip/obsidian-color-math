@@ -18,8 +18,8 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm ci
-      - name: Type check
-        run: npx tsc --noEmit
+      - name: Pre-flight integrity & Linter audit
+        run: npm run check:all
       - name: Run Vitest test suite
         run: npm test
       - name: Build plugin bundle

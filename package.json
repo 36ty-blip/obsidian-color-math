@@ -29,6 +29,9 @@
     "publish:github": "node scripts/publish_github.mjs",
     "publish:dry": "node scripts/publish_github.mjs --dry-run",
     "release:stats": "node scripts/telemetry.mjs",
+    "check:lockfile": "npm install --package-lock-only && git diff --exit-code package-lock.json",
+    "check:mobile": "node scripts/mobile_sandbox_guard.mjs",
+    "check:all": "npm run check:lockfile && npm run lint:obsidian && npm run check:mobile",
     "lint:obsidian": "eslint src/",
     "lint:advisory": "eslint src/ --config eslint.advisory.mjs"
   },
