@@ -65,6 +65,7 @@ function parseCliArgs() {
     description: null,
     pushGithub: false,
     skipLint: false,
+    skipBench: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -84,6 +85,11 @@ function parseCliArgs() {
     else if (arg === "--desc" && i + 1 < args.length) options.description = args[++i];
     else if (arg === "--push-github") options.pushGithub = true;
     else if (arg === "--skip-lint") options.skipLint = true;
+    else if (arg === "--skip-bench") options.skipBench = true;
+  }
+
+  if (options.quick) {
+    options.skipBench = true;
   }
 
   return options;
@@ -238,6 +244,22 @@ async function main() {
         console.error(`\n${c.red}❌ Corpus audit benchmark failed! Aborting release pipeline.${c.reset}`);
         process.exit(1);
       }
+    }
+  }
+
+  // Step 1C: Empirical Performance Benchmarking & 144Hz SLA Synchronization
+  if (options.skipBench) {
+    console.log(`\n  • ${c.yellow}⚠️  Benchmarks skipped via --skip-bench / --quick flag.${c.reset}`);
+  } else {
+    console.log(`\n  • ${c.bold}Executing 10-Workload Performance Benchmarks & 144Hz SLA Synchronization...${c.reset}`);
+    const benchStart = Date.now();
+    try {
+      await runCommand("npm", ["run", "bench"], rootDir);
+      const benchElapsed = ((Date.now() - benchStart) / 1000).toFixed(2);
+      console.log(`  • ${c.green}✔ All 10 workloads profiled & README tables synchronized in ${benchElapsed}s.${c.reset}`);
+    } catch (err) {
+      console.error(`\n${c.red}❌ Performance benchmark execution failed!${c.reset}`);
+      process.exit(1);
     }
   }
 
