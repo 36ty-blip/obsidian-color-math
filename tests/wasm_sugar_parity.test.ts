@@ -2,9 +2,8 @@
 // Bijective Parity Test Suite: Pure TypeScript Normalizer vs. WebAssembly Island 4 Engine
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import * as fs from "fs";
-import * as path from "path";
 import { normalizeBracketMatrices, normalizeMathSyntax } from "../src/utils/latex_helpers";
+import { initWasmEngine } from "../src/parsers/engine_bridge";
 import {
   initWasmCatalog,
   disableWasmCatalog,
@@ -18,15 +17,7 @@ import {
 
 describe("Island 4: WebAssembly Syntactic Sugar & Merkle Checksum Engine Parity", () => {
   beforeAll(async () => {
-    const candidatePaths = [
-      path.resolve(__dirname, "../wasm/target/wasm32-unknown-unknown/release/color_math_wasm.wasm"),
-      path.resolve(__dirname, "../wasm/wasm_pkg/color_math_wasm_bg.wasm"),
-    ];
-    const wasmPath = candidatePaths.find((p) => fs.existsSync(p));
-    if (wasmPath) {
-      const wasmBytes = fs.readFileSync(wasmPath);
-      await initWasmCatalog(wasmBytes);
-    }
+    await initWasmEngine();
   });
 
   afterAll(() => {

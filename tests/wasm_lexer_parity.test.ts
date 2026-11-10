@@ -17,19 +17,12 @@ import {
   ROLE_SUBSCRIPT,
   ROLE_SUPERSCRIPT,
 } from "../src/parsers/wasm_lexer";
+import { initWasmEngine } from "../src/parsers/engine_bridge";
 import { COLORS } from "../src/config";
 
 describe("Island 3: WebAssembly Whole-Block Lexer Bijective Parity", () => {
   beforeAll(async () => {
-    const candidatePaths = [
-      path.resolve(__dirname, "../wasm/target/wasm32-unknown-unknown/release/color_math_wasm.wasm"),
-      path.resolve(__dirname, "../wasm/wasm_pkg/color_math_wasm_bg.wasm"),
-    ];
-    const wasmPath = candidatePaths.find((p) => fs.existsSync(p));
-    if (wasmPath) {
-      const wasmBytes = fs.readFileSync(wasmPath);
-      await initWasmCatalog(wasmBytes);
-    }
+    await initWasmEngine();
   });
 
   afterAll(() => {

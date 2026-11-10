@@ -9,6 +9,7 @@ import {
   collectDelimiterSpans,
   findDelimiterScan,
 } from "../src/parsers/delimiters";
+import { initWasmEngine } from "../src/parsers/engine_bridge";
 import {
   initWasmCatalog,
   disableWasmCatalog,
@@ -21,15 +22,7 @@ import {
 
 describe("Island 2: WebAssembly Rainbow Delimiter Engine Bijective Parity", () => {
   beforeAll(async () => {
-    const candidatePaths = [
-      path.resolve(__dirname, "../wasm/target/wasm32-unknown-unknown/release/color_math_wasm.wasm"),
-      path.resolve(__dirname, "../wasm/wasm_pkg/color_math_wasm_bg.wasm"),
-    ];
-    const wasmPath = candidatePaths.find((p) => fs.existsSync(p));
-    if (wasmPath) {
-      const wasmBytes = fs.readFileSync(wasmPath);
-      await initWasmCatalog(wasmBytes);
-    }
+    await initWasmEngine();
   });
 
   afterAll(() => {
